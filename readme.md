@@ -61,6 +61,8 @@ dist\installer\setup_rnd.exe
 - Iniciar sesión con credenciales de usuario registrado.
 - Trabajar con hojas de ruta, clientes, proveedores, equipos, empleados, reportes e importaciones.
 
+La guia operativa para usuarios finales esta en [docs/guia_usuario.md](docs/guia_usuario.md).
+
 ## Contribución
 1. Haz un fork del repositorio.
 2. Crea una rama con tu nueva funcionalidad (`git checkout -b feature/nueva-funcionalidad`).
