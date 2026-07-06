@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Local environments
+.venv/
+.venv-*/
+venv/
+env/
+
+# Build artifacts
+build/
+dist/
+*.spec.bak
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.secrets.*
+
+# Runtime logs
+*.log
+all.log
+errors.log
+
+# Local editor/cache metadata
+.vscode/
+.idea/
+.codegraph/
+.cursor/
+.pyqt5libs_git_backup/
+
+# Generated or local operational documents
+documentacion/
+*.xls
+*.xlsx
+*.csv
+*.pdf
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+Thumbs.db
