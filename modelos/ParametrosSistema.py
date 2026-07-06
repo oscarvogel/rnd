@@ -23,7 +23,7 @@ class ParamSist(ModeloBase):
             param.parametro = parametro
             param.valor = default
             param.save()
-            valor = parametro
+            valor = default
 
         return valor
 
