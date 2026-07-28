@@ -5,7 +5,7 @@ import decimal
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import QComboBox, QItemDelegate, QApplication, QStyle
+from PyQt5.QtWidgets import QComboBox, QItemDelegate, QApplication, QStyle, QCompleter
 
 
 class ComboSQL(QComboBox):
@@ -34,13 +34,20 @@ class ComboSQL(QComboBox):
             self.cOrden = kwargs['orden']
         if 'todos' in kwargs:
             self.agrega_todos = True
-            
+
+        # Configurar búsqueda interactiva
+        self.setEditable(True)
+        self.setInsertPolicy(QComboBox.NoInsert)
+
+        # Crear completer pero configurarlo después de cargar datos
+        self._completer = None
+
         if self.lcarga:
             if 'checkeable' in kwargs:
                 self.CargaDatos(checkeable=kwargs['checkeable'])
             else:
                 self.CargaDatos()
-        
+
 
     def CargaDatos(self, checkeable=False, checked=False):
         self.clear()
@@ -91,7 +98,37 @@ class ComboSQL(QComboBox):
                 indice_defecto = indice
             indice += 1
         self.setCurrentIndex(indice_defecto)
+
+        # Configurar completer después de cargar los datos
+        self._setup_completer()
+
         self.postCargaDatos()
+
+    def _setup_completer(self):
+        """Configura el completer con los items actuales del combo"""
+        if self._completer:
+            self._completer.deleteLater()
+
+        # Crear lista de textos para el completer
+        items = [self.itemText(i) for i in range(self.count())]
+
+        # Configurar completer
+        self._completer = QCompleter(items, self)
+        self._completer.setCompletionMode(QCompleter.PopupCompletion)
+        self._completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self._completer.setFilterMode(Qt.MatchContains)
+
+        # Asignar completer al combo
+        self.setCompleter(self._completer)
+
+        # Conectar señal para mantener sincronizado el valor
+        self._completer.activated.connect(self._on_completer_activated)
+
+    def _on_completer_activated(self, text):
+        """Cuando se selecciona del completer, buscar y establecer el índice correcto"""
+        index = self.findText(text, Qt.MatchExactly)
+        if index >= 0:
+            self.setCurrentIndex(index)
 
     def agregar_dato(self, detalle, valor, checkeable=False, checked=False):
         self.numero_filas += 1

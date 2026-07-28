@@ -79,24 +79,35 @@ class Excel:
 
         if self.archivo:
             self.libro = xlsxwriter.Workbook(self.archivo)
-            self.hoja = self.crea_hoja()
+            self.crea_hoja()
 
         return self.archivo
 
     def crea_hoja(self, nombre_hoja: str = 'Hoja1'):
-        self.agrega_hoja(nombre_hoja)
+        return self.agrega_hoja(nombre_hoja)
     
     def agrega_hoja(self, nombre_hoja: str = 'Hoja1'):
         self.asegura_libro()
         nombre_hoja = nombre_hoja[:30].translate(str.maketrans("áéíóúÁÉÍÓÚñÑ", "aeiouAEIOUnN"))
+        # Si ya existe una hoja con ese nombre, crear una variante única
         if nombre_hoja in self.hojas:
-            print(f"La hoja '{nombre_hoja}' ya existe.")
-            self.hoja = self.hojas[nombre_hoja]
-            return True
-        else:
-            self.hoja = self.libro.add_worksheet(nombre_hoja)
-            self.hojas[nombre_hoja] = self.hoja # Guarda la referencia
-            return False
+            # Generar sufijo incremental hasta encontrar un nombre libre
+            base = nombre_hoja
+            i = 1
+            while True:
+                # Reservar 3-4 caracteres para sufijo _n, respetando 30 chars
+                suffix = f"_{i}"
+                max_base_len = 30 - len(suffix)
+                candidate = (base[:max_base_len] + suffix).translate(str.maketrans("áéíóúÁÉÍÓÚñÑ", "aeiouAEIOUnN"))
+                if candidate not in self.hojas:
+                    nombre_hoja = candidate
+                    break
+                i += 1
+
+        # Crear la hoja con el nombre (nuevo o original)
+        self.hoja = self.libro.add_worksheet(nombre_hoja)
+        self.hojas[nombre_hoja] = self.hoja  # Guarda la referencia
+        return nombre_hoja
 
     def activa_hoja(self, nombre_hoja: str = 'Hoja1'):
         """Activa una hoja existente o crea una nueva si no existe."""
@@ -187,14 +198,14 @@ class Excel:
                     formato_celda = self.libro.add_format(formato)
                 else:
                     formato_celda = formato
+            # Convertir a filas 1-based en la referencia de la fórmula
+            start_row = desdefila + 1
+            end_row = hastafila + 1
+            formula = '=SUM({}{}:{}{})'.format(chr(col + 65), start_row, chr(col + 65), end_row)
             if formato_celda:
-                self.hoja.write_formula(filaformula, col, '=sum({}{}:{}{})'.format(
-                    chr(col + 65), desdefila, chr(col + 65), hastafila
-                ), formato_celda)
+                self.hoja.write_formula(filaformula, col, formula, formato_celda)
             else:
-                self.hoja.write_formula(filaformula, col, '=sum({}{}:{}{})'.format(
-                    chr(col + 65), desdefila, chr(col + 65), hastafila
-                ))
+                self.hoja.write_formula(filaformula, col, formula)
 
     def SubTitulo(self, titulo='', desdecol='A', hastacol='A', fila=0, combina=True):
         self.Titulo(titulo, desdecol, hastacol, fila, combina, tamanio=12)

@@ -1,7 +1,7 @@
 # coding=utf-8
-from PyQt5.QtCore import QSize
+from PyQt5.QtCore import QSize, Qt
 from PyQt5.QtGui import QIcon, QFont
-from PyQt5.QtWidgets import QPushButton, QToolButton
+from PyQt5.QtWidgets import QPushButton, QToolButton, QSizePolicy
 
 from .utiles import LeerIni, imagen
 
@@ -29,6 +29,8 @@ class Boton(QPushButton):
 
         if 'tooltip' in kwargs:
             self.setToolTip(kwargs['tooltip'])
+        elif texto:
+            self.setToolTip(texto.replace('&', ''))
 
         if 'autodefault' in kwargs:
             self.setAutoDefault(kwargs['autodefault'])
@@ -39,13 +41,19 @@ class Boton(QPushButton):
         if 'enabled' in kwargs:
             self.setEnabled(kwargs['enabled'])
 
+        self.setCursor(Qt.PointingHandCursor)
+        self.setMinimumHeight(34)
+        self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+
 
 class BotonMain(Boton):
 
     def __init__(self, *args, **kwargs):
         Boton.__init__(self, *args, **kwargs)
-        self.setMinimumHeight(100)
+        self.setProperty("role", "module")
+        self.setMinimumSize(118, 108)
         self.setIconSize(QSize(48, 48))
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
 
 class BotonAceptar(Boton):

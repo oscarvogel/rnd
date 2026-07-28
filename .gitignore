@@ -13,6 +13,7 @@ env/
 # Build artifacts
 build/
 dist/
+artifacts/
 *.spec.bak
 
 # Local configuration and secrets

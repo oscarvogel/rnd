@@ -37,6 +37,9 @@ from logging.handlers import RotatingFileHandler
 from smtplib import SMTP
 from dotenv import load_dotenv
 from ..libs.vistas.select_printer import Ui_FormPrinter
+import json
+import re
+from urllib.request import Request, urlopen
 
 # Cargar variables de entorno desde el archivo .env
 load_dotenv()
@@ -94,18 +97,92 @@ def AbrirArchivo(cArchivo=None):
 
 # leo el archivo de configuracion del sistema
 # recibe la clave y el key a leer en caso de que tenga mas de una seccion el archivo
+def _normalizar_perfil(perfil):
+    if not perfil:
+        return ''
+    valor = str(perfil).strip().upper()
+    alias = {
+        'DESARROLLO': 'FGPY',
+        'DEVELOPMENT': 'FGPY',
+        'DEV': 'FGPY',
+        'MANTENIMIENTO': 'FGLOCAL',
+        'MANT': 'FGLOCAL',
+        'LOCAL': 'FGLOCAL',
+        'PRODUCCION': 'FGPRODUCCION',
+        'PRODUCCIÓN': 'FGPRODUCCION',
+        'PROD': 'FGPRODUCCION',
+    }
+    return alias.get(valor, valor)
+
+
+def _archivo_por_perfil(perfil):
+    perfil_normalizado = _normalizar_perfil(perfil)
+    if not perfil_normalizado:
+        return ''
+
+    if perfil_normalizado.endswith('.ini'):
+        return perfil_normalizado
+
+    archivos = {
+        'FGPY': 'sistema.ini',
+        'FGLOCAL': 'conil.ini',
+        'FGPRODUCCION': 'ini\\sistema-fg-py.ini',
+    }
+    return archivos.get(perfil_normalizado, '')
+
+
+def resolver_configuracion_activa():
+    analizador = argparse.ArgumentParser(description='Sistema.', add_help=False)
+    analizador.add_argument("-i", "--inicio", default=None)
+    analizador.add_argument("-a", "--archivo", default=None)
+    analizador.add_argument("-p", "--perfil", default=None)
+    argumento, _ = analizador.parse_known_args()
+
+    carpeta = argumento.inicio or os.getcwd()
+    archivo = argumento.archivo
+    perfil = argumento.perfil
+    origen = 'cli-archivo'
+
+    if not archivo:
+        perfil = perfil or os.environ.get('FGPY_CONFIG')
+        if perfil:
+            origen = 'perfil'
+            archivo = _archivo_por_perfil(perfil)
+
+    if not archivo:
+        archivo = 'sistema.ini'
+        origen = 'fallback'
+
+    perfil = _normalizar_perfil(perfil)
+
+    ruta_absoluta = archivo
+    if not os.path.isabs(ruta_absoluta):
+        ruta_absoluta = join(carpeta, ruta_absoluta)
+
+    if not os.path.exists(ruta_absoluta) and archivo != 'sistema.ini':
+        archivo = 'sistema.ini'
+        ruta_absoluta = join(carpeta, archivo)
+        origen = 'fallback'
+
+    return {
+        'carpeta': carpeta,
+        'archivo': archivo,
+        'ruta': ruta_absoluta,
+        'perfil': perfil,
+        'origen': origen,
+    }
+
+
 def LeerIni(clave=None, key=None, carpeta=''):
-    analizador = argparse.ArgumentParser(description='Sistema.')
-    analizador.add_argument("-i", "--inicio", default=os.getcwd(), help="Carpeta de Inicio de sistema.")
-    analizador.add_argument("-a", "--archivo", default="sistema.ini", help="Archivo de Configuracion de sistema.")
-    argumento = analizador.parse_args()
     retorno = ''
     Config = ConfigParser()
-    archivoini = argumento.archivo
-    carpeta = argumento.inicio
+    configuracion = resolver_configuracion_activa()
+    archivoini = configuracion['archivo']
+    carpeta = configuracion['carpeta']
+    ruta_archivo = configuracion['ruta']
     # Config.read("fasa.ini")
     if carpeta:
-        Config.read(join(carpeta, archivoini))
+        Config.read(ruta_archivo)
         # logging.debug("Archivo utilizado {}".format(join(carpeta, archivoini)))
     else:
         Config.read(archivoini)
@@ -142,11 +219,16 @@ def ubicacion_sistema():
 
 
 def imagen(archivo):
-    archivoImg = ubicacion_sistema() + join("imagenes", archivo)
+    if not archivo:
+        return ""
+    # Build a safe path to the imagenes folder inside the application root
+    archivoImg = os.path.join(ubicacion_sistema(), 'imagenes', archivo)
     if os.path.exists(archivoImg):
         return archivoImg
-    else:
-        return ""
+    # fallback: try the filename as provided (in case it's already an absolute path)
+    if os.path.exists(archivo):
+        return archivo
+    return ""
 
 
 def icono_sistema():
@@ -257,15 +339,29 @@ def inicializar_y_capturar_excepciones(func):
             file = open("errors.log", "a")
             file.write(self.Traceback)
             file.close()
-            Ventanas.showAlert("Error", "Se ha producido un error \n{}".format(self.Excepcion))
+            # Cuando estamos en modo CLI puede que no exista un QApplication activo
+            # En ese caso evitamos invocar los dialogs de Qt y mostramos por consola
+            try:
+                from PyQt5.QtWidgets import QApplication
+                gui_available = hasattr(self, 'view') and self.view is not None and QApplication.instance() is not None
+            except Exception:
+                gui_available = False
+
+            if gui_available:
+                Ventanas.showAlert("Error", "Se ha producido un error \n{}".format(self.Excepcion))
+            else:
+                # Mostrar mensaje por consola en modo headless/CLI
+                print("ERROR: Se ha producido un error:\n{}".format(self.Excepcion))
+
+            # Siempre volcamos el traceback en consola y logs
             print(self.Traceback)
             logging.debug(self.Traceback)
             if LeerIni('debug') == 'N':
                 # Envio un correo al administrador del sistema
                 # si no se ha configurado el correo, no se envia nada
                 try:
-                    remitente = 'sistemas@servinlgsm.com.ar'
-                    destinatario = 'sistemas@servinlgsm.com.ar'
+                    remitente = 'info@vogelconsultoria.com.ar'
+                    destinatario = 'info@vogelconsultoria.com.ar'
                     mensaje = "{} {} Enviado desde mi Software de Gestion desarrollado por http://www.servinlgsm.com.ar".format(
                         self.Traceback, self.Excepcion
                     )
@@ -282,26 +378,8 @@ def inicializar_y_capturar_excepciones(func):
     return capturar_errores_wrapper
 
 
-def getFileName(filename='file', extension='txt', base=False):
-    """
-    Genera un nombre de archivo aleatorio en la carpeta temporal con la extensión deseada.
-
-    Args:
-        flineame (str): Prefijo para el nombre del archivo.
-        extension (str): Extensión del archivo (por ejemplo, 'pdf', 'xlsx', 'txt').
-        base (bool): Si es True, devuelve solo el nombre base; si es False, devuelve la ruta completa.
-
-    Returns:
-        str: Ruta completa o nombre base del archivo temporal.
-    """
-    # Asegurarse de que la extensión no empiece con punto
-    if extension.startswith('.'):
-        extension = extension[1:]
-    
-    # Crear un archivo temporal con el prefijo y agregar la extensión
-    tf = tempfile.NamedTemporaryFile(prefix=filename, suffix=f'.{extension}', delete=False)
-    tf.close()  # Cerrar el manejador, pero el archivo permanece en disco
-
+def getFileName(filename='pdf', base=False):
+    tf = tempfile.NamedTemporaryFile(prefix=filename, mode='w+b')
     if base:
         return os.path.basename(tf.name)
     return tf.name
@@ -405,6 +483,46 @@ def initialize_logger(output_dir):
         logger.addHandler(handler)
 
 
+def obtener_dolar_oficial_compra_ambito(timeout=15):
+    """Obtiene la cotizacion del Dolar Oficial (COMPRA) desde Ambito.
+
+    Intenta primero consumir el JSON público y como fallback parsea el HTML.
+    Devuelve un float o lanza ValueError si no se puede obtener un valor valido.
+    """
+    headers = {'User-Agent': 'Mozilla/5.0 (compatible; ProcesoTarifa/1.0)'}
+
+    api_url = 'https://mercados.ambito.com/dolar/oficial/variacion'
+    try:
+        req = Request(api_url, headers=headers)
+        with urlopen(req, timeout=timeout) as resp:
+            payload = resp.read().decode('utf-8', errors='ignore')
+        data = json.loads(payload)
+        compra = str(data.get('compra', '')).strip()
+        if compra:
+            valor = float(compra.replace('.', '').replace(',', '.'))
+            if valor > 0:
+                return valor
+    except Exception:
+        pass
+
+    # Fallback por si el sitio vuelve a renderizar el valor en el HTML.
+    url = 'https://www.ambito.com/contenidos/dolar.html'
+    req = Request(url, headers=headers)
+    with urlopen(req, timeout=timeout) as resp:
+        html = resp.read().decode('utf-8', errors='ignore')
+
+    m = re.search(r'D[oó]lar\s+Oficial.*?(\d{1,4},\d{1,2})\s*(?:<[^>]+>\s*)*COMPRA', html, flags=re.IGNORECASE | re.DOTALL)
+    if not m:
+        raise ValueError('No se pudo extraer Dolar Oficial COMPRA desde Ambito (API y HTML)')
+
+    valor_txt = m.group(1).replace('.', '').replace(',', '.')
+    valor = float(valor_txt)
+    if valor <= 0:
+        raise ValueError(f'Valor de dolar invalido obtenido desde Ambito: {valor}')
+    return valor
+
+
+
 def getText(vista, titulo='', etiqueta='', valor=''):
     text, okPressed = QInputDialog.getText(vista, titulo, etiqueta, QLineEdit.Normal, valor)
     if okPressed and text != '':
@@ -442,56 +560,179 @@ def HayInternet():
 
 
 def envia_correo(from_address='', to_address='', message='', subject='',
-                password_email='', to_cc='', archivo_adjunto=None, nombre_archivo=None) -> object:
+                password_email='', to_cc='', archivo_adjunto=None, nombre_archivo=None, es_html=False) -> object:
     def send_email():
-        smtp_server = os.getenv('SMTP_HOST')
-        smtp_port = os.getenv('SMTP_PORT', 587)
-        smtp_username = os.getenv('SMTP_USER')
-        smtp_password = os.getenv('SMTP_PASS')
-        mime_message = MIMEMultipart()
-        mime_message["From"] = from_address
-        if isinstance(to_address, list):
-            mime_message["To"] = ', '.join(to_address)
-        else:
-            mime_message["To"] = to_address
-        mime_message["Subject"] = subject
-        mime_message.attach(MIMEText(message))
-        if to_cc:
-            mime_message["Cc"] = to_cc
-            
-        # Procesamiento del archivo adjunto (puede ser ruta en disco o BytesIO)
-        if archivo_adjunto:
-            # Determinar el nombre del archivo
-            if nombre_archivo:
-                filename = nombre_archivo
-            elif isinstance(archivo_adjunto, str):
-                filename = os.path.basename(archivo_adjunto)
+        try:
+            # Intentar importar ParamSist aquí para evitar dependencias circulares
+            try:
+                from modelos.ParametrosSistema import ParamSist
+
+                # Obtener configuración de ParamSist
+                smtp_server = ParamSist.ObtenerParametro('SMTP_SERVER')
+                smtp_port = ParamSist.ObtenerParametro('SMTP_PORT', '587')
+                smtp_username = ParamSist.ObtenerParametro('EMAIL_ADDRESS')
+
+                # Prioridad: 1. Argumento password_email, 2. ParamSist EMAIL_PASSWORD, 3. ParamSist PASSWORD_EMAIL
+                smtp_password = password_email
+                if not smtp_password:
+                    smtp_password = ParamSist.ObtenerParametro('EMAIL_PASSWORD')
+                if not smtp_password:
+                    smtp_password = ParamSist.ObtenerParametro('PASSWORD_EMAIL')
+
+            except ImportError:
+                # Si no se puede importar (ej. uso fuera del proyecto), usar variables de entorno o valores por defecto
+                logging.warning("No se pudo importar ParamSist, usando variables de entorno")
+                smtp_server = os.getenv('SMTP_HOST')
+                smtp_port = os.getenv('SMTP_PORT', '587')
+                smtp_username = os.getenv('SMTP_USER')
+                smtp_password = password_email or os.getenv('SMTP_PASS')
+
+            # Fallback a variables de entorno si ParamSist devolvió vacío (y se pudo importar)
+            if not smtp_server:
+                smtp_server = os.getenv('SMTP_HOST')
+            if not smtp_port:
+                smtp_port = os.getenv('SMTP_PORT', '587')
+            if not smtp_username:
+                smtp_username = os.getenv('SMTP_USER')
+            if not smtp_password:
+                smtp_password = os.getenv('SMTP_PASS')
+
+            smtp_use_ssl = os.getenv('SMTP_USE_SSL', 'false').lower() == 'true'
+
+            # Sanitizar credenciales: eliminar espacios en blanco al inicio/fin
+            if smtp_server:
+                smtp_server = smtp_server.strip()
+            if smtp_username:
+                smtp_username = smtp_username.strip()
+            if smtp_password:
+                smtp_password = smtp_password.strip()
+
+            # Validar que tengamos al menos el servidor
+            if not smtp_server:
+                logging.error("SMTP_SERVER no está configurado. No se puede enviar el correo.")
+                return
+
+            # Convertir puerto a entero
+            try:
+                smtp_port = int(smtp_port)
+            except (ValueError, TypeError):
+                logging.warning(f"Puerto SMTP inválido '{smtp_port}', usando 587 por defecto")
+                smtp_port = 587
+
+            logging.debug(f"Intentando conectar a SMTP: {smtp_server}:{smtp_port} (SSL={smtp_use_ssl})")
+
+            # Construir mensaje MIME
+            mime_message = MIMEMultipart()
+            mime_message["From"] = from_address
+            if isinstance(to_address, list):
+                mime_message["To"] = ', '.join(to_address)
             else:
-                filename = "archivo_adjunto"
-                
-            # Manejar diferentes tipos de archivos adjuntos
-            if isinstance(archivo_adjunto, str):
-                # Es una ruta de archivo en disco
-                with open(archivo_adjunto, 'rb') as archivo:
-                    adjunto = MIMEApplication(archivo.read(), Name=filename)
-            elif isinstance(archivo_adjunto, BytesIO):
-                # Es un archivo en memoria
-                archivo_adjunto.seek(0)  # Asegurarnos de leer desde el principio
-                adjunto = MIMEApplication(archivo_adjunto.read(), Name=filename)
+                mime_message["To"] = to_address
+            mime_message["Subject"] = subject
+            if es_html:
+                mime_message.attach(MIMEText(message, 'html'))
             else:
-                # Es un objeto similar a un archivo
-                archivo_adjunto.seek(0)  # Asegurarnos de leer desde el principio
-                adjunto = MIMEApplication(archivo_adjunto.read(), Name=filename)
-                
-            adjunto['Content-Disposition'] = f'attachment; filename="{filename}"'
-            mime_message.attach(adjunto)
-            
-        with smtplib.SMTP(smtp_server, smtp_port) as servidor:
-            servidor.login(smtp_username, smtp_password)
-            servidor.sendmail(mime_message['From'], mime_message['To'], mime_message.as_string())
-    
-    thread = threading.Thread(target=send_email)
+                mime_message.attach(MIMEText(message))
+            if to_cc:
+                mime_message["Cc"] = to_cc
+
+            # Procesamiento del archivo adjunto (puede ser ruta en disco o BytesIO)
+            if archivo_adjunto:
+                # Determinar el nombre del archivo
+                if nombre_archivo:
+                    filename = nombre_archivo
+                elif isinstance(archivo_adjunto, str):
+                    filename = os.path.basename(archivo_adjunto)
+                else:
+                    filename = "archivo_adjunto"
+
+                # Manejar diferentes tipos de archivos adjuntos
+                if isinstance(archivo_adjunto, str):
+                    # Es una ruta de archivo en disco
+                    with open(archivo_adjunto, 'rb') as archivo:
+                        adjunto = MIMEApplication(archivo.read(), Name=filename)
+                elif isinstance(archivo_adjunto, BytesIO):
+                    # Es un archivo en memoria
+                    archivo_adjunto.seek(0)  # Asegurarnos de leer desde el principio
+                    adjunto = MIMEApplication(archivo_adjunto.read(), Name=filename)
+                else:
+                    # Es un objeto similar a un archivo
+                    archivo_adjunto.seek(0)  # Asegurarnos de leer desde el principio
+                    adjunto = MIMEApplication(archivo_adjunto.read(), Name=filename)
+
+                adjunto['Content-Disposition'] = f'attachment; filename="{filename}"'
+                mime_message.attach(adjunto)
+
+            # Preparar lista de destinatarios para sendmail
+            destinatarios = []
+            if isinstance(to_address, list):
+                destinatarios.extend(to_address)
+            elif to_address:
+                destinatarios.append(to_address)
+            if to_cc:
+                if isinstance(to_cc, list):
+                    destinatarios.extend(to_cc)
+                else:
+                    destinatarios.append(to_cc)
+
+            if not destinatarios:
+                logging.error("No hay destinatarios para enviar el correo")
+                return
+
+            # Conectar al servidor SMTP con timeout
+            servidor = None
+            try:
+                if smtp_use_ssl or smtp_port == 465:
+                    # Usar SMTP_SSL para puerto 465 o si está explícitamente configurado
+                    logging.debug("Usando SMTP_SSL")
+                    servidor = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=30)
+                    # EHLO después de conectar con SSL
+                    logging.debug("Enviando EHLO")
+                    servidor.ehlo()
+                else:
+                    # Usar SMTP normal con STARTTLS para puerto 587 u otros
+                    logging.debug("Usando SMTP con STARTTLS")
+                    servidor = smtplib.SMTP(smtp_server, smtp_port, timeout=30)
+                    servidor.ehlo()
+                    if smtp_port == 587:
+                        servidor.starttls()
+                        servidor.ehlo()
+
+                # Autenticación si hay credenciales
+                if smtp_username and smtp_password:
+                    logging.debug(f"Autenticando con usuario: {smtp_username}")
+                    servidor.login(smtp_username, smtp_password)
+                else:
+                    logging.warning("No se proporcionaron credenciales SMTP, intentando envío sin autenticación")
+
+                # Enviar correo
+                logging.debug(f"Enviando correo a: {destinatarios}")
+                servidor.sendmail(from_address, destinatarios, mime_message.as_string())
+                logging.info(f"Correo enviado exitosamente a {destinatarios}")
+
+            except smtplib.SMTPAuthenticationError as e:
+                logging.error(f"Error de autenticación SMTP: {e}")
+            except smtplib.SMTPException as e:
+                logging.error(f"Error SMTP: {e}")
+            except socket.timeout:
+                logging.error(f"Timeout al conectar con {smtp_server}:{smtp_port}")
+            except Exception as e:
+                logging.error(f"Error inesperado al enviar correo: {e}")
+                logging.exception("Detalles del error:")
+            finally:
+                if servidor:
+                    try:
+                        servidor.quit()
+                    except Exception:
+                        pass
+
+        except Exception as e:
+            logging.error(f"Error en send_email: {e}")
+            logging.exception("Detalles del error:")
+
+    thread = threading.Thread(target=send_email, daemon=True)
     thread.start()
+    return thread
 
 def uniqueid():
     seed = random.getrandbits(32)

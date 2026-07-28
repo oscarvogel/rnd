@@ -206,7 +206,6 @@ class Buscador:
     cOrden = None  # orden de busqueda
     condiciones = []  # condiciones de filtrado
     campos_busqueda = []  # campos sobre los cuales realizar la busqueda
-    valor_busqueda = '' #valor inicial de lal busqueda
 
     def __init__(self):
         self.valorRetorno = None
@@ -222,7 +221,6 @@ class Buscador:
         ventana.camposTabla = self.campos
         ventana.campoRetorno = self.codigo.column_name if isinstance(self.codigo, str) else self.codigo
         ventana.condiciones = self.condiciones
-        ventana.lineEdit.setText(self.valor_busqueda)
         ventana.CargaDatos()
         ventana.exec_()
         if ventana.lRetval:
