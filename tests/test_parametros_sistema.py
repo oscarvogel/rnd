@@ -5,7 +5,8 @@ from unittest.mock import patch
 
 sys.argv = [sys.argv[0]]
 
-from modelos.ParametrosSistema import ParamSist
+with patch("mongoengine.connect", return_value=SimpleNamespace()):
+    from modelos.ParametrosSistema import ParamSist
 
 
 class MissingParameterQuery:

@@ -1,15 +1,23 @@
 # -*- coding: utf-8 -*-
 import os
+import sys
 from os.path import join
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QDialog, QDesktopWidget, QHBoxLayout
 
-from modelos.ParametrosSistema import ParamSist
 from .EntradaTexto import EntradaTexto
 from .Etiquetas import Etiqueta
 from .Fechas import FechaLine
 from .utiles import icono_sistema, ubicacion_sistema
+
+try:
+    from modelos.ParametrosSistema import ParamSist
+except ModuleNotFoundError:
+    class ParamSist:
+        @staticmethod
+        def ObtenerParametro(_nombre, default=None):
+            return default
 
 
 class Formulario(QDialog):
@@ -28,6 +36,7 @@ class Formulario(QDialog):
         self._want_to_close = False
         flags = Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint
         self.setWindowFlags(flags)
+        self.setMinimumSize(420, 160)
         self.EstablecerTema()
         # self.EstablecerOrden()
 
@@ -53,9 +62,7 @@ class Formulario(QDialog):
         self.move(qr.topLeft())
 
     def resizeEvent(self, QResizeEvent):
-        self.Center()
         QDialog.resizeEvent(self, QResizeEvent)
-        print("Ancho {} Alto {}".format(self.width(), self.height()))
 
     def addStatusBar(self, layout=None):
         if layout:
@@ -132,16 +139,43 @@ class Formulario(QDialog):
         QKeyEvent.ignore()
 
     def EstablecerTema(self):
-        # tema = f'{ubicacion_sistema()}{ParamSist.ObtenerParametro("TEMA")}'
-        tema = join(ubicacion_sistema(), 'temas', ParamSist.ObtenerParametro("TEMA"))
-        if not tema.lower().endswith('.css'):
-            tema += '.css'
-        
-        if not os.path.isfile(tema):
-            tema = join('temas/ubuntu.css')
+        tema_configurado = ParamSist.ObtenerParametro("TEMA", "forestal_moderno.css")
+        if not tema_configurado or tema_configurado == "TEMA":
+            tema_configurado = "forestal_moderno.css"
 
-        style = open(tema)
-        style = style.read()
+        if not tema_configurado.lower().endswith('.css'):
+            tema_configurado += '.css'
+        
+        candidatos = [
+            join(ubicacion_sistema(), 'temas', tema_configurado),
+            join('temas', tema_configurado),
+            join('libs', 'temas', tema_configurado),
+            join(os.path.dirname(__file__), '..', 'libs', 'temas', tema_configurado),
+        ]
+
+        if hasattr(sys, "_MEIPASS"):
+            candidatos.append(join(sys._MEIPASS, 'temas', tema_configurado))
+
+        tema = next((candidato for candidato in candidatos if os.path.isfile(candidato)), "")
+
+        if not tema:
+            candidatos_fallback = [
+                join(ubicacion_sistema(), 'temas', 'forestal_moderno.css'),
+                join('temas', 'forestal_moderno.css'),
+                join('libs', 'temas', 'forestal_moderno.css'),
+                join(os.path.dirname(__file__), '..', 'libs', 'temas', 'forestal_moderno.css'),
+                join('libs', 'temas', 'ubuntu.css'),
+                join(os.path.dirname(__file__), '..', 'libs', 'temas', 'ubuntu.css'),
+            ]
+            if hasattr(sys, "_MEIPASS"):
+                candidatos_fallback.append(join(sys._MEIPASS, 'temas', 'forestal_moderno.css'))
+            tema = next((candidato for candidato in candidatos_fallback if os.path.isfile(candidato)), "")
+
+        if not tema:
+            return
+
+        with open(tema, encoding="utf-8") as style_file:
+            style = style_file.read()
         self.setStyleSheet(style)
 
     def EstablecerOrden(self):

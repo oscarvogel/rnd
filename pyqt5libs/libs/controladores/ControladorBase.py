@@ -33,8 +33,12 @@ class ControladorBase(object):
     id_formulario = 0 #id del formulario para validar el acceso, se toma de la tabla formula
     for_valid = '' #en caso de usar el sistema en mas de una base puedo tener la validacion que es unica
 
-    def __init__(self):
-        self.view = VistaBase()
+    def __init__(self, headless=False):
+        # In headless mode we avoid creating any Qt views/widgets
+        if not headless:
+            self.view = VistaBase()
+        else:
+            self.view = None
 
     def run(self):
         self.view.show()

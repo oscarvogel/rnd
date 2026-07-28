@@ -18,6 +18,11 @@ def tracked_files():
 
 
 class RepositoryHygieneTests(unittest.TestCase):
+    def test_generated_validation_artifacts_are_ignored(self):
+        gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+
+        self.assertIn("artifacts/", gitignore.splitlines())
+
     def test_generated_and_local_files_are_not_tracked(self):
         forbidden_prefixes = (
             ".venv-build/",

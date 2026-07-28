@@ -6,6 +6,28 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PackagingStaticTests(unittest.TestCase):
+    def test_release_version_is_consistent_across_runtime_and_installers(self):
+        main = (ROOT / "main.py").read_text(encoding="utf-8")
+        version_info = (ROOT / "version.txt").read_text(encoding="utf-8")
+        installer = (ROOT / "installer" / "RND.iss").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('__version__ = "2026.7.28.1"', main)
+        self.assertIn('Copyright (C) 2026', main)
+        self.assertIn('#define AppVersion "2026.7.28.1"', installer)
+        self.assertIn("filevers=(2026, 7, 28, 1)", version_info)
+        self.assertIn("prodvers=(2026, 7, 28, 1)", version_info)
+        self.assertIn(
+            "StringStruct(u'FileVersion', u'2026, 7, 28, 1')",
+            version_info,
+        )
+        self.assertIn(
+            "StringStruct(u'FileDescription', "
+            "u'RND - Gestión de hojas de ruta')",
+            version_info,
+        )
+
     def test_pyinstaller_spec_includes_runtime_resources(self):
         spec = (ROOT / "main.spec").read_text(encoding="utf-8")
 

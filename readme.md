@@ -1,5 +1,7 @@
 # RND
 
+**Versión preparada:** `2026.7.28.1`
+
 ## Descripción
 RND es una aplicación de escritorio desarrollada en Python/PyQt5 para gestión operativa, hojas de ruta, clientes, proveedores, equipos, empleados, importación de pedidos y reportes.
 
@@ -61,7 +63,10 @@ dist\installer\setup_rnd.exe
 - Iniciar sesión con credenciales de usuario registrado.
 - Trabajar con hojas de ruta, clientes, proveedores, equipos, empleados, reportes e importaciones.
 
-La guia operativa para usuarios finales esta en [docs/guia_usuario.md](docs/guia_usuario.md).
+## Documentación
+
+- [Guía operativa para usuarios finales](docs/guia_usuario.md).
+- [Preparación y guion del meet del 29/07/2026](docs/meet-2026-07-29.md).
 
 ## Contribución
 1. Haz un fork del repositorio.

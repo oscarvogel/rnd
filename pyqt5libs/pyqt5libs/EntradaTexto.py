@@ -80,7 +80,7 @@ class EntradaTexto(QLineEdit):
             self.setText(self.text().zfill(self.relleno))
 
         if self.text():
-            self.setStyleSheet("background-color: Dodgerblue")
+            self.setStyleSheet("background-color: #eef6f2")
         else:
             self.setStyleSheet("background-color: white")
         if self.largo > 0:
@@ -183,6 +183,88 @@ class Factura(QHBoxLayout):
             self.lineEditPtoVta.setText('')
             self.lineEditNumero.setText('')
         self.AssignNumero()
+
+class FacturaPY(QHBoxLayout):
+    numero = ''
+    titulo = ''
+    tamanio = 10
+    enabled = True
+
+    def __init__(self, parent=None, *args, **kwargs):
+        QHBoxLayout.__init__(self)
+        if 'titulo' in kwargs:
+            self.titulo = kwargs['titulo']
+        if 'tamanio' in kwargs:
+            self.tamanio = kwargs['tamanio']
+        if 'enabled' in kwargs:
+            self.enabled = kwargs['enabled']
+
+        self.setupUi(parent)
+
+    def setupUi(self, layout):
+
+        if not self.titulo:
+            self.titulo = "Factura"
+
+        self.labelTitulo = Etiqueta(layout, texto=self.titulo, tamanio=self.tamanio)
+        self.labelTitulo.setObjectName("labelTitulo")
+        self.addWidget(self.labelTitulo)
+
+        self.lineEditPtoVta = EntradaTexto(layout, placeholderText="Pto Expedicion", tamanio=self.tamanio)
+        self.lineEditPtoVta.setObjectName("lineEditPtoVta")
+        self.lineEditPtoVta.setEnabled(self.enabled)
+        self.addWidget(self.lineEditPtoVta)
+
+        self.lineEditSucursal = EntradaTexto(layout, placeholderText="Sucursal", tamanio=self.tamanio)
+        self.lineEditSucursal.setObjectName("lineEditSucursal")
+        self.lineEditSucursal.setEnabled(self.enabled)
+        self.addWidget(self.lineEditSucursal)
+
+        self.lineEditNumero = EntradaTexto(layout, placeholderText="Numero", tamanio=self.tamanio)
+        self.lineEditNumero.setObjectName("lineEditNumero")
+        self.lineEditNumero.setEnabled(self.enabled)
+        self.addWidget(self.lineEditNumero)
+
+        self.lineEditPtoVta.proximoWidget = self.lineEditNumero
+        self.lineEditNumero.largo = 7
+        self.lineEditPtoVta.largo = 3
+        self.lineEditSucursal.largo = 3
+        self.lineEditPtoVta.setMaximumWidth(40)
+        self.lineEditSucursal.setMaximumWidth(40)
+        self.lineEditNumero.setMaximumWidth(70)
+
+        self.lineEditPtoVta.editingFinished.connect(self.AssignNumero)
+        self.lineEditNumero.editingFinished.connect(self.AssignNumero)
+        self.lineEditSucursal.editingFinished.connect(self.AssignNumero)
+
+    def AssignNumero(self):
+        self.lineEditNumero.setText(str(self.lineEditNumero.text()).zfill(7))
+        self.lineEditPtoVta.setText(str(self.lineEditPtoVta.text()).zfill(3))
+        self.lineEditSucursal.setText(str(self.lineEditSucursal.text()).zfill(3))
+        self.numero = str(self.lineEditPtoVta.text()).zfill(3) + \
+                      str(self.lineEditSucursal.text()).zfill(3) + \
+                      str(self.lineEditNumero.text()).zfill(7)
+
+    def setText(self, texto):
+        if texto:
+            if len(texto) == 13:
+                self.lineEditPtoVta.setText(texto[:3])
+                self.lineEditSucursal.setText(texto[3:6])
+                self.lineEditNumero.setText(texto[6:])
+            elif len(texto) == 7:
+                self.lineEditPtoVta.setText('000')
+                self.lineEditSucursal.setText('000')
+                self.lineEditNumero.setText(texto)
+            else:
+                self.lineEditSucursal.setText('')
+                self.lineEditPtoVta.setText('')
+                self.lineEditNumero.setText('')
+        else:
+            self.lineEditSucursal.setText('')
+            self.lineEditPtoVta.setText('')
+            self.lineEditNumero.setText('')
+        self.AssignNumero()
+
 
 class TextEdit(QTextEdit):
     tamanio = 10

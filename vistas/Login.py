@@ -1,4 +1,5 @@
 # coding=utf-8
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QGridLayout
 
@@ -25,7 +26,12 @@ class LoginView(VistaBase):
 
         layoutInicio = QVBoxLayout()
         labelImagen = Etiqueta()
-        pixmap = QPixmap(imagen("login.png"))
+        pixmap = QPixmap(imagen("logo.png")).scaled(
+            150,
+            150,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
         labelImagen.setPixmap(pixmap)
         layoutInicio.addWidget(labelImagen)
         layoutPpal.addLayout(layoutInicio)

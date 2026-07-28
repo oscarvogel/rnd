@@ -20,9 +20,9 @@ from pathlib import Path
 from pyqt5libs.pyqt5libs.utiles import BorrarConf, GrabaConf, LeerIni, initialize_logger
 
 __author__ = "Jose Oscar Vogel <oscarvogel@gmail.com>"
-__copyright__ = "Copyright (C) 2025"
+__copyright__ = "Copyright (C) 2026"
 __license__ = "GPL 3.0"
-__version__ = "0.1"
+__version__ = "2026.7.28.1"
 
 def _build_arg_parser():
     analizador = argparse.ArgumentParser(description='Sistema.')
@@ -32,6 +32,11 @@ def _build_arg_parser():
         "--startup-check",
         action="store_true",
         help="Valida configuracion y recursos sin abrir la interfaz.",
+    )
+    analizador.add_argument(
+        "--ui-check",
+        action="store_true",
+        help="Valida PyQt5 y widgets compartidos sin abrir el sistema ni la base.",
     )
     return analizador
 
@@ -78,6 +83,27 @@ def _validate_startup(inicio, archivo):
     return True, "inicio={} archivo={}".format(carpeta_inicio, archivo_ini)
 
 
+def _validate_ui_dependencies():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    try:
+        from PyQt5.QtCore import PYQT_VERSION_STR
+        from PyQt5.QtWidgets import QApplication
+        from pyqt5libs.pyqt5libs.Botones import Boton
+        from pyqt5libs.pyqt5libs.Etiquetas import Etiqueta
+
+        application = QApplication.instance() or QApplication([])
+        label = Etiqueta(texto="RND")
+        button = Boton(texto="Validar")
+        if label.text() != "RND" or button.text() != "Validar":
+            return False, "los widgets compartidos no conservaron su texto"
+        return True, "PyQt5={} plataforma={}".format(
+            PYQT_VERSION_STR,
+            application.platformName(),
+        )
+    except Exception as error:
+        return False, "{}: {}".format(type(error).__name__, error)
+
+
 def inicio(argv=None):
     BorrarConf()
     argumento = _build_arg_parser().parse_args(argv)
@@ -91,6 +117,14 @@ def inicio(argv=None):
             print("STARTUP_CHECK_OK {}".format(message))
             return 0
         print("STARTUP_CHECK_ERROR {}".format(message), file=sys.stderr)
+        return 1
+
+    if argumento.ui_check:
+        ok, message = _validate_ui_dependencies()
+        if ok:
+            print("UI_CHECK_OK {}".format(message))
+            return 0
+        print("UI_CHECK_ERROR {}".format(message), file=sys.stderr)
         return 1
 
     from PyQt5.QtWidgets import QApplication

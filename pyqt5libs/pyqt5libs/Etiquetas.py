@@ -35,9 +35,7 @@ class EtiquetaTitulo(Etiqueta):
 
     def __init__(self, parent=None, texto='', *args, **kwargs):
         Etiqueta.__init__(self, parent, texto, *args, **kwargs)
-        self.setStyleSheet("* {color: qlineargradient(spread:pad, x1:0 y1:0, x2:1 y2:0, stop:0 rgba(0, 0, 0, 255), "
-                            "stop:1 rgba(255, 255, 255, 255));"
-                            "background: qlineargradient( x1:0 y1:0, x2:1 y2:0, stop:0 blue, stop:1 cyan);}")
+        self.setObjectName("tituloPantalla")
 
 class EtiquetaRoja(Etiqueta):
 

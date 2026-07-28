@@ -8,7 +8,7 @@ import xlsxwriter
 from PyQt5 import QtCore
 from PyQt5.QtCore import QAbstractTableModel, Qt, QVariant
 from PyQt5.QtGui import QFont, QColor
-from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QTableView
+from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QTableView, QApplication, QHeaderView
 from openpyxl.reader.excel import load_workbook
 
 from . import Ventanas
@@ -80,6 +80,8 @@ class Grilla(QTableWidget):
 
     formatos = {}
 
+    copy_data = []
+
     def __init__(self, *args, **kwargs):
 
         QTableWidget.__init__(self, *args)
@@ -94,6 +96,14 @@ class Grilla(QTableWidget):
             self.setSortingEnabled(True)
         if 'enabled' in kwargs:
             self.setEnabled(kwargs['enabled'])
+        self.setAlternatingRowColors(True)
+        self.setSelectionBehavior(QTableWidget.SelectRows)
+        self.setSelectionMode(QTableWidget.SingleSelection)
+        self.setShowGrid(False)
+        self.setWordWrap(False)
+        self.verticalHeader().setVisible(False)
+        self.verticalHeader().setDefaultSectionSize(28)
+        self.horizontalHeader().setHighlightSections(False)
 
     def ArmaCabeceras(self, cabeceras=None):
 
@@ -105,10 +115,12 @@ class Grilla(QTableWidget):
         for col in range(0, len(cabeceras)):
             self.setHorizontalHeaderItem(col, QTableWidgetItem(cabeceras[col]))
 
-        self.resizeRowsToContents()
-        self.resizeColumnsToContents()
         self.cabeceras = cabeceras
         self.OcultaColumnas()
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.horizontalHeader().setStretchLastSection(False)
+        self.resizeRowsToContents()
+        self.resizeColumnsToContents()
 
     def AgregaItem(self, items=None,
                    backgroundColor=QColor(255, 255, 255), readonly=False, formatea_miles=False):
@@ -186,8 +198,9 @@ class Grilla(QTableWidget):
                     # self.setItemDelegate(widgetColumna)
                     # self.setCellWidget(cantFilas - 1, col, widgetColumna)
                 col += 1
-            self.resizeRowsToContents()
-            self.resizeColumnsToContents()
+            if cantFilas <= 25:
+                self.resizeRowsToContents()
+                self.resizeColumnsToContents()
 
     # def ArmaWidgetCol(self, col):
     #     for x in range(self.rowCount()):
@@ -253,16 +266,17 @@ class Grilla(QTableWidget):
                 item.setBackground(self.itemAt(fila, col).background().color())
 
         self.setItem(fila, numCol, item)
-        self.resizeColumnsToContents()
+        if self.rowCount() <= 25:
+            self.resizeColumnsToContents()
 
     def ObtenerItem(self, fila, col):
 
-        try:
-            if isinstance(col, int):
-                numCol = col
-            else:
-                numCol = self.cabeceras.index(col)
+        if isinstance(col, int):
+            numCol = col
+        else:
+            numCol = self.cabeceras.index(col)
 
+        try:
             item = self.item(fila, numCol)
             if item.checkState() == QtCore.Qt.Checked:
                 item = True
@@ -292,7 +306,7 @@ class Grilla(QTableWidget):
                 except locale.Error:
                     print("No se pudo cargar el locale del sistema, usando 'C'")
                     locale.setlocale(locale.LC_NUMERIC, 'C.UTF-8')  # Fallback seguro
-        
+
         if isinstance(col, int):
             numCol = col
         else:
@@ -300,19 +314,22 @@ class Grilla(QTableWidget):
 
         try:
             item = self.item(fila, numCol)
-            if item.checkState() == QtCore.Qt.ItemIsUserCheckable:
-                item = True
+            if item:
+                if item.checkState() == QtCore.Qt.ItemIsUserCheckable:
+                    item = True
+                else:
+                    item = item.text()
+                    item = re.sub(r"[^-0123456789\.,]", "", item)
+
+                if configuracion_numero:
+                    item = locale.atof(item)
+                else:
+                    item = float(item)
             else:
-                item = item.text()
-                item = re.sub(r"[^-0123456789\.,]", "", item)
-            
-            if configuracion_numero:
-                item = locale.atof(item)
-            else:
-                item = float(item)
+                item = 0
         except Exception as e:
-            item = 0
-            Ventanas.showAlert("INFO", f"Error al convertir a numero {e} {col} {fila}")
+            pass
+            # Ventanas.showAlert("INFO", f"Error al convertir a numero {e} {col} {fila}")
 
         # return item.replace(',','.') if item else 0
         return item
@@ -354,7 +371,7 @@ class Grilla(QTableWidget):
             valor = self.ObtenerItem(fila=fila, col=col)
             self.ModificaItem(valor=valor, fila=fila, col=col)
 
-    def ExportaExcel(self, columnas=None, archivo="", titulo="", nuevo=True, hoja='', fila=0, col=0):
+    def ExportaExcel(self, columnas=None, archivo="", titulo="", nuevo=True, hoja='', fila=0, col=0, avance=None):
 
         if not columnas:
             columnas = self.cabeceras
@@ -402,7 +419,8 @@ class Grilla(QTableWidget):
             col += 1
 
         fila += 1
-        for row in range(self.rowCount()):
+        total_rows = self.rowCount()
+        for row in range(total_rows):
             col = 0
             for c in columnas:
                 dato = self.ObtenerItem(fila=row, col=c)
@@ -425,7 +443,17 @@ class Grilla(QTableWidget):
                     worksheet.write(fila, col, dato)
                 col += 1
             fila += 1
-
+            # actualizar barra de progreso si se provee
+            try:
+                if avance is not None and total_rows > 0:
+                    porcentaje = int((row + 1) / total_rows * 100)
+                    # avance puede ser un widget Avance con método actualizar
+                    if hasattr(avance, 'actualizar'):
+                        avance.actualizar(porcentaje)
+                    # asegurarse de procesar eventos para mantener UI responsive
+                    QApplication.processEvents()
+            except Exception:
+                pass
         # cabeceras_excel = [{'header': x} for x in columnas]
         # worksheet.add_table(0, 0, fila, col-1, cabeceras_excel)
         workbook.close()
@@ -549,11 +577,11 @@ class Grilla(QTableWidget):
                         self.setCurrentCell(fila, columna)
                     fila += 1
         return
-    
+
     def limpiarGrilla(self):
         self.setSortingEnabled(False)
         self.setRowCount(0)
-        
+
     def filaSeleccionada(self):
         try:
             return self.currentRow()

@@ -86,6 +86,7 @@ class ControladorBaseABM(ControladorBase):
         self.view.tableView.ExportaExcel()
         self.view.limite = limite
 
+    @reconnect_if_needed
     @inicializar_y_capturar_excepciones
     def onClickBtnBorrar(self, *args, **kwargs):
         if not self.view.tableView.currentRow() != -1:

@@ -4,7 +4,11 @@ from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import QLineEdit, QHBoxLayout
 
-from modelos.ModeloBase import reconnect_if_needed
+try:
+    from modelos.ModeloBase import reconnect_if_needed
+except ModuleNotFoundError:
+    def reconnect_if_needed(func):
+        return func
 
 from . import Ventanas
 from .EntradaTexto import EntradaTexto
