@@ -104,8 +104,7 @@ class UiBusqueda(Formulario):
         logging.info("Row {} and Column {} was clicked value {} item {}"
                      .format(row, column, self.tableView.currentItem().text(), item))
 
-    @reconnect_if_needed
-    def CargaDatos(self, *args, **kwargs):
+    def CargaDatos(self):
 
         with db.connection_context():
             textoBusqueda = self.lineEdit.text()
@@ -114,21 +113,7 @@ class UiBusqueda(Formulario):
                 if not self.modelo:
                     Ventanas.showAlert(LeerIni('nombre_sistema'), "No se ha establecido el modelo para la busqueda")
                     return
-                # Forzar ``ORDER BY id`` antes del ``limit`` para que MySQL use
-                # el indice PRIMARY en vez de hacer un FULL SCAN + LIMIT sobre
-                # la tabla completa. Sin esto, en tablas grandes (varios miles
-                # de empleados) la query tarda mas de 60s y la app queda
-                # colgada esperando el read_timeout, especialmente en
-                # conexiones lentas a la BD remota (caso: notebooks del
-                # taller conectandose a srv1723.hstgr.io).
-                try:
-                    primary_key = self.modelo._meta.primary_key
-                except AttributeError:
-                    primary_key = None
-                query = self.modelo.select()
-                if primary_key is not None:
-                    query = query.order_by(primary_key)
-                rows = query.dicts()
+                rows = self.modelo.select().dicts()
             else:
                 rows = self.data
 
@@ -229,6 +214,7 @@ class Buscador:
     cOrden = None  # orden de busqueda
     condiciones = []  # condiciones de filtrado
     campos_busqueda = []  # campos sobre los cuales realizar la busqueda
+    valor_busqueda = '' #valor inicial de lal busqueda
 
     def __init__(self):
         self.valorRetorno = None
@@ -244,6 +230,7 @@ class Buscador:
         ventana.camposTabla = self.campos
         ventana.campoRetorno = self.codigo.column_name if isinstance(self.codigo, str) else self.codigo
         ventana.condiciones = self.condiciones
+        ventana.lineEdit.setText(self.valor_busqueda)
         ventana.CargaDatos()
         ventana.exec_()
         if ventana.lRetval:
