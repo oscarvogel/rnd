@@ -27,6 +27,12 @@ from peewee import OperationalError, InterfaceError, DoesNotExist
 MAX_REINTENTOS = 5
 DELAY_SEGUNDOS = 1
 
+# Tiempo maximo (segundos) que puede vivir una conexion antes de ser reciclada.
+# Por debajo del wait_timeout default de MySQL (28800s = 8h) para evitar que el
+# server cierre la conexion silenciosamente y peewee no se entere hasta la
+# proxima query fallida. Configurable via RND_DB_STALE_TIMEOUT.
+DB_STALE_TIMEOUT = int(os.getenv('RND_DB_STALE_TIMEOUT', '300'))
+
 __author__ = "Jose Oscar Vogel <oscarvogel@gmail.com>"
 __copyright__ = "Copyright (C) 2018 Jose Oscar Vogel"
 __license__ = "GPL 3.0"
@@ -49,6 +55,36 @@ def _env_secret(*names):
 def _mysql_password():
     return _env_secret('RND_DB_PASSWORD', 'MYSQL_PASSWORD', 'DB_PASSWORD')
 
+
+class RecycledMySQLDatabase(MySQLDatabase):
+    """MySQLDatabase que recicla la conexion cuando pasa DB_STALE_TIMEOUT.
+
+    peewee 4.x no trae pool automatico; esto evita que conexiones muy viejas
+    se rompan silenciosamente por el wait_timeout del server MySQL.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._stale_timeout = DB_STALE_TIMEOUT
+        self._connected_at = 0.0
+
+    def connect(self, *args, **kwargs):
+        now = time.monotonic()
+        if self._stale_timeout > 0 and self._connected_at and (now - self._connected_at) >= self._stale_timeout:
+            try:
+                if not self.is_closed():
+                    super().close()
+            except Exception:
+                pass
+        result = super().connect(*args, **kwargs)
+        self._connected_at = time.monotonic()
+        return result
+
+    def close(self):
+        super().close()
+        self._connected_at = 0.0
+
+
 if LeerIni(clave='base') == 'sqlite':
     db = SqliteDatabase('sistema.db')
     # db = SqliteExtDatabase('sistema.db')
@@ -56,25 +92,12 @@ if LeerIni(clave='base') == 'sqlite':
     #     'cipher_page_size': 1024 * 16,
     #     'cache_size': 10000})  # 10,000 16KB pages, or 160MB.
 else:
-    if LeerIni(clave='debug') == 'S':
-        db = MySQLDatabase(LeerIni("basedatos"),
-                        user=LeerIni("user"),
-                        password=_mysql_password(),
-                        host=LeerIni("host"),
-                        port=int(LeerIni("port") or '3306'),
-                        connect_timeout=10)
-    elif LeerIni(clave='host') == 'srv1723.hstgr.io':
-        db = MySQLDatabase(LeerIni("basedatos"),
-                        user=LeerIni("user"),
-                        password=_mysql_password(),
-                        host=LeerIni("host"),
-                        port=int(LeerIni("port") or '3306'))
-    else:
-        db = MySQLDatabase(LeerIni("basedatos"),
-                           user=LeerIni("user"),
-                           password=_mysql_password(),
-                           host=LeerIni("host"),
-                           port=int(LeerIni("port") or '3306'))
+    db = RecycledMySQLDatabase(LeerIni("basedatos"),
+                               user=LeerIni("user"),
+                               password=_mysql_password(),
+                               host=LeerIni("host"),
+                               port=int(LeerIni("port") or '3306'),
+                               connect_timeout=10)
 
 def model_to_dict(instance):
     data = {}
