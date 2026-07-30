@@ -24,8 +24,11 @@ from functools import wraps
 import time
 from peewee import OperationalError, InterfaceError, DoesNotExist
 
-MAX_REINTENTOS = 5
-DELAY_SEGUNDOS = 1
+MAX_REINTENTOS = int(os.getenv('RND_DB_MAX_REINTENTOS', '5'))
+RETRY_BASE_DELAY = float(os.getenv('RND_DB_RETRY_BASE_DELAY', '1'))
+# Backoff exponencial cap: 60s entre reintentos para no esperar infinito en
+# una red muy lenta.
+RETRY_MAX_DELAY = float(os.getenv('RND_DB_RETRY_MAX_DELAY', '60'))
 
 # Timeouts de la conexion MySQL (en segundos). Configurables por env var para
 # poder ajustarlos en deploys con internet lenta (ej. VPS) sin tocar el codigo.
@@ -144,8 +147,10 @@ def reconnect_if_needed(method):
                 db.close()  # Cerramos la conexión rota si existe
 
                 if intento < MAX_REINTENTOS:
-                    print(f"Reintentando en {DELAY_SEGUNDOS} segundo(s)...")
-                    time.sleep(DELAY_SEGUNDOS)
+                    # Backoff exponencial: 1s, 2s, 4s, 8s, ... capeado por RETRY_MAX_DELAY.
+                    delay = min(RETRY_BASE_DELAY * (2 ** (intento - 1)), RETRY_MAX_DELAY)
+                    print(f"Reintentando en {delay:.1f} segundo(s)...")
+                    time.sleep(delay)
                 else:
                     raise ConnectionError("No se pudo restablecer la conexión después de varios intentos.")
         return None
