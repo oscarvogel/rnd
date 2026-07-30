@@ -27,6 +27,11 @@ from peewee import OperationalError, InterfaceError, DoesNotExist
 MAX_REINTENTOS = 5
 DELAY_SEGUNDOS = 1
 
+# Timeouts de la conexion MySQL (en segundos). Configurables por env var para
+# poder ajustarlos en deploys con internet lenta (ej. VPS) sin tocar el codigo.
+DB_CONNECT_TIMEOUT = int(os.getenv('RND_DB_CONNECT_TIMEOUT', '10'))
+DB_READ_TIMEOUT = int(os.getenv('RND_DB_READ_TIMEOUT', '30'))
+
 __author__ = "Jose Oscar Vogel <oscarvogel@gmail.com>"
 __copyright__ = "Copyright (C) 2018 Jose Oscar Vogel"
 __license__ = "GPL 3.0"
@@ -56,25 +61,13 @@ if LeerIni(clave='base') == 'sqlite':
     #     'cipher_page_size': 1024 * 16,
     #     'cache_size': 10000})  # 10,000 16KB pages, or 160MB.
 else:
-    if LeerIni(clave='debug') == 'S':
-        db = MySQLDatabase(LeerIni("basedatos"),
-                        user=LeerIni("user"),
-                        password=_mysql_password(),
-                        host=LeerIni("host"),
-                        port=int(LeerIni("port") or '3306'),
-                        connect_timeout=10)
-    elif LeerIni(clave='host') == 'srv1723.hstgr.io':
-        db = MySQLDatabase(LeerIni("basedatos"),
-                        user=LeerIni("user"),
-                        password=_mysql_password(),
-                        host=LeerIni("host"),
-                        port=int(LeerIni("port") or '3306'))
-    else:
-        db = MySQLDatabase(LeerIni("basedatos"),
-                           user=LeerIni("user"),
-                           password=_mysql_password(),
-                           host=LeerIni("host"),
-                           port=int(LeerIni("port") or '3306'))
+    db = MySQLDatabase(LeerIni("basedatos"),
+                       user=LeerIni("user"),
+                       password=_mysql_password(),
+                       host=LeerIni("host"),
+                       port=int(LeerIni("port") or '3306'),
+                       connect_timeout=DB_CONNECT_TIMEOUT,
+                       read_timeout=DB_READ_TIMEOUT)
 
 def model_to_dict(instance):
     data = {}
