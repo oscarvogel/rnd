@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyqt5libs"
+version = "0.1.0"
+description = "Biblioteca de utilidades y extensiones para proyectos desarrollados con PyQt5."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "LGPL-3.0" }
+authors = [
+  { name = "Jose Oscar Vogel", email = "oscarvogel@gmail.com" }
+]
+keywords = ["pyqt5", "qt", "desktop", "utilities"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
+  "Operating System :: OS Independent",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+  "peewee>=3.17",
+  "PyQt5>=5.15",
+  "openpyxl>=3.1",
+  "python-dateutil>=2.8",
+  "XlsxWriter>=3.0",
+  "python-dotenv>=1.0",
+  "cryptography>=41.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/oscarvogel/pyqt5libs"
+Repository = "https://github.com/oscarvogel/pyqt5libs"
+Issues = "https://github.com/oscarvogel/pyqt5libs/issues"
+
+[tool.setuptools]
+packages = ["pyqt5libs"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
