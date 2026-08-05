@@ -1,0 +1,3 @@
+[submodule "pyqt5libs"]
+	path = pyqt5libs
+	url = https://github.com/oscarvogel/pyqt5libs
