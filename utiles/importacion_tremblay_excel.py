@@ -163,5 +163,9 @@ def procesar_archivo_tremblay_excel(archivo_entrada):
     return archivo_temporal.name  # Devuelve la ruta del archivo temporal
 
 if __name__ == "__main__":
-    archivo_temporal = procesar_archivo_tremblay_excel("o:/rnd/documentacion/MISIONES-tremblay.xls")
+    import sys
+    if len(sys.argv) < 2:
+        print("Uso: python -m utiles.importacion_tremblay_excel <archivo.xls>")
+        sys.exit(1)
+    archivo_temporal = procesar_archivo_tremblay_excel(sys.argv[1])
     print(f"Archivo procesado: {archivo_temporal}")

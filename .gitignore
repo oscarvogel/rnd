@@ -45,3 +45,9 @@ documentacion/
 *.bak
 *.swp
 Thumbs.db
+
+# Excepción: fixtures de tests se versionan
+!tests/fixtures/*.xls
+!tests/fixtures/*.xlsx
+!tests/fixtures/*.csv
+!tests/fixtures/*.pdf
