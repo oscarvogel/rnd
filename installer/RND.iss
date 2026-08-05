@@ -1,5 +1,5 @@
 #define AppName "RND"
-#define AppVersion "2026.8.5.1"
+#define AppVersion "2026.8.5.2"
 #define AppPublisher "Jose Oscar Vogel"
 #define AppExeName "main.exe"
 
@@ -41,7 +41,10 @@ Type: filesandordirs; Name: "{app}\PIL"
 Type: filesandordirs; Name: "{app}\fitz"
 Type: filesandordirs; Name: "{app}\pdfminer"
 Type: filesandordirs; Name: "{app}\pymongo"
-Type: filesandordirs; Name: "{app}\cryptography"
+; Type: filesandordirs; Name: "{app}\cryptography" ; COMENTADO 2026-08-05: cryptography lo necesita pymysql para el handshake
+; de auth con MySQL 8 (caching_sha2_password). Borrarlo rompe la conexion
+; a la DB con un 1045 "Access denied" enganoso. Si se quiere limpiar
+; una version vieja, hacerlo manualmente antes de actualizar.
 Type: files; Name: "{app}\*.dll"
 Type: files; Name: "{app}\*.pyd"
 Type: files; Name: "{app}\*.zip"
