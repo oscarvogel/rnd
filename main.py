@@ -126,11 +126,15 @@ def inicio(argv=None):
     # mostrar el dialog para que el usuario la ingrese. Asi RND es
     # viable para distribuir a clientes no tecnicos.
     from modelos.ModeloBase import _mysql_password
-    if not _mysql_password():
+    has_password = bool(_mysql_password())
+    print(f"[main] Password presente: {has_password}")
+    if not has_password:
+        print("[main] No hay password -> mostrando dialog de credenciales")
         from PyQt5.QtWidgets import QApplication
         from controladores.ConfiguracionDB import pedir_credenciales_db
         # Necesitamos QApplication para que el dialog sea modal.
         _qapp = QApplication.instance() or QApplication([])
+        print(f"[main] QApplication creada: {_qapp}")
         creds = pedir_credenciales_db(
             parent=None,
             carpeta=argumento.inicio,
@@ -139,10 +143,12 @@ def inicio(argv=None):
                 "Ingresa los datos de conexion a la base de datos."
             ),
         )
+        print(f"[main] Dialog result: {creds}")
         if creds is None:
             # El usuario cancelo - no podemos seguir sin DB
             print("ERROR: no se ingresaron credenciales de DB. Saliendo.", file=sys.stderr)
             return 1
+        print("[main] Credenciales aceptadas, continuando")
 
     # ModeloBase().init()
     args = []
