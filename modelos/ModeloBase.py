@@ -106,9 +106,28 @@ class RecycledMySQLDatabase(MySQLDatabase):
                     super().close()
             except Exception:
                 pass
-        result = super().connect(*args, **kwargs)
-        self._connected_at = time.monotonic()
-        return result
+        try:
+            result = super().connect(*args, **kwargs)
+            self._connected_at = time.monotonic()
+            return result
+        except Exception as exc:
+            # Si falla con auth/SSL/host, mostrar el dialog de credenciales
+            # y reintentar. Asi RND NUNCA crashea con un 1045 sin chance
+            # de recovery.
+            from peewee import OperationalError as PeeweeOperationalError
+            if not isinstance(exc, PeeweeOperationalError):
+                raise
+            code = exc.args[0] if exc.args else 0
+            if code not in (1045, 1044, 1130, 2026, 1043, 2002, 2003):
+                raise
+            # Llamar al dialog con retry. Si el usuario cancela o si
+            # seguimos fallando despues de varios intentos, raise.
+            if not connect_with_credentials_dialog(max_attempts=3):
+                raise
+            # El dialog persistio la nueva config; reintentar.
+            result = super().connect(*args, **kwargs)
+            self._connected_at = time.monotonic()
+            return result
 
     def close(self):
         super().close()
