@@ -173,4 +173,19 @@ def inicio(argv=None):
     return 0
 
 if __name__ == "__main__":
-    sys.exit(inicio())
+    import traceback
+    try:
+        sys.exit(inicio())
+    except SystemExit:
+        raise
+    except BaseException as exc:
+        log_path = os.path.join(os.getcwd(), "rnd_crash.log")
+        with open(log_path, "w", encoding="utf-8") as fh:
+            fh.write(f"Excepcion no capturada: {type(exc).__name__}: {exc}
+
+")
+            fh.write(traceback.format_exc())
+        print(f"CRASH: {type(exc).__name__}: {exc}", file=sys.stderr)
+        print(f"Log escrito en: {log_path}", file=sys.stderr)
+        traceback.print_exc()
+        sys.exit(1)
