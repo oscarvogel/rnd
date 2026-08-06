@@ -1,68 +1,119 @@
 # coding=utf-8
 
-from os.path import join
-
-from PyQt5 import QtWidgets, QtCore
-from PyQt5.QtGui import QIcon, QPixmap, QPalette, QBrush
-from PyQt5.QtWidgets import QMainWindow, qApp, QAction, QVBoxLayout
+from PyQt5 import QtWidgets
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QMainWindow, qApp
 from peewee import DoesNotExist
 
 
 from modelos.Accesos import Acceso
-from modelos.Formula import Formula, MenuLateral
+from modelos.Formula import MenuLateral
 from pyqt5libs.pyqt5libs import Ventanas
-from pyqt5libs.pyqt5libs.ToolBox import ToolBox
-from pyqt5libs.pyqt5libs.Botones import Boton, BotonCerrarFormulario
-from pyqt5libs.pyqt5libs.utiles import BorrarConf, LeerConf, imagen, inicializar_y_capturar_excepciones, ubicacion_sistema
+from pyqt5libs.pyqt5libs.utiles import BorrarConf, LeerConf
 
-from controladores import ABMClientes, ABMEmpleados, ABMEquipos, ABMProveedores
-from controladores import ABMTablas, ImportacionPedidos, VerHojaRuta
+from vistas.shell.AreaCentral import AreaCentralView
+from vistas.shell.BarraLateral import BarraLateralView
+from vistas.shell.Encabezado import EncabezadoView
 
 
 class MainView(QMainWindow):
     LanzarExcepciones = True
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # self.ImagenFondo()
+        # ``botones`` se conserva por compatibilidad con codigo existente
+        # (controlador, scripts) que itera sobre esta lista. Con el shell
+        # moderno los elementos son ``QTreeWidgetItem`` y se navega via
+        # ``itemClicked`` (ver ``controladores.Main.conectarWidgets``).
+        self.botones = []
+        self.ventana_menu_lateral = None
         self.initUi()
         self.showMaximized()
 
     def initUi(self):
-        self.ArmaToolBoxLateral(self)
+        """Punto de entrada del armado de la UI principal."""
+        self.ArmaShellModerno(self)
 
-    def initMenu(self):
-        pass
+    def ArmaShellModerno(self, main_window):
+        """Compone el shell: encabezado + barra lateral + area central.
 
-    def SeleccionaMenu(self, idMenu, Archivo):
-        print("ID Menu {}".format(idMenu))
-        if Archivo:
-            self.ventana = eval(Archivo)
-            # ventana.exec_()
-            self.ventana.run()
-        else:
-            Ventanas.showAlert("Error", u"Opcion de menu no establecida")
+        El layout es totalmente escalable: no usa geometrias absolutas
+        (a diferencia del ``QToolBox`` original) y se adapta al
+        escalado de Windows via ``ancho_por_dpi``.
+        """
+        central = QtWidgets.QWidget(main_window)
+        central.setObjectName("shellCentralRoot")
+        raiz = QtWidgets.QVBoxLayout(central)
+        raiz.setContentsMargins(0, 0, 0, 0)
+        raiz.setSpacing(0)
 
-    def SalirSistema(self):
-        BorrarConf()
-        qApp.exit()
+        self.encabezado = EncabezadoView()
+        self.encabezado.boton_salir.clicked.connect(self.SalirSistema)
+        raiz.addWidget(self.encabezado)
 
-    def ArmaToolBarSalir(self):
-        pass
+        cuerpo = QtWidgets.QWidget()
+        cuerpo.setObjectName("shellCuerpo")
+        layout_cuerpo = QtWidgets.QHBoxLayout(cuerpo)
+        layout_cuerpo.setContentsMargins(0, 0, 0, 0)
+        layout_cuerpo.setSpacing(0)
 
-    def ImagenFondo(self):
-        #self.setStyleSheet("background-image: url(:imagenes/FOTO1.jpg); ")
-        pixmap = QPixmap(join(ubicacion_sistema(), "imagenes", "perfiles.jpg"))
-        # pixmap.scaledToWidth(self.width())
-        # pixmap.scaledToHeight(self.height())
-        print("alto {} ancho {}".format(self.height(), self.width()))
-        # oImage = QImage(join(LeerConf("InicioSistema"), "imagenes", "FOTO1.jpg"))
-        # oImage.scaledToHeight(self.height())
-        # oImage.scaledToWidth(self.width())
-        palette = QPalette()
-        palette.setBrush(10, QBrush(pixmap))
-        self.setAutoFillBackground(True)
-        self.setPalette(palette)
+        self.barra_lateral = BarraLateralView()
+        layout_cuerpo.addWidget(self.barra_lateral)
+
+        self.area_central = AreaCentralView()
+        layout_cuerpo.addWidget(self.area_central, stretch=1)
+
+        raiz.addWidget(cuerpo, stretch=1)
+        main_window.setCentralWidget(central)
+
+        dpi = main_window.logicalDpiX() or 96
+        self.barra_lateral.ancho_por_dpi(dpi)
+
+    def cargar_menu_lateral(self, usu_id):
+        """Carga las opciones de la barra lateral segun permisos.
+
+        Devuelve la cantidad de items visibles para que el
+        controlador o los tests puedan verificarla.
+        """
+        visibles = self.barra_lateral.cargar(usu_id)
+        self.botones = []
+        for i in range(self.barra_lateral.arbol.topLevelItemCount()):
+            padre = self.barra_lateral.arbol.topLevelItem(i)
+            for j in range(padre.childCount()):
+                self.botones.append(padre.child(j))
+        return visibles
+
+    def actualizar_encabezado(self, usuario, servidor, base,
+                              estado="Conectado", version=""):
+        self.encabezado.actualizar(
+            usuario=usuario,
+            servidor=servidor,
+            base=base,
+            estado=estado,
+            version=version,
+        )
+
+    def onClickItemMenu(self, item, _columna=0):
+        """Maneja clicks sobre items del arbol de navegacion lateral."""
+        if item is None:
+            return
+        menu_id = item.data(0, Qt.UserRole)
+        if menu_id is None:
+            return
+        try:
+            dato_menu = MenuLateral.get_by_id(menu_id)
+        except DoesNotExist:
+            return
+        if Acceso.ValidaMenu(
+            usu_id=int(LeerConf("idUsuario") or 0),
+            for_valid=dato_menu.for_id.for_valid,
+        ):
+            self.ventana_menu_lateral = eval(dato_menu.for_id.for_arch)
+            self.ventana_menu_lateral.run()
+
+    # ------------------------------------------------------------------
+    # API heredada (deprecada, mantenida por compatibilidad transitoria)
+    # ------------------------------------------------------------------
 
     def ArmaToolBarContable(self):
         pass
@@ -72,69 +123,39 @@ class MainView(QMainWindow):
 
     def ArmaToolBarVentas(self):
         pass
-    
+
     def ArmaToolBarSueldos(self):
         pass
 
-    def ArmaToolBoxLateral(self, MainWindow):
-        self.centralwidget = QtWidgets.QWidget(MainWindow)
-        self.centralwidget.setObjectName("centralwidget")
-        self.toolBox = ToolBox(self.centralwidget)
-        self.toolBox.setGeometry(QtCore.QRect(0, 0, 250, 500))
-        self.toolBox.setObjectName("toolBox")
-        self.paginas = []
-        self.botones = []
-        self.layoutBotones = []
-        datos_pagina = MenuLateral.Cabeceras()
+    def ArmaToolBarSalir(self):
+        pass
 
-        for pag in datos_pagina:
-            self.paginas.append(QtWidgets.QWidget())
-            indice = len(self.paginas) - 1
-            self.toolBox.addItem(self.paginas[indice], pag.nombre.strip())
+    def initMenu(self):
+        pass
 
-            items_pagina = MenuLateral.select().join(Formula).where(
-                MenuLateral.for_pare == pag.id,
-            ).order_by(Formula.for_orde)
-            layoutBoton = QVBoxLayout(self.paginas[indice])
-            self.layoutBotones.append(layoutBoton)
-            indice_boton = len(self.layoutBotones) - 1
-            alto = 0
-            for item in items_pagina:
-                alto += 1
-                boton = Boton(texto=item.nombre.strip(), imagen=imagen(
-                    item.for_id.for_imag
-                ), tooltip=item.for_id.for_nomb)
-                boton.id = item.id
-                self.layoutBotones[indice_boton].addWidget(boton)
-                self.botones.append(boton)
+    def SeleccionaMenu(self, idMenu, Archivo):
+        if Archivo:
+            self.ventana = eval(Archivo)
+            self.ventana.run()
+        else:
+            Ventanas.showAlert("Error", u"Opcion de menu no establecida")
 
-            ancho_pagina = QtCore.QRect(0, 0, 150, alto * 35)
-            self.paginas[indice].setGeometry(ancho_pagina)
-            self.layoutBotones[indice_boton].addStretch(1)
+    def SalirSistema(self):
+        BorrarConf()
+        qApp.exit()
 
-        self.paginas.append(QtWidgets.QWidget())
-        indice = len(self.paginas) - 1
-        self.toolBox.addItem(self.paginas[indice], 'Salir')
-        layoutBoton = QVBoxLayout(self.paginas[indice])
-        self.layoutBotones.append(layoutBoton)
-        indice_boton = len(self.layoutBotones) - 1
-        boton = BotonCerrarFormulario()
-        boton.clicked.connect(lambda: qApp.exit())
-        self.layoutBotones[indice_boton].addWidget(boton)
-        self.layoutBotones[indice_boton].addStretch(1)
-
-        self.botones.append(boton)
-
-        MainWindow.setCentralWidget(self.centralwidget)
-
-    @inicializar_y_capturar_excepciones
     def onClickBtnMenuIzquierda(self, boton, *args, **kwargs):
+        """Compatibilidad: adapta botones ``Boton`` o ``QTreeWidgetItem``."""
+        if hasattr(boton, "data") and callable(getattr(boton, "data", None)):
+            self.onClickItemMenu(boton, 0)
+            return
         if boton.text().replace('&', '').upper() == 'CERRAR':
             qApp.exit()
             return
         try:
             dato_menu = MenuLateral.get_by_id(boton.id)
-            if Acceso.ValidaMenu(usu_id=LeerConf('idUsuario'), for_valid=dato_menu.for_id.for_valid):
+            if Acceso.ValidaMenu(usu_id=LeerConf('idUsuario'),
+                                 for_valid=dato_menu.for_id.for_valid):
                 self.ventana_menu_lateral = eval(dato_menu.for_id.for_arch)
                 self.ventana_menu_lateral.run()
         except DoesNotExist:

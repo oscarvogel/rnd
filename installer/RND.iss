@@ -1,5 +1,5 @@
 #define AppName "RND"
-#define AppVersion "2026.8.6.3"
+#define AppVersion "2026.8.6.4"
 #define AppPublisher "Jose Oscar Vogel"
 #define AppExeName "main.exe"
 

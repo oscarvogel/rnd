@@ -150,6 +150,14 @@ def inicio(argv=None):
     # myStyle = MyProxyStyle('Fusion')
     app = QApplication(args)
     app.setWindowIcon(icono_sistema())
+
+    # Tema QSS global (issue #5). Se aplica a nivel de aplicacion para
+    # que la ventana principal, formularios, grillas y dialogos compartan
+    # el mismo lenguaje visual. Si el QSS no esta disponible, la app
+    # arranca con el estilo default de Qt (fallback seguro).
+    from utiles.tema import aplicar_tema
+    aplicar_tema(app)
+
     # app.setStyle(myStyle)
     ex = MainController()
     # ex.view.ImagenFondo()
