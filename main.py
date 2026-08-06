@@ -9,7 +9,7 @@
 # or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 # for more details.
 
-#Punto de Inicio del sistema
+# Punto de Inicio del sistema
 import argparse
 import configparser
 import logging
@@ -24,10 +24,18 @@ __copyright__ = "Copyright (C) 2025"
 __license__ = "GPL 3.0"
 __version__ = "0.1"
 
+
 def _build_arg_parser():
-    analizador = argparse.ArgumentParser(description='Sistema.')
-    analizador.add_argument("-i", "--inicio", default=os.getcwd(), help="Carpeta de Inicio de sistema.")
-    analizador.add_argument("-a", "--archivo", default="sistema.ini", help="Archivo de Configuracion de sistema.")
+    analizador = argparse.ArgumentParser(description="Sistema.")
+    analizador.add_argument(
+        "-i", "--inicio", default=os.getcwd(), help="Carpeta de Inicio de sistema."
+    )
+    analizador.add_argument(
+        "-a",
+        "--archivo",
+        default="sistema.ini",
+        help="Archivo de Configuracion de sistema.",
+    )
     analizador.add_argument(
         "--startup-check",
         action="store_true",
@@ -58,7 +66,8 @@ def _validate_startup(inicio, archivo):
 
     required_keys = ["host", "basedatos", "port", "icono", "logo", "iniciosistema"]
     missing_keys = [
-        key for key in required_keys
+        key
+        for key in required_keys
         if not config.get("param", key, fallback="").strip()
     ]
     if missing_keys:
@@ -108,9 +117,17 @@ def inicio(argv=None):
     #     carpeta = ""
     initialize_logger(LeerIni("iniciosistema", carpeta=carpeta))
     logging.basicConfig()
-    logging.debug("carpeta inicio{} archivo de inicio {}".format(argumento.inicio, argumento.archivo))
-    print("carpeta inicio{} archivo de inicio {}".format(argumento.inicio, argumento.archivo))
-    logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+    logging.debug(
+        "carpeta inicio{} archivo de inicio {}".format(
+            argumento.inicio, argumento.archivo
+        )
+    )
+    print(
+        "carpeta inicio{} archivo de inicio {}".format(
+            argumento.inicio, argumento.archivo
+        )
+    )
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
 
     sys.path.insert(0, LeerIni("iniciosistema", carpeta=carpeta))
     # if len(sys.argv) > 1:
@@ -126,12 +143,14 @@ def inicio(argv=None):
     # mostrar el dialog para que el usuario la ingrese. Asi RND es
     # viable para distribuir a clientes no tecnicos.
     from modelos.ModeloBase import _mysql_password
+
     has_password = bool(_mysql_password())
     print(f"[main] Password presente: {has_password}")
     if not has_password:
         print("[main] No hay password -> mostrando dialog de credenciales")
         from PyQt5.QtWidgets import QApplication
         from controladores.ConfiguracionDB import pedir_credenciales_db
+
         # Necesitamos QApplication para que el dialog sea modal.
         _qapp = QApplication.instance() or QApplication([])
         print(f"[main] QApplication creada: {_qapp}")
@@ -146,13 +165,15 @@ def inicio(argv=None):
         print(f"[main] Dialog result: {creds}")
         if creds is None:
             # El usuario cancelo - no podemos seguir sin DB
-            print("ERROR: no se ingresaron credenciales de DB. Saliendo.", file=sys.stderr)
+            print(
+                "ERROR: no se ingresaron credenciales de DB. Saliendo.", file=sys.stderr
+            )
             return 1
         print("[main] Credenciales aceptadas, continuando")
 
     # ModeloBase().init()
     args = []
-    #args = ['', '-style', 'Cleanlooks']
+    # args = ['', '-style', 'Cleanlooks']
     # myStyle = MyProxyStyle('Fusion')
     app = QApplication(args)
     app.setWindowIcon(icono_sistema())
@@ -162,6 +183,7 @@ def inicio(argv=None):
     # el mismo lenguaje visual. Si el QSS no esta disponible, la app
     # arranca con el estilo default de Qt (fallback seguro).
     from utiles.tema import aplicar_tema
+
     aplicar_tema(app)
 
     # app.setStyle(myStyle)
@@ -172,8 +194,10 @@ def inicio(argv=None):
         return app.exec_()
     return 0
 
+
 if __name__ == "__main__":
     import traceback
+
     try:
         sys.exit(inicio())
     except SystemExit:
@@ -181,9 +205,13 @@ if __name__ == "__main__":
     except BaseException as exc:
         log_path = os.path.join(os.getcwd(), "rnd_crash.log")
         with open(log_path, "w", encoding="utf-8") as fh:
-            fh.write(f"Excepcion no capturada: {type(exc).__name__}: {exc}
-
-")
+            fh.write(
+                "Excepcion no capturada: "
+                + type(exc).__name__
+                + ": "
+                + str(exc)
+                + "\n\n"
+            )
             fh.write(traceback.format_exc())
         print(f"CRASH: {type(exc).__name__}: {exc}", file=sys.stderr)
         print(f"Log escrito en: {log_path}", file=sys.stderr)

@@ -7,12 +7,16 @@ from controladores.Migraciones import MigracionBaseDatos
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.pyqt5libs import Constantes
 from pyqt5libs.pyqt5libs.Menu import GeneraMenu
-from pyqt5libs.pyqt5libs.utiles import LeerConf, LeerIni, getFileProperties, inicializar_y_capturar_excepciones
+from pyqt5libs.pyqt5libs.utiles import (
+    LeerConf,
+    LeerIni,
+    getFileProperties,
+    inicializar_y_capturar_excepciones,
+)
 from vistas.Main import MainView
 
 
 class MainController(ControladorBase):
-
     def __init__(self):
         super().__init__()
         self.view = MainView()
@@ -40,7 +44,7 @@ class MainController(ControladorBase):
             if propiedades["StringFileInfo"]:
                 versionexe = propiedades["StringFileInfo"]["FileVersion"]
             else:
-                versionexe = ''
+                versionexe = ""
 
             usuario = LeerConf("usuario") or ""
             servidor = LeerIni("ServerDB") or ""
@@ -54,9 +58,9 @@ class MainController(ControladorBase):
                 version=versionexe,
             )
             self.view.setWindowTitle(
-                f'Usuario {usuario} Servidor {servidor}'
-                f' Base de datos {basedatos} '
-                f'Version sistema {versionexe}'
+                f"Usuario {usuario} Servidor {servidor}"
+                f" Base de datos {basedatos} "
+                f"Version sistema {versionexe}"
             )
 
             usu_id = int(LeerConf("idUsuario") or 0)
@@ -79,9 +83,7 @@ class MainController(ControladorBase):
     def conectarWidgets(self):
         # El shell moderno navega via itemClicked del arbol lateral.
         try:
-            self.view.barra_lateral.arbol.itemClicked.connect(
-                self.view.onClickItemMenu
-            )
+            self.view.barra_lateral.arbol.itemClicked.connect(self.view.onClickItemMenu)
         except AttributeError:
             # Fallback tolerante: si por algun motivo el arbol no
             # existe, conserva el comportamiento historico.
@@ -89,7 +91,6 @@ class MainController(ControladorBase):
                 btn.clicked.connect(
                     lambda _, b=btn: self.view.onClickBtnMenuIzquierda(b)
                 )
-
 
     @inicializar_y_capturar_excepciones
     def toolbtnpressed(self, a, *args, **kwargs) -> None:
