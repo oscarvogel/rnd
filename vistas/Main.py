@@ -114,29 +114,61 @@ class MainView(QMainWindow):
         # en un QMessageBox en vez de cerrar la app silenciosamente.
         try:
             import importlib
+            from PyQt5.QtWidgets import QWidget
             target = dato_menu.for_id.for_arch
             # El path en la DB a veces no tiene el prefijo "controladores."
-            # (ej "ABMClientes.ABMClientesController"). Si arranca con un
-            # nombre de modulo (sin punto al inicio o prefijo "controladores."),
-            # le agregamos el prefijo.
+            # (ej "ABMClientes.ABMClientesController"). Se lo agregamos.
             if not target.startswith("controladores."):
                 target = "controladores." + target
-            # Separar modulo de clase: "controladores.ABMClientes.ABMClientesController"
-            # -> modulo = "controladores.ABMClientes", clase = "ABMClientesController"
             mod_path, class_name = target.rsplit(".", 1)
             modulo = importlib.import_module(mod_path)
-            clase = getattr(modulo, class_name)
+            # Fallback: si la clase exacta no existe, tomar la primera
+            # subclase de QWidget del modulo (es la convencion usual:
+            # el modulo ABMClientes exporta una vista/control que es lo
+            # que se quiere abrir).
+            try:
+                clase = getattr(modulo, class_name)
+            except AttributeError:
+                candidatos = [
+                    n for n, v in vars(modulo).items()
+                    if isinstance(v, type)
+                    and issubclass(v, QWidget)
+                    and not n.startswith("_")
+                ]
+                if not candidatos:
+                    raise AttributeError(
+                        f"Modulo {mod_path} no tiene ninguna subclase de QWidget"
+                    )
+                # Priorizar la que tenga el mismo nombre del modulo o
+                # el mismo nombre de la clase buscada sin sufijo.
+                preferido = next(
+                    (n for n in candidatos if n == mod_path.split(".")[-1]),
+                    None,
+                ) or next(
+                    (n for n in candidatos if n.lower() == class_name.lower()),
+                    None,
+                ) or candidatos[0]
+                clase = getattr(modulo, preferido)
             self.ventana_menu_lateral = clase()
             self.ventana_menu_lateral.run()
         except Exception as exc:
             import traceback
             from PyQt5.QtWidgets import QMessageBox
             tb = traceback.format_exc()
-            QMessageBox.critical(
-                self,
-                "Error al abrir la opcion",
-                f"No se pudo abrir el menu '{dato_menu.for_id.for_arch}':\n\n{exc}\n\n{tb}",
+            # Forzar estilos legibles: el QSS vogel2026 oscurece el texto
+            # del QMessageBox. Aplicamos un stylesheet inline que sobrescribe.
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Critical)
+            box.setWindowTitle("Error al abrir la opcion")
+            box.setText(f"No se pudo abrir el menu '{dato_menu.for_id.for_arch}':\n\n{exc}")
+            box.setDetailedText(tb)
+            box.setStyleSheet(
+                "QMessageBox { background-color: #ffffff; color: #000000; }"
+                " QMessageBox QLabel { color: #000000; background-color: #ffffff; }"
+                " QPushButton { background-color: #e0e0e0; color: #000000;"
+                "                padding: 4px 12px; min-width: 60px; }"
             )
+            box.exec_()
 
     # ------------------------------------------------------------------
     # API heredada (deprecada, mantenida por compatibilidad transitoria)
