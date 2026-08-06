@@ -14,9 +14,11 @@
 
 .PARAMETER Version
     Version nueva en formato AAAA.MM.DD.VV (ej: 2026.8.5.2).
-    Si no se pasa, default a la fecha de hoy con VV=1 (ej: 2026.8.5.1).
-    VV es la variante del build del dia: incrementarla si hay varios
-    builds en la misma fecha.
+    Si no se pasa:
+      - Si la version actual es del mismo dia que hoy, se incrementa VV
+        (ej: 2026.8.6.2 -> 2026.8.6.3).
+      - Si es de otro dia, se usa la fecha de hoy con VV=1
+        (ej: 2026.8.6.2 -> 2026.8.7.1).
 
 .PARAMETER SkipTests
     Salta la corrida de pytest. Util solo si ya los corriste y queres
@@ -88,8 +90,19 @@ Write-Host "    Version actual: $currentVersion"
 
 if (-not $Version) {
     $today = Get-Date -Format 'yyyy.M.d'
-    $Version = "$today.1"
-    Write-Host "    Default (fecha de hoy + VV=1): $Version"
+    # Si la version actual es del mismo dia, incrementar VV en vez de
+    # pisar con VV=1 (eso destruia el bump que ya estuviera hecho y
+    # generaba "regresiones" de version, ej 2026.8.6.2 -> 2026.8.6.1).
+    $currentParts = $currentVersion.Split('.')
+    $currentDate = "$($currentParts[0]).$($currentParts[1]).$($currentParts[2])"
+    if ($currentDate -eq $today) {
+        $newVV = [int]$currentParts[3] + 1
+        $Version = "$today.$newVV"
+        Write-Host "    Default (mismo dia, incrementando VV): $Version"
+    } else {
+        $Version = "$today.1"
+        Write-Host "    Default (nuevo dia, VV=1): $Version"
+    }
 }
 
 if (-not (Test-VersionFormat $Version)) {
