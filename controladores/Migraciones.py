@@ -67,10 +67,25 @@ class MigracionBaseDatos:
             logging.debug("Tabla ProcesoLista ya existe, no se crea de nuevo")
                     
     def RealizaMigraciones(self):
+        # Errores que la migracion considera "ya aplicado" (idempotencia):
+        #   1060 = Duplicate column name (la columna ya existe)
+        #   1022 = Can't write; duplicate key (constraint/unique ya existe)
+        #   1061 = Duplicate key name (indice ya existe)
+        #   1091 = Can't DROP; check that column/key exists (ya borrado)
+        IGNORAR = {1060, 1022, 1061, 1091}
         for m in self.migraciones:
             try:
                 migrate(m)
             except Exception as e:
+                # peewee expone el codigo de MySQL en e.args[0] o como
+                # atributo del cursor. Cubrimos ambos casos.
+                code = None
+                if hasattr(e, "args") and e.args:
+                    code = e.args[0]
+                if code in IGNORAR:
+                    # Migracion ya aplicada en la DB. Skip silencioso.
+                    logging.debug(f"Migracion ya aplicada (mysql {code}): {e}")
+                    continue
                 ex = traceback.format_exception(sys.exc_info()[0], sys.exc_info()[1], sys.exc_info()[2])
                 self.Traceback = ''.join(ex)
                 logging.debug(self.Traceback)
