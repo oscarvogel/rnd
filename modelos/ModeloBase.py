@@ -100,13 +100,21 @@ if LeerIni(clave='base') == 'sqlite':
     #     'cipher_page_size': 1024 * 16,
     #     'cache_size': 10000})  # 10,000 16KB pages, or 160MB.
 else:
+    # El server MySQL (vps-922868-x.dattaweb.com) tiene
+    # require_secure_transport=ON desde 2026-08. Sin SSL, pymysql tira un
+    # 1045 enganoso ("Access denied") o un 2026 ("SSL required") segun
+    # el estado del handshake. pymysql espera ssl=dict, no ssl=bool
+    # (ssl=True tira AttributeError: 'bool' object has no attribute 'get').
+    # ssl={} cifra sin verificar cert del server; si en el futuro se
+    # quiere endurecer, pasar ssl={'ca': '...', 'check_hostname': True}.
     db = RecycledMySQLDatabase(LeerIni("basedatos"),
                                user=LeerIni("user"),
                                password=_mysql_password(),
                                host=LeerIni("host"),
                                port=int(LeerIni("port") or '3306'),
                                connect_timeout=DB_CONNECT_TIMEOUT,
-                               read_timeout=DB_READ_TIMEOUT)
+                               read_timeout=DB_READ_TIMEOUT,
+                               ssl={})
 
 def model_to_dict(instance):
     data = {}
