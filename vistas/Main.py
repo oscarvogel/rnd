@@ -109,22 +109,24 @@ class MainView(QMainWindow):
             for_valid=dato_menu.for_id.for_valid,
         ):
             return
-        # Wrappeamos el eval + run con un try/except amplio para que
+        # Wrappeamos el load + run con un try/except amplio para que
         # cualquier error (import, constructor, conexion a DB) se muestre
         # en un QMessageBox en vez de cerrar la app silenciosamente.
         try:
+            import importlib
             target = dato_menu.for_id.for_arch
-            try:
-                self.ventana_menu_lateral = eval(target)
-            except NameError:
-                # Fallback: el path en la DB no tiene el prefijo "controladores."
-                # (ej "ABMClientes.ABMClientesController" en vez de
-                # "controladores.ABMClientes.ABMClientesController").
-                # Probamos con el prefijo.
-                if not target.startswith("controladores."):
-                    self.ventana_menu_lateral = eval("controladores." + target)
-                else:
-                    raise
+            # El path en la DB a veces no tiene el prefijo "controladores."
+            # (ej "ABMClientes.ABMClientesController"). Si arranca con un
+            # nombre de modulo (sin punto al inicio o prefijo "controladores."),
+            # le agregamos el prefijo.
+            if not target.startswith("controladores."):
+                target = "controladores." + target
+            # Separar modulo de clase: "controladores.ABMClientes.ABMClientesController"
+            # -> modulo = "controladores.ABMClientes", clase = "ABMClientesController"
+            mod_path, class_name = target.rsplit(".", 1)
+            modulo = importlib.import_module(mod_path)
+            clase = getattr(modulo, class_name)
+            self.ventana_menu_lateral = clase()
             self.ventana_menu_lateral.run()
         except Exception as exc:
             import traceback
@@ -133,7 +135,7 @@ class MainView(QMainWindow):
             QMessageBox.critical(
                 self,
                 "Error al abrir la opcion",
-                f"No se pudo abrir el menu '{target}':\n\n{exc}\n\n{tb}",
+                f"No se pudo abrir el menu '{dato_menu.for_id.for_arch}':\n\n{exc}\n\n{tb}",
             )
 
     # ------------------------------------------------------------------
