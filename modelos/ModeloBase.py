@@ -60,8 +60,30 @@ def _env_secret(*names):
             return value
     return ''
 
+
+def _persisted_password():
+    """Lee la clave persistida en QSettings (lo que GrabaConf escribio
+    al arranque o cuando el usuario la re-ingresa via dialog).
+
+    Antes (issue #11): este fallback no existia. La clave se persistia
+    en QSettings pero _mysql_password() no la leia, asi que el sistema
+    dependia 100% de tener RND_DB_PASSWORD en el env var. Resultado: el
+    sistema no era viable para distribuir a clientes que no saben
+    setear env vars.
+    """
+    try:
+        from pyqt5libs.pyqt5libs.utiles import LeerIni
+        return LeerIni("password") or ''
+    except Exception:
+        return ''
+
+
 def _mysql_password():
-    return _env_secret('RND_DB_PASSWORD', 'MYSQL_PASSWORD', 'DB_PASSWORD')
+    # Orden de prioridad:
+    # 1) env var (la mas explicita, gana sobre la persistencia)
+    # 2) QSettings (la persistencia que escribe GrabaConf en main.py)
+    # 3) string vacio -> el caller deberia gatillar el dialog de credenciales
+    return _env_secret('RND_DB_PASSWORD', 'MYSQL_PASSWORD', 'DB_PASSWORD') or _persisted_password()
 
 
 class RecycledMySQLDatabase(MySQLDatabase):
@@ -160,9 +182,64 @@ def reconnect_if_needed(method):
                     print(f"Reintentando en {delay:.1f} segundo(s)...")
                     time.sleep(delay)
                 else:
-                    raise ConnectionError("No se pudo restablecer la conexión después de varios intentos.")
+                    # Ultimo intento: si el error es auth/SSL/host,
+                    # mostrar dialog para que el usuario corrija las credenciales.
+                    code = getattr(e, "args", [None])[0] if hasattr(e, "args") else None
+                    if code in (1045, 1044, 1130, 2026, 1043):
+                        if not connect_with_credentials_dialog():
+                            raise ConnectionError(
+                                "No se pudo restablecer la conexion: el usuario cancelo el dialog."
+                            )
+                        return method(self, *args, **kwargs)
+                    raise ConnectionError(
+                        "No se pudo restablecer la conexion despues de varios intentos: {}".format(e)
+                    )
         return None
     return wrapper
+
+def connect_with_credentials_dialog(max_attempts=3):
+    """Conecta a la DB. Si falla con OperationalError (auth, SSL, host),
+    muestra un dialog para que el usuario corrija las credenciales.
+    Reintenta hasta max_attempts veces.
+
+    Returns:
+        True si la conexion se establecio OK. False si el usuario cancelo
+        o si se agotaron los intentos.
+    """
+    from peewee import OperationalError as PeeweeOperationalError
+    from controladores.ConfiguracionDB import pedir_credenciales_db
+    from PyQt5.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    parent = None
+    if app is not None:
+        try:
+            parent = app.activeWindow()
+        except Exception:
+            parent = None
+
+    carpeta = os.getcwd() + "\\"
+
+    for intento in range(1, max_attempts + 1):
+        try:
+            db.connect(reuse_if_open=True)
+            return True
+        except PeeweeOperationalError as exc:
+            code, msg = exc.args if len(exc.args) >= 2 else (0, str(exc))
+            mensaje = (
+                "No se pudo conectar a la base de datos.\n\n"
+                "Error MySQL {}: {}\n\n"
+                "Verifica los datos o consulta con el administrador."
+            ).format(code, msg)
+            nueva = pedir_credenciales_db(
+                parent=parent,
+                carpeta=carpeta,
+                mensaje=mensaje,
+            )
+            if nueva is None:
+                return False
+    return False
+
 
 class ModeloBase(Model):
 

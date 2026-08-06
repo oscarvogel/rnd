@@ -122,6 +122,28 @@ def inicio(argv=None):
     if db_password:
         GrabaConf(clave="password", valor=db_password)
 
+    # Si despues de leer env var y QSettings no hay clave de DB,
+    # mostrar el dialog para que el usuario la ingrese. Asi RND es
+    # viable para distribuir a clientes no tecnicos.
+    from modelos.ModeloBase import _mysql_password
+    if not _mysql_password():
+        from PyQt5.QtWidgets import QApplication
+        from controladores.ConfiguracionDB import pedir_credenciales_db
+        # Necesitamos QApplication para que el dialog sea modal.
+        _qapp = QApplication.instance() or QApplication([])
+        creds = pedir_credenciales_db(
+            parent=None,
+            carpeta=argumento.inicio,
+            mensaje=(
+                "Es la primera vez que inicia el sistema.\n\n"
+                "Ingresa los datos de conexion a la base de datos."
+            ),
+        )
+        if creds is None:
+            # El usuario cancelo - no podemos seguir sin DB
+            print("ERROR: no se ingresaron credenciales de DB. Saliendo.", file=sys.stderr)
+            return 1
+
     # ModeloBase().init()
     args = []
     #args = ['', '-style', 'Cleanlooks']
