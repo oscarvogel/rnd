@@ -104,12 +104,27 @@ class MainView(QMainWindow):
             dato_menu = MenuLateral.get_by_id(menu_id)
         except DoesNotExist:
             return
-        if Acceso.ValidaMenu(
+        if not Acceso.ValidaMenu(
             usu_id=int(LeerConf("idUsuario") or 0),
             for_valid=dato_menu.for_id.for_valid,
         ):
-            self.ventana_menu_lateral = eval(dato_menu.for_id.for_arch)
+            return
+        # Wrappeamos el eval + run con un try/except amplio para que
+        # cualquier error (import, constructor, conexion a DB) se muestre
+        # en un QMessageBox en vez de cerrar la app silenciosamente.
+        try:
+            target = dato_menu.for_id.for_arch
+            self.ventana_menu_lateral = eval(target)
             self.ventana_menu_lateral.run()
+        except Exception as exc:
+            import traceback
+            from PyQt5.QtWidgets import QMessageBox
+            tb = traceback.format_exc()
+            QMessageBox.critical(
+                self,
+                "Error al abrir la opcion",
+                f"No se pudo abrir el menu '{target}':\n\n{exc}\n\n{tb}",
+            )
 
     # ------------------------------------------------------------------
     # API heredada (deprecada, mantenida por compatibilidad transitoria)
