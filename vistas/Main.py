@@ -114,7 +114,17 @@ class MainView(QMainWindow):
         # en un QMessageBox en vez de cerrar la app silenciosamente.
         try:
             target = dato_menu.for_id.for_arch
-            self.ventana_menu_lateral = eval(target)
+            try:
+                self.ventana_menu_lateral = eval(target)
+            except NameError:
+                # Fallback: el path en la DB no tiene el prefijo "controladores."
+                # (ej "ABMClientes.ABMClientesController" en vez de
+                # "controladores.ABMClientes.ABMClientesController").
+                # Probamos con el prefijo.
+                if not target.startswith("controladores."):
+                    self.ventana_menu_lateral = eval("controladores." + target)
+                else:
+                    raise
             self.ventana_menu_lateral.run()
         except Exception as exc:
             import traceback
