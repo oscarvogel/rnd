@@ -109,26 +109,24 @@ class MainView(QMainWindow):
             for_valid=dato_menu.for_id.for_valid,
         ):
             return
-        # Wrappeamos el load + run con un try/except amplio para que
-        # cualquier error (import, constructor, conexion a DB) se muestre
-        # en un QMessageBox en vez de cerrar la app silenciosamente.
+        # Cargamos EXACTAMENTE lo que esta en for_arch, sin agregar
+        # prefijos ni buscar alternativas. Si falla, lo mostramos al
+        # operador para que sepa que el path en la DB no es resoluble.
         try:
             import importlib
-            from PyQt5.QtWidgets import QWidget
             target = dato_menu.for_id.for_arch
-            # El path en la DB a veces no tiene el prefijo "controladores."
-            # (ej "ABMClientes.ABMClientesController"). Se lo agregamos.
-            if not target.startswith("controladores."):
-                target = "controladores." + target
-            mod_path, class_name = target.rsplit(".", 1)
-            modulo = importlib.import_module(mod_path)
-            # Fallback: si la clase exacta no existe, tomar la primera
-            # subclase de QWidget del modulo (es la convencion usual:
-            # el modulo ABMClientes exporta una vista/control que es lo
-            # que se quiere abrir).
-            try:
+            # Si el target tiene la forma "modulo.Clase" instanciable,
+            # separamos y cargamos. Si NO tiene punto, asumimos que es
+            # un nombre de modulo simple y la primera clase de ese modulo.
+            if "." in target:
+                mod_path, class_name = target.rsplit(".", 1)
+                modulo = importlib.import_module(mod_path)
                 clase = getattr(modulo, class_name)
-            except AttributeError:
+            else:
+                modulo = importlib.import_module(target)
+                # Si no se especifico clase, tomar la primera subclase
+                # de QWidget del modulo.
+                from PyQt5.QtWidgets import QWidget
                 candidatos = [
                     n for n, v in vars(modulo).items()
                     if isinstance(v, type)
@@ -137,18 +135,9 @@ class MainView(QMainWindow):
                 ]
                 if not candidatos:
                     raise AttributeError(
-                        f"Modulo {mod_path} no tiene ninguna subclase de QWidget"
+                        f"Modulo {target} no tiene subclases de QWidget"
                     )
-                # Priorizar la que tenga el mismo nombre del modulo o
-                # el mismo nombre de la clase buscada sin sufijo.
-                preferido = next(
-                    (n for n in candidatos if n == mod_path.split(".")[-1]),
-                    None,
-                ) or next(
-                    (n for n in candidatos if n.lower() == class_name.lower()),
-                    None,
-                ) or candidatos[0]
-                clase = getattr(modulo, preferido)
+                clase = getattr(modulo, candidatos[0])
             self.ventana_menu_lateral = clase()
             self.ventana_menu_lateral.run()
         except Exception as exc:
@@ -160,7 +149,11 @@ class MainView(QMainWindow):
             box = QMessageBox(self)
             box.setIcon(QMessageBox.Critical)
             box.setWindowTitle("Error al abrir la opcion")
-            box.setText(f"No se pudo abrir el menu '{dato_menu.for_id.for_arch}':\n\n{exc}")
+            box.setText(
+                "No se pudo abrir la opcion del menu.\n\n"
+                "Path guardado en la DB: '" + str(dato_menu.for_id.for_arch) + "'\n\n"
+                "Error: " + str(exc)
+            )
             box.setDetailedText(tb)
             box.setStyleSheet(
                 "QMessageBox { background-color: #ffffff; color: #000000; }"
