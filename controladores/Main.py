@@ -16,17 +16,14 @@ class MainController(ControladorBase):
     def __init__(self):
         super().__init__()
         self.view = MainView()
-        # self.view.ArmaToolbarVentas()
-        # self.view.ArmaToolbarCompra()
+        # Las ``ArmaToolBar*`` quedan como no-op en el shell moderno pero
+        # se llaman para mantener compatibilidad con el contrato historico.
         self.view.ArmaToolBarContable()
         self.view.ArmaToolBarVentas()
         self.view.ArmaToolBarCompras()
-        # self.view.ArmaToolBarSueldos()
         self.view.ArmaToolBarSalir()
-        
-        # #informa cuotas de polizas a vencer
+
         # notificar_cuotas_a_vencer()
-        # #informa polizas a vencer
         # notificar_polizas_a_vencer()
         self.conectarWidgets()
 
@@ -40,15 +37,31 @@ class MainController(ControladorBase):
             migrador = MigracionBaseDatos()
             # hilo_vencimientos()
             propiedades = getFileProperties("main.exe")
-            # self.view.setWindowTitle("Usuario " + LeerConf("usuario") + " Servidor " + LeerIni("ServerDB") +
-            #                         " Base de datos " + LeerIni("BaseDatos"))
             if propiedades["StringFileInfo"]:
                 versionexe = propiedades["StringFileInfo"]["FileVersion"]
             else:
                 versionexe = ''
-            self.view.setWindowTitle(f'Usuario {LeerConf("usuario")} Servidor {LeerIni("ServerDB")}'
-                                     f' Base de datos {LeerIni("BaseDatos")} '
-                                     f'Version sistema {versionexe}')
+
+            usuario = LeerConf("usuario") or ""
+            servidor = LeerIni("ServerDB") or ""
+            basedatos = LeerIni("BaseDatos") or ""
+
+            self.view.actualizar_encabezado(
+                usuario=usuario,
+                servidor=servidor,
+                base=basedatos,
+                estado="Conectado",
+                version=versionexe,
+            )
+            self.view.setWindowTitle(
+                f'Usuario {usuario} Servidor {servidor}'
+                f' Base de datos {basedatos} '
+                f'Version sistema {versionexe}'
+            )
+
+            usu_id = int(LeerConf("idUsuario") or 0)
+            self.view.cargar_menu_lateral(usu_id)
+
             # inicializadb()
             self.ArmaMenu()
         return lRetVal
@@ -61,11 +74,21 @@ class MainController(ControladorBase):
         menu.Carga()
 
     def SalirSistema(self):
-        qApp.exit()
+        self.view.SalirSistema()
 
     def conectarWidgets(self):
-        for btn in self.view.botones:
-            btn.clicked.connect(lambda _, b=btn: self.view.onClickBtnMenuIzquierda(b))    
+        # El shell moderno navega via itemClicked del arbol lateral.
+        try:
+            self.view.barra_lateral.arbol.itemClicked.connect(
+                self.view.onClickItemMenu
+            )
+        except AttributeError:
+            # Fallback tolerante: si por algun motivo el arbol no
+            # existe, conserva el comportamiento historico.
+            for btn in self.view.botones:
+                btn.clicked.connect(
+                    lambda _, b=btn: self.view.onClickBtnMenuIzquierda(b)
+                )
 
 
     @inicializar_y_capturar_excepciones
