@@ -53,8 +53,11 @@ def obtener_estado_flujo(usu_id, fecha=None):
     en_preparacion_completos = 0
     listas = 0
     despachadas = 0
+    rutas_incompletas = []
+    rutas_validables = []
+    rutas_listas = []
 
-    for ruta_id, pedidos_ruta in por_ruta.items():
+    for ruta_id, pedidos_ruta in sorted(por_ruta.items()):
         estado = estados.get(ruta_id, EstadoHojaRuta.EN_PREPARACION)
         resultado = validar_hoja(
             pedidos_ruta, fecha, ruta_id, empleado_generico, camion_generico
@@ -63,12 +66,23 @@ def obtener_estado_flujo(usu_id, fecha=None):
             despachadas += 1
         elif estado == EstadoHojaRuta.LISTA:
             listas += 1
+            rutas_listas.append(ruta_id)
         elif resultado.valida:
             en_preparacion_completos += 1
+            rutas_validables.append(ruta_id)
         else:
             codigos = {item.codigo for item in resultado.pendientes}
             if "chofer" in codigos or "camion" in codigos:
                 incompletos_recursos += 1
+                rutas_incompletas.append(ruta_id)
+
+    ruta_recomendada = 0
+    if rutas_incompletas:
+        ruta_recomendada = rutas_incompletas[0]
+    elif rutas_validables:
+        ruta_recomendada = rutas_validables[0]
+    elif rutas_listas:
+        ruta_recomendada = rutas_listas[0]
 
     return EstadoFlujoDashboard(
         pedidos=len(registros),
@@ -79,4 +93,5 @@ def obtener_estado_flujo(usu_id, fecha=None):
         en_preparacion_completos=en_preparacion_completos,
         listas=listas,
         despachadas=despachadas,
+        ruta_recomendada=ruta_recomendada,
     )
