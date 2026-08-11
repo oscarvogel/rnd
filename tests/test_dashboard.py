@@ -258,7 +258,7 @@ class DashboardViewTests(unittest.TestCase):
         d = DashboardView(usu_id=1, ejecutor=ejecutor)
         try:
             d.cargar()
-            self.assertEqual(ejecutor.ejecutar.call_count, 4)
+            self.assertEqual(ejecutor.ejecutar.call_count, 5)
             self.mock_hoja.assert_not_called()
             self.mock_venc.assert_not_called()
         finally:

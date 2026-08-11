@@ -4,21 +4,15 @@ from controladores.Migraciones import MigracionBaseDatos
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.pyqt5libs import Constantes
 from pyqt5libs.pyqt5libs.Menu import GeneraMenu
-from pyqt5libs.pyqt5libs.utiles import (
-    LeerConf,
-    LeerIni,
-    getFileProperties,
-    inicializar_y_capturar_excepciones,
+from pyqt5libs.pyqt5libs.utiles import LeerConf, LeerIni, getFileProperties, inicializar_y_capturar_excepciones
+from utiles.dashboard_flujo import (
+    ACCION_ASIGNAR, ACCION_DESPACHAR, ACCION_IMPORTAR,
+    ACCION_ORGANIZAR, ACCION_REVISAR, ACCION_VALIDAR,
 )
 from vistas.Main import MainView
 from vistas.dashboard.dashboard_view import (
-    NAV_ALERTAS,
-    NAV_HOJAS_RUTA_DIA,
-    NAV_IMPORTAR_PEDIDOS,
-    NAV_ORGANIZAR_PEDIDOS,
-    NAV_PENDIENTES,
-    NAV_VENCIMIENTOS,
-    DashboardView,
+    NAV_ALERTAS, NAV_HOJAS_RUTA_DIA, NAV_IMPORTAR_PEDIDOS,
+    NAV_ORGANIZAR_PEDIDOS, NAV_PENDIENTES, NAV_VENCIMIENTOS, DashboardView,
 )
 
 
@@ -40,26 +34,12 @@ class MainController(ControladorBase):
         if lRetVal:
             MigracionBaseDatos()
             propiedades = getFileProperties("main.exe")
-            if propiedades["StringFileInfo"]:
-                versionexe = propiedades["StringFileInfo"]["FileVersion"]
-            else:
-                versionexe = ""
-
+            versionexe = propiedades["StringFileInfo"]["FileVersion"] if propiedades["StringFileInfo"] else ""
             usuario = LeerConf("usuario") or ""
             servidor = LeerIni("ServerDB") or ""
             basedatos = LeerIni("BaseDatos") or ""
-            self.view.actualizar_encabezado(
-                usuario=usuario,
-                servidor=servidor,
-                base=basedatos,
-                estado="Conectado",
-                version=versionexe,
-            )
-            self.view.setWindowTitle(
-                "Usuario {} Servidor {} Base de datos {} Version sistema {}".format(
-                    usuario, servidor, basedatos, versionexe
-                )
-            )
+            self.view.actualizar_encabezado(usuario=usuario, servidor=servidor, base=basedatos, estado="Conectado", version=versionexe)
+            self.view.setWindowTitle("Usuario {} Servidor {} Base de datos {} Version sistema {}".format(usuario, servidor, basedatos, versionexe))
             usu_id = int(LeerConf("idUsuario") or 0)
             self.view.cargar_menu_lateral(usu_id)
             self._inicializar_dashboard(usu_id)
@@ -77,45 +57,33 @@ class MainController(ControladorBase):
         self.view.dashboard.cargar()
 
     def _navegar_desde_dashboard(self, clave):
-        if clave == NAV_IMPORTAR_PEDIDOS:
+        from datetime import date
+
+        partes = str(clave).split("|", 1)
+        accion = partes[0]
+        ruta_id = int(partes[1]) if len(partes) > 1 and partes[1].isdigit() else 0
+
+        if accion in (NAV_IMPORTAR_PEDIDOS, ACCION_IMPORTAR, ACCION_REVISAR):
             from controladores.ImportacionPedidos import ImportacionPedidosController
-
             self.view.ventana_menu_lateral = ImportacionPedidosController()
-            self.view.ventana_menu_lateral.run()
-        elif clave == NAV_ORGANIZAR_PEDIDOS:
-            from datetime import date
+        elif accion in (NAV_ORGANIZAR_PEDIDOS, NAV_PENDIENTES, ACCION_ORGANIZAR):
             from controladores.BandejaPedidos import BandejaPedidosController
-
-            self.view.ventana_menu_lateral = BandejaPedidosController(
-                fecha_inicial=date.today()
-            )
-            self.view.ventana_menu_lateral.run()
-        elif clave == NAV_HOJAS_RUTA_DIA:
-            from datetime import date
+            self.view.ventana_menu_lateral = BandejaPedidosController(fecha_inicial=date.today())
+        elif accion == ACCION_ASIGNAR:
+            from controladores.AsignacionRecursos import AsignacionRecursosController
+            self.view.ventana_menu_lateral = AsignacionRecursosController(fecha_inicial=date.today(), ruta_inicial=ruta_id)
+        elif accion in (ACCION_VALIDAR, ACCION_DESPACHAR):
+            from controladores.ValidacionHojaRuta import ValidacionHojaRutaController
+            self.view.ventana_menu_lateral = ValidacionHojaRutaController(fecha_inicial=date.today(), ruta_inicial=ruta_id)
+        elif accion == NAV_HOJAS_RUTA_DIA:
             from controladores.VerHojaRuta import VerHojaRutaController
-
-            self.view.ventana_menu_lateral = VerHojaRutaController(
-                fecha_inicial=date.today()
-            )
-            self.view.ventana_menu_lateral.run()
-        elif clave == NAV_PENDIENTES:
-            from datetime import date
-            from controladores.BandejaPedidos import BandejaPedidosController
-
-            self.view.ventana_menu_lateral = BandejaPedidosController(
-                fecha_inicial=date.today()
-            )
-            self.view.ventana_menu_lateral.run()
-        elif clave == NAV_VENCIMIENTOS:
+            self.view.ventana_menu_lateral = VerHojaRutaController(fecha_inicial=date.today())
+        elif accion in (NAV_VENCIMIENTOS, NAV_ALERTAS):
             from controladores.ABMEquipos import ABMEquiposController
-
             self.view.ventana_menu_lateral = ABMEquiposController()
-            self.view.ventana_menu_lateral.run()
-        elif clave == NAV_ALERTAS:
-            from controladores.ABMEquipos import ABMEquiposController
-
-            self.view.ventana_menu_lateral = ABMEquiposController()
-            self.view.ventana_menu_lateral.run()
+        else:
+            return
+        self.view.ventana_menu_lateral.run()
 
     def ArmaMenu(self):
         menu = GeneraMenu()
@@ -129,14 +97,10 @@ class MainController(ControladorBase):
 
     def conectarWidgets(self):
         try:
-            self.view.barra_lateral.arbol.itemClicked.connect(
-                self.view.onClickItemMenu
-            )
+            self.view.barra_lateral.arbol.itemClicked.connect(self.view.onClickItemMenu)
         except AttributeError:
             for btn in self.view.botones:
-                btn.clicked.connect(
-                    lambda _, b=btn: self.view.onClickBtnMenuIzquierda(b)
-                )
+                btn.clicked.connect(lambda _, b=btn: self.view.onClickBtnMenuIzquierda(b))
 
     @inicializar_y_capturar_excepciones
     def toolbtnpressed(self, a, *args, **kwargs) -> None:

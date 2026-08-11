@@ -5,18 +5,14 @@ from datetime import date
 
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QScrollArea,
-    QSizePolicy,
-    QVBoxLayout,
-    QWidget,
+    QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea,
+    QSizePolicy, QVBoxLayout, QWidget,
 )
 
+from utiles.dashboard_flujo import ACCION_COMPLETO
 from vistas.dashboard import servicios
 from vistas.dashboard.ejecutor import EjecutorConsultasQt
+from vistas.dashboard.flujo_servicio import obtener_estado_flujo
 from vistas.dashboard.tarjeta import TarjetaDashboard, TarjetaHero
 
 
@@ -36,6 +32,8 @@ class DashboardView(QWidget):
         self.setObjectName("dashboardRoot")
         self._usu_id = int(usu_id or 0)
         self._ejecutor = ejecutor or EjecutorConsultasQt()
+        self._accion_flujo = NAV_IMPORTAR_PEDIDOS
+        self._ruta_recomendada = 0
         self._build_ui()
 
     def _build_ui(self):
@@ -46,71 +44,63 @@ class DashboardView(QWidget):
         cabecera = QWidget()
         cabecera.setObjectName("dashboardCabecera")
         layout_cabecera = QHBoxLayout(cabecera)
-        layout_cabecera.setContentsMargins(0, 0, 0, 0)
-        layout_cabecera.setSpacing(12)
-
         textos = QVBoxLayout()
-        textos.setContentsMargins(0, 0, 0, 0)
-        textos.setSpacing(2)
         titulo = QLabel("Resumen operativo")
         titulo.setObjectName("dashboardTitulo")
         textos.addWidget(titulo)
-        subtitulo = QLabel("Estado del dia {}".format(date.today().strftime("%d/%m/%Y")))
+        subtitulo = QLabel("Estado del día {}".format(date.today().strftime("%d/%m/%Y")))
         subtitulo.setObjectName("dashboardSubtitulo")
         textos.addWidget(subtitulo)
         layout_cabecera.addLayout(textos)
         layout_cabecera.addStretch(1)
-
         self.boton_recargar = QPushButton("Actualizar")
-        self.boton_recargar.setObjectName("dashboardBotonRecargar")
         self.boton_recargar.setProperty("role", "secondary")
-        self.boton_recargar.setCursor(Qt.PointingHandCursor)
         self.boton_recargar.clicked.connect(self.recargar)
         layout_cabecera.addWidget(self.boton_recargar)
         raiz.addWidget(cabecera)
 
-        acceso_importar = QWidget()
-        acceso_importar.setObjectName("dashboardAccionImportar")
-        fila_importar = QHBoxLayout(acceso_importar)
-        fila_importar.setContentsMargins(16, 12, 16, 12)
-        textos_importar = QVBoxLayout()
-        titulo_importar = QLabel("Preparar reparto")
-        titulo_importar.setObjectName("dashboardAccionTitulo")
-        textos_importar.addWidget(titulo_importar)
-        detalle_importar = QLabel(
-            "Importá los pedidos y luego organizalos por ruta antes de asignar chofer y camión."
-        )
-        detalle_importar.setWordWrap(True)
-        detalle_importar.setObjectName("dashboardAccionDetalle")
-        textos_importar.addWidget(detalle_importar)
-        fila_importar.addLayout(textos_importar, stretch=1)
+        siguiente = QWidget()
+        siguiente.setObjectName("dashboardSiguientePaso")
+        layout_siguiente = QVBoxLayout(siguiente)
+        self.lbl_siguiente_epigrafe = QLabel("SIGUIENTE PASO")
+        self.lbl_siguiente_epigrafe.setObjectName("dashboardSiguienteEpigrafe")
+        layout_siguiente.addWidget(self.lbl_siguiente_epigrafe)
+        self.lbl_siguiente_titulo = QLabel("Calculando estado del reparto…")
+        self.lbl_siguiente_titulo.setObjectName("dashboardAccionTitulo")
+        layout_siguiente.addWidget(self.lbl_siguiente_titulo)
+        self.lbl_siguiente_detalle = QLabel("")
+        self.lbl_siguiente_detalle.setWordWrap(True)
+        self.lbl_siguiente_detalle.setObjectName("dashboardAccionDetalle")
+        layout_siguiente.addWidget(self.lbl_siguiente_detalle)
 
-        self.boton_importar = QPushButton("Importar pedidos")
-        self.boton_importar.setObjectName("dashboardBotonImportar")
-        self.boton_importar.setProperty("role", "primary")
-        self.boton_importar.setCursor(Qt.PointingHandCursor)
-        self.boton_importar.clicked.connect(lambda: self.navegar.emit(NAV_IMPORTAR_PEDIDOS))
-        fila_importar.addWidget(self.boton_importar)
+        progreso = QHBoxLayout()
+        self.labels_pasos = []
+        for texto in ("1. Importar", "2. Revisar", "3. Organizar", "4. Asignar recursos", "5. Validar / despachar"):
+            label = QLabel(texto)
+            label.setObjectName("dashboardPaso")
+            progreso.addWidget(label)
+            self.labels_pasos.append(label)
+        layout_siguiente.addLayout(progreso)
 
-        self.boton_organizar = QPushButton("Pedidos para organizar")
-        self.boton_organizar.setObjectName("dashboardBotonOrganizar")
-        self.boton_organizar.setProperty("role", "secondary")
-        self.boton_organizar.setCursor(Qt.PointingHandCursor)
-        self.boton_organizar.clicked.connect(lambda: self.navegar.emit(NAV_ORGANIZAR_PEDIDOS))
-        fila_importar.addWidget(self.boton_organizar)
-        raiz.addWidget(acceso_importar)
+        fila_accion = QHBoxLayout()
+        self.lbl_indicadores_flujo = QLabel("")
+        self.lbl_indicadores_flujo.setWordWrap(True)
+        fila_accion.addWidget(self.lbl_indicadores_flujo, stretch=1)
+        self.btn_siguiente = QPushButton("Abrir")
+        self.btn_siguiente.setProperty("role", "primary")
+        self.btn_siguiente.setCursor(Qt.PointingHandCursor)
+        self.btn_siguiente.clicked.connect(self._emitir_siguiente)
+        fila_accion.addWidget(self.btn_siguiente)
+        layout_siguiente.addLayout(fila_accion)
+        raiz.addWidget(siguiente)
 
         scroll = QScrollArea()
-        scroll.setObjectName("dashboardScroll")
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.NoFrame)
         raiz.addWidget(scroll)
-
         contenido = QWidget()
-        contenido.setObjectName("dashboardContenido")
         contenido.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         grid = QGridLayout(contenido)
-        grid.setContentsMargins(0, 0, 0, 0)
         grid.setSpacing(16)
 
         self.hero = TarjetaHero("Hojas de ruta del dia")
@@ -132,15 +122,10 @@ class DashboardView(QWidget):
         self.tarjeta_alertas.clicked.connect(lambda: self.navegar.emit(NAV_ALERTAS))
         self.tarjeta_alertas.conectar_reintentar(self._cargar_alertas)
         grid.addWidget(self.tarjeta_alertas, 1, 2)
-
-        grid.setRowStretch(0, 2)
-        grid.setRowStretch(1, 1)
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
-        grid.setColumnStretch(2, 1)
         scroll.setWidget(contenido)
 
     def cargar(self):
+        self._cargar_flujo()
         self._cargar_hero()
         self._cargar_pendientes()
         self._cargar_vencimientos()
@@ -148,6 +133,52 @@ class DashboardView(QWidget):
 
     def recargar(self):
         self.cargar()
+
+    def _cargar_flujo(self):
+        self.lbl_siguiente_titulo.setText("Calculando estado del reparto…")
+        self.btn_siguiente.setEnabled(False)
+        self._ejecutor.ejecutar(
+            lambda: obtener_estado_flujo(self._usu_id),
+            self._aplicar_flujo,
+            self._error_flujo,
+        )
+
+    def _aplicar_flujo(self, estado):
+        if estado is None:
+            self.lbl_siguiente_titulo.setText("Flujo operativo no disponible")
+            self.lbl_siguiente_detalle.setText("No hay permiso para consultar esta operación.")
+            self.btn_siguiente.setEnabled(False)
+            return
+        self._accion_flujo = estado.accion
+        self._ruta_recomendada = estado.ruta_recomendada
+        self.lbl_siguiente_titulo.setText(estado.titulo_accion)
+        self.lbl_siguiente_detalle.setText(estado.detalle_accion)
+        self.btn_siguiente.setText(estado.titulo_accion)
+        self.btn_siguiente.setEnabled(estado.accion != ACCION_COMPLETO)
+        for label, (texto, estado_paso) in zip(self.labels_pasos, estado.pasos()):
+            simbolo = "✓" if estado_paso == "completo" else ("!" if estado_paso == "atencion" else "○")
+            label.setText("{} {}".format(simbolo, texto))
+            label.setProperty("estado", estado_paso)
+            label.style().unpolish(label)
+            label.style().polish(label)
+        self.lbl_indicadores_flujo.setText(
+            "Pedidos: {0} · Sin ruta: {1} · Hojas sin recursos: {2} · "
+            "Por validar: {3} · Listas: {4} · Despachadas: {5}".format(
+                estado.pedidos, estado.sin_ruta, estado.incompletos_recursos,
+                estado.en_preparacion_completos, estado.listas, estado.despachadas,
+            )
+        )
+
+    def _error_flujo(self, exc):
+        self.lbl_siguiente_titulo.setText("No se pudo calcular el siguiente paso")
+        self.lbl_siguiente_detalle.setText(str(exc))
+        self.btn_siguiente.setEnabled(False)
+
+    def _emitir_siguiente(self):
+        clave = self._accion_flujo
+        if self._ruta_recomendada:
+            clave = "{}|{}".format(clave, self._ruta_recomendada)
+        self.navegar.emit(clave)
 
     def _cargar_hero(self):
         self.hero.mostrar_cargando()
