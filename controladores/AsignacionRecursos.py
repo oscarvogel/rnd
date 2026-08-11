@@ -130,7 +130,7 @@ class AsignacionRecursosController(ControladorBase):
             showAlert("Sistema", mensaje)
             return
 
-        actualizados = (
+        (
             HojaDeRuta.update(
                 responsable=responsable_id,
                 equipo_asignado=equipo_id,
@@ -141,7 +141,20 @@ class AsignacionRecursosController(ControladorBase):
             )
             .execute()
         )
-        if actualizados != self.resumen_actual.pedidos:
+
+        inconsistentes = (
+            HojaDeRuta.select()
+            .where(
+                (HojaDeRuta.fecha == self.fecha_actual()) &
+                (HojaDeRuta.ruta == ruta_id) &
+                (
+                    (HojaDeRuta.responsable != responsable_id) |
+                    (HojaDeRuta.equipo_asignado != equipo_id)
+                )
+            )
+            .count()
+        )
+        if inconsistentes:
             showAlert("Sistema", "No se pudieron actualizar todos los pedidos de la hoja")
             self.cargar_hoja()
             return
