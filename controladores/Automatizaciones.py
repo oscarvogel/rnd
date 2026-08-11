@@ -11,11 +11,23 @@ import threading
 
 
 # Configuración del servidor SMTP (ejemplo con Gmail)
-SMTP_SERVER = os.getenv('SMTP_HOST') or ParamSist.ObtenerParametro('smtp_server', '')
-SMTP_PORT = os.getenv('SMTP_PORT') or ParamSist.ObtenerParametro('smtp_port', '465')
-# Credenciales de la cuenta de correo
-EMAIL_ADDRESS = os.getenv('SMTP_USER') or ParamSist.ObtenerParametro('email_address', '')
-EMAIL_PASSWORD = os.getenv('SMTP_PASS') or ParamSist.ObtenerParametro('email_password', '')
+# Se lee BAJO DEMANDA, no al importar el modulo: leerla en el import
+# implicaba consultar la base de datos (ParamSist.ObtenerParametro) en
+# tiempo de import y eso crasheaba la app / el build de PyInstaller cuando
+# la DB todavia no estaba disponible.
+def _config_smtp():
+    def _parametro(nombre, default):
+        try:
+            return ParamSist.ObtenerParametro(nombre, default) or default
+        except Exception:
+            return default
+
+    return {
+        'server': os.getenv('SMTP_HOST') or _parametro('smtp_server', ''),
+        'port': os.getenv('SMTP_PORT') or _parametro('smtp_port', '465'),
+        'address': os.getenv('SMTP_USER') or _parametro('email_address', ''),
+        'password': os.getenv('SMTP_PASS') or _parametro('email_password', ''),
+    }
 
 
 def main_automatizacion():
@@ -41,17 +53,18 @@ def enviar_correo_asunto_html(destinatario, asunto, html_content):
     """
     Envía un correo con contenido HTML.
     """
+    cfg = _config_smtp()
     msg = MIMEMultipart()
-    msg['From'] = EMAIL_ADDRESS
+    msg['From'] = cfg['address']
     msg['To'] = destinatario
     msg['Subject'] = asunto
 
     msg.attach(MIMEText(html_content, 'html'))
 
     try:
-        with smtplib.SMTP_SSL(SMTP_SERVER, int(SMTP_PORT)) as server:
-            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-            server.sendmail(EMAIL_ADDRESS, destinatario, msg.as_string())
+        with smtplib.SMTP_SSL(cfg['server'], int(cfg['port'])) as server:
+            server.login(cfg['address'], cfg['password'])
+            server.sendmail(cfg['address'], destinatario, msg.as_string())
         print("Correo enviado exitosamente.")
     except Exception as e:
         print(f"Error al enviar correo: {e}")

@@ -54,7 +54,7 @@ $ErrorActionPreference = 'Stop'
 $WarningPreference = 'Continue'
 
 # Paths
-$RepoRoot    = (Resolve-Path "$PSScriptRoot\..").Path
+$RepoRoot    = (Resolve-Path "$PSScriptRoot\..").ProviderPath
 $VenvPython  = Join-Path $RepoRoot '.venv-build\Scripts\python.exe'
 $PyInstaller = Join-Path $RepoRoot '.venv-build\Scripts\pyinstaller.exe'
 $VersionFile = Join-Path $RepoRoot 'version.txt'
