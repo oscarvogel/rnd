@@ -43,4 +43,6 @@ Issues = "https://github.com/oscarvogel/pyqt5libs/issues"
 packages = ["pyqt5libs"]
 
 [tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
 pythonpath = ["."]
+testpaths = ["tests"]

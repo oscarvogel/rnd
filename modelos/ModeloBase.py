@@ -105,7 +105,8 @@ else:
                                host=LeerIni("host"),
                                port=int(LeerIni("port") or '3306'),
                                connect_timeout=DB_CONNECT_TIMEOUT,
-                               read_timeout=DB_READ_TIMEOUT)
+                               read_timeout=DB_READ_TIMEOUT,
+                               ssl={})
 
 def model_to_dict(instance):
     data = {}

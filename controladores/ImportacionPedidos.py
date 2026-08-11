@@ -15,6 +15,7 @@ from pyqt5libs.pyqt5libs.Ventanas import showAlert
 from pyqt5libs.pyqt5libs.utiles import getFileName, inicializar_y_capturar_excepciones, openFileNameDialog
 from utiles.importacion_tremblay_excel import procesar_archivo_tremblay_excel
 from utiles.importacion_tremblay_pdf import procesar_pdf_despacho
+from utiles.importacion_informe_tremblay import procesar_informe_tremblay
 from vistas.ImportacionPedidos import ImportacionPedidosView
 
 
@@ -44,7 +45,7 @@ class ImportacionPedidosController(ControladorBase):
         if cArchivo:
             self.view.txt_archivo.setText(cArchivo)
             if self.view.empresa_proveedora.valor() == "15":
-                self.importa_xls_tremblay()
+                self.importa_tremblay()
                 cArchivo = self.view.txt_archivo.text()
             # Crear objeto ExcelFile para manejar múltiples hojas
             xls = pd.ExcelFile(cArchivo)
@@ -222,7 +223,7 @@ class ImportacionPedidosController(ControladorBase):
             hoja_ruta.equipo_asignado = ParamSist.ObtenerParametro("CAMION_GENERICO", "1")
             hoja_ruta.comprobante = self.view.grid_datos.ObtenerItem(fila=row,
                                 col=self.obtener_proceso_list(self.view.empresa_proveedora.valor(), 'Comprobante'))
-            hoja_ruta.comprobante = hoja_ruta.comprobante.replace('.', '')
+            hoja_ruta.comprobante = str(hoja_ruta.comprobante).replace('.', '')
             hoja_ruta.producto = producto
             hoja_ruta.cantidad = self.view.grid_datos.ObtenerItem(fila=row,
                                 col=self.obtener_proceso_list(self.view.empresa_proveedora.valor(), 'Cantidad'))
@@ -271,16 +272,32 @@ class ImportacionPedidosController(ControladorBase):
             self.msg_box.close()
             self.msg_box = None
 
-    def importa_xls_tremblay(self):
-        """Importa pedidos desde un archivo Excel de Tremblay."""
+    def importa_tremblay(self):
+        """Importa pedidos desde un archivo de Tremblay (.xls o .xlsx).
+
+        - .xls: informe de despacho por cliente (layout nuevo) - usa
+          `procesar_informe_tremblay`.
+        - .xlsx: pedidos en formato viejo (layout MISIONES-tremblay) - usa
+          `procesar_archivo_tremblay_excel`.
+
+        En ambos casos devuelve la ruta de un xlsx temporal que el resto
+        del controller trata como un pedido estandar.
+        """
         if not self.view.txt_archivo.text():
-            showAlert("Sistema", "Debe seleccionar un archivo Excel para importar")
+            showAlert("Sistema", "Debe seleccionar un archivo para importar")
             return
-        # self.mostrar_mensaje_procesando()
-        archivo_procesado = procesar_archivo_tremblay_excel(self.view.txt_archivo.valor())
+        path = self.view.txt_archivo.valor()
+        ext = path.lower().rsplit(".", 1)[-1] if "." in path else ""
+        try:
+            if ext == "xls":
+                archivo_procesado = procesar_informe_tremblay(path)
+            else:
+                archivo_procesado = procesar_archivo_tremblay_excel(path)
+        except (ValueError, FileNotFoundError) as exc:
+            showAlert("Sistema", f"No se pudo procesar el archivo: {exc}")
+            return
         if not archivo_procesado:
-            showAlert("Sistema", "No se pudo procesar el archivo Excel")
+            showAlert("Sistema", "No se pudo procesar el archivo")
             return
         self.view.txt_archivo.setText(archivo_procesado)
-        # self.cerrar_mensaje_procesando()
         QApplication.processEvents()

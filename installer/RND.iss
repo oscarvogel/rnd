@@ -47,7 +47,8 @@ Type: filesandordirs; Name: "{app}\PIL"
 Type: filesandordirs; Name: "{app}\fitz"
 Type: filesandordirs; Name: "{app}\pdfminer"
 Type: filesandordirs; Name: "{app}\pymongo"
-Type: filesandordirs; Name: "{app}\cryptography"
+; cryptography es requerido por PyMySQL para autenticacion MySQL 8.
+; El paquete nuevo lo sobrescribe; no debe borrarse durante la actualizacion.
 Type: files; Name: "{app}\*.dll"
 Type: files; Name: "{app}\*.pyd"
 Type: files; Name: "{app}\*.zip"

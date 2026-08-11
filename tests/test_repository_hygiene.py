@@ -30,11 +30,17 @@ class RepositoryHygieneTests(unittest.TestCase):
 
         tracked = tracked_files()
 
+        # Excepcion: los fixtures de tests se versionan aunque tengan
+        # extension prohibida (.xls, .xlsx, etc). Esto matchea la excepcion
+        # en .gitignore (`!tests/fixtures/*.xls` etc).
         for path in tracked:
             with self.subTest(path=path):
                 self.assertFalse(path.endswith(".pyc"))
                 self.assertNotIn(path, forbidden_files)
-                self.assertFalse(path.endswith((".log", ".xls", ".xlsx", ".pdf", ".csv")))
+                if not path.startswith("tests/fixtures/"):
+                    self.assertFalse(
+                        path.endswith((".log", ".xls", ".xlsx", ".pdf", ".csv"))
+                    )
                 self.assertFalse(path.startswith(forbidden_prefixes))
 
     def test_known_secret_values_are_not_tracked(self):

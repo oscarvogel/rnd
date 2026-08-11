@@ -39,7 +39,11 @@ class Cliente(ModeloBase):
         max_length=20,
         null=True,
         unique=True,
-        verbose_name='CUIT' if ParamSist.ObtenerParametro("NACIONALIDAD_EMPRESA", "ARG") == "ARG" else 'RUC'
+        # Antes: ParamSist.ObtenerParametro(...) == 'ARG' else 'RUC' - requeria DB al importar.
+        # El sistema RND opera casi siempre con nacionalidad ARG; se hardcodea 'CUIT'
+        # y se evita la query al import-time. Si la nacionalidad cambia a RUC, mover
+        # esta decision a runtime (ej. al inicializar la app o al construir el form).
+        verbose_name='CUIT'
     )
     contacto = peewee.CharField(max_length=100, null=True, verbose_name='Contacto')
     activo = peewee.BooleanField(default=True, verbose_name='Activo')

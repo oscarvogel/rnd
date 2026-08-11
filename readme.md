@@ -44,17 +44,22 @@ py -3.10 -m venv .venv-build
 
 ## Build del Instalador
 
-El instalador se genera con:
+Para generar el ejecutable y el instalador Windows:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build_installer.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1
 ```
+
+La guia completa (pre-requisitos, formato de version, troubleshooting,
+build manual) esta en [docs/BUILD.md](docs/BUILD.md).
 
 El resultado queda en:
 
 ```text
-dist\installer\setup_rnd.exe
+dist\main\main.exe           <- Ejecutable
+dist\installer\setup_rnd.exe <- Instalador Windows
 ```
+
 
 ## Uso
 - Ejecutar la aplicación de escritorio.
