@@ -1,4 +1,5 @@
 # coding=utf-8
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QGridLayout
 
@@ -7,7 +8,7 @@ from pyqt5libs.libs.vistas.VistaBase import VistaBase
 from pyqt5libs.pyqt5libs.Botones import Boton, BotonCerrarFormulario
 from pyqt5libs.pyqt5libs.EntradaTexto import Password
 from pyqt5libs.pyqt5libs.Etiquetas import Etiqueta
-from pyqt5libs.pyqt5libs.utiles import imagen
+from pyqt5libs.pyqt5libs.utiles import LeerIni, imagen
 
 
 
@@ -25,8 +26,10 @@ class LoginView(VistaBase):
 
         layoutInicio = QVBoxLayout()
         labelImagen = Etiqueta()
-        pixmap = QPixmap(imagen("login.png"))
-        labelImagen.setPixmap(pixmap)
+        pixmap = QPixmap(imagen(LeerIni("logo")))
+        labelImagen.setPixmap(
+            pixmap.scaled(180, 180, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        )
         layoutInicio.addWidget(labelImagen)
         layoutPpal.addLayout(layoutInicio)
 

@@ -1,5 +1,5 @@
 #define AppName "RND"
-#define AppVersion "2026.8.6.7"
+#define AppVersion "2026.8.11.1"
 #define AppPublisher "Jose Oscar Vogel"
 #define AppExeName "main.exe"
 
@@ -15,7 +15,7 @@ DisableProgramGroupPage=yes
 UsePreviousAppDir=no
 OutputDir=..\dist\installer
 OutputBaseFilename=setup_rnd
-SetupIconFile=..\imagenes\LogoS-01.ico
+SetupIconFile=..\imagenes\vogel_consultoria_oficial.ico
 Compression=lzma2
 SolidCompression=yes
 PrivilegesRequired=admin
@@ -31,7 +31,13 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
+[Dirs]
+Name: "{commonappdata}\RND"; Permissions: users-readexec
+
 [InstallDelete]
+; Eliminar el tema activo antes de copiarlo evita conservar un QSS obsoleto
+; de una instalacion anterior aunque cambien marcas de tiempo o atributos.
+Type: files; Name: "{app}\temas\vogel2026.qss"
 Type: filesandordirs; Name: "{app}\_internal"
 Type: filesandordirs; Name: "{app}\PyQt5"
 Type: filesandordirs; Name: "{app}\numpy"
@@ -41,10 +47,8 @@ Type: filesandordirs; Name: "{app}\PIL"
 Type: filesandordirs; Name: "{app}\fitz"
 Type: filesandordirs; Name: "{app}\pdfminer"
 Type: filesandordirs; Name: "{app}\pymongo"
-; Type: filesandordirs; Name: "{app}\cryptography" ; COMENTADO 2026-08-05: cryptography lo necesita pymysql para el handshake
-; de auth con MySQL 8 (caching_sha2_password). Borrarlo rompe la conexion
-; a la DB con un 1045 "Access denied" enganoso. Si se quiere limpiar
-; una version vieja, hacerlo manualmente antes de actualizar.
+; cryptography es requerido por PyMySQL para autenticacion MySQL 8.
+; El paquete nuevo lo sobrescribe; no debe borrarse durante la actualizacion.
 Type: files; Name: "{app}\*.dll"
 Type: files; Name: "{app}\*.pyd"
 Type: files; Name: "{app}\*.zip"
@@ -56,11 +60,75 @@ Source: "..\dist\main\rnd.ini"; DestDir: "{app}"; Flags: ignoreversion onlyifdoe
 
 [INI]
 Filename: "{app}\sistema.ini"; Section: "param"; Key: "InicioSistema"; String: "{app}\"
+Filename: "{app}\sistema.ini"; Section: "param"; Key: "icono"; String: "vogel_consultoria_oficial.ico"
+Filename: "{app}\sistema.ini"; Section: "param"; Key: "logo"; String: "vogel_consultoria_oficial.png"
 Filename: "{app}\rnd.ini"; Section: "param"; Key: "InicioSistema"; String: "{app}\"
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Parameters: "-i ""{app}"" -a ""sistema.ini"""; WorkingDir: "{app}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Parameters: "-i ""{app}"" -a ""sistema.ini"""; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Parameters: "-i ""{app}"" -a ""sistema.ini"""; WorkingDir: "{app}"; IconFilename: "{app}\imagenes\vogel_consultoria_oficial.ico"; AppUserModelID: "VogelConsultoria.RND"
+Name: "{autoprograms}\{#AppName}\Configurar conexión MySQL"; Filename: "{app}\{#AppExeName}"; Parameters: "--edit-db-connection -i ""{app}"" -a ""sistema.ini"""; WorkingDir: "{app}"; IconFilename: "{app}\imagenes\vogel_consultoria_oficial.ico"; AppUserModelID: "VogelConsultoria.RND"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Parameters: "-i ""{app}"" -a ""sistema.ini"""; WorkingDir: "{app}"; IconFilename: "{app}\imagenes\vogel_consultoria_oficial.ico"; AppUserModelID: "VogelConsultoria.RND"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Parameters: "-i ""{app}"" -a ""sistema.ini"""; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExeName}"; Parameters: "-i ""{app}"" -a ""sistema.ini"""; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runasoriginaluser
+
+[Code]
+function NormalizeInstallDir(const Value: String): String;
+begin
+  Result := RemoveBackslashUnlessRoot(Value);
+end;
+
+function RequiredInstallDir(): String;
+begin
+  Result := NormalizeInstallDir('C:\RND');
+end;
+
+function InitializeSetup(): Boolean;
+var
+  RequestedDir: String;
+begin
+  RequestedDir := ExpandConstant('{param:DIR|}');
+  Result := (RequestedDir = '') or
+    (CompareText(NormalizeInstallDir(RequestedDir), RequiredInstallDir()) = 0);
+
+  if not Result then
+    SuppressibleMsgBox(
+      'RND solo puede instalarse en C:\RND.',
+      mbError,
+      MB_OK,
+      IDOK);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  if CompareText(NormalizeInstallDir(WizardDirValue()), RequiredInstallDir()) <> 0 then
+    Result := 'El destino de RND debe ser C:\RND.'
+  else
+    Result := '';
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+  CredentialDir: String;
+  Params: String;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    CredentialDir := ExpandConstant('{commonappdata}\RND');
+    Params := '"' + CredentialDir +
+      '" /inheritance:r /grant:r ' +
+      '"*S-1-5-18:(OI)(CI)(F)" ' +
+      '"*S-1-5-32-544:(OI)(CI)(F)" ' +
+      '"*S-1-5-32-545:(OI)(CI)(RX)"';
+
+    if (not Exec(
+      ExpandConstant('{sys}\icacls.exe'),
+      Params,
+      '',
+      SW_HIDE,
+      ewWaitUntilTerminated,
+      ResultCode)) or (ResultCode <> 0) then
+      RaiseException('No se pudieron proteger los datos compartidos de RND.');
+  end;
+end;

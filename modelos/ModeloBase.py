@@ -48,42 +48,19 @@ __version__ = "0.1"
 
 # database_proxy = Proxy()  # Create a proxy for our db.
 from pyqt5libs.pyqt5libs.utiles import LeerConf, LeerIni
+from rnd_credentials import CredentialError, resolve_mysql_password
 
 db = None
 
 dbsqlite = SqliteDatabase(':memory:', pragmas={'journal_mode': 'wal'})
 
-def _env_secret(*names):
-    for name in names:
-        value = os.getenv(name)
-        if value:
-            return value
-    return ''
-
-
-def _persisted_password():
-    """Lee la clave persistida en QSettings (lo que GrabaConf escribio
-    al arranque o cuando el usuario la re-ingresa via dialog).
-
-    Antes (issue #11): este fallback no existia. La clave se persistia
-    en QSettings pero _mysql_password() no la leia, asi que el sistema
-    dependia 100% de tener RND_DB_PASSWORD en el env var. Resultado: el
-    sistema no era viable para distribuir a clientes que no saben
-    setear env vars.
-    """
-    try:
-        from pyqt5libs.pyqt5libs.utiles import LeerIni
-        return LeerIni("password") or ''
-    except Exception:
-        return ''
-
-
 def _mysql_password():
-    # Orden de prioridad:
-    # 1) env var (la mas explicita, gana sobre la persistencia)
-    # 2) QSettings (la persistencia que escribe GrabaConf en main.py)
-    # 3) string vacio -> el caller deberia gatillar el dialog de credenciales
-    return _env_secret('RND_DB_PASSWORD', 'MYSQL_PASSWORD', 'DB_PASSWORD') or _persisted_password()
+    try:
+        return resolve_mysql_password()
+    except CredentialError:
+        # La importación de modelos no debe exigir conexión. El arranque
+        # interactivo valida la credencial antes de cargar este módulo.
+        return ''
 
 
 class RecycledMySQLDatabase(MySQLDatabase):
@@ -106,28 +83,9 @@ class RecycledMySQLDatabase(MySQLDatabase):
                     super().close()
             except Exception:
                 pass
-        try:
-            result = super().connect(*args, **kwargs)
-            self._connected_at = time.monotonic()
-            return result
-        except Exception as exc:
-            # Si falla con auth/SSL/host, mostrar el dialog de credenciales
-            # y reintentar. Asi RND NUNCA crashea con un 1045 sin chance
-            # de recovery.
-            from peewee import OperationalError as PeeweeOperationalError
-            if not isinstance(exc, PeeweeOperationalError):
-                raise
-            code = exc.args[0] if exc.args else 0
-            if code not in (1045, 1044, 1130, 2026, 1043, 2002, 2003):
-                raise
-            # Llamar al dialog con retry. Si el usuario cancela o si
-            # seguimos fallando despues de varios intentos, raise.
-            if not connect_with_credentials_dialog(max_attempts=3):
-                raise
-            # El dialog persistio la nueva config; reintentar.
-            result = super().connect(*args, **kwargs)
-            self._connected_at = time.monotonic()
-            return result
+        result = super().connect(*args, **kwargs)
+        self._connected_at = time.monotonic()
+        return result
 
     def close(self):
         super().close()
@@ -141,13 +99,6 @@ if LeerIni(clave='base') == 'sqlite':
     #     'cipher_page_size': 1024 * 16,
     #     'cache_size': 10000})  # 10,000 16KB pages, or 160MB.
 else:
-    # El server MySQL (vps-922868-x.dattaweb.com) tiene
-    # require_secure_transport=ON desde 2026-08. Sin SSL, pymysql tira un
-    # 1045 enganoso ("Access denied") o un 2026 ("SSL required") segun
-    # el estado del handshake. pymysql espera ssl=dict, no ssl=bool
-    # (ssl=True tira AttributeError: 'bool' object has no attribute 'get').
-    # ssl={} cifra sin verificar cert del server; si en el futuro se
-    # quiere endurecer, pasar ssl={'ca': '...', 'check_hostname': True}.
     db = RecycledMySQLDatabase(LeerIni("basedatos"),
                                user=LeerIni("user"),
                                password=_mysql_password(),
@@ -201,64 +152,9 @@ def reconnect_if_needed(method):
                     print(f"Reintentando en {delay:.1f} segundo(s)...")
                     time.sleep(delay)
                 else:
-                    # Ultimo intento: si el error es auth/SSL/host,
-                    # mostrar dialog para que el usuario corrija las credenciales.
-                    code = getattr(e, "args", [None])[0] if hasattr(e, "args") else None
-                    if code in (1045, 1044, 1130, 2026, 1043):
-                        if not connect_with_credentials_dialog():
-                            raise ConnectionError(
-                                "No se pudo restablecer la conexion: el usuario cancelo el dialog."
-                            )
-                        return method(self, *args, **kwargs)
-                    raise ConnectionError(
-                        "No se pudo restablecer la conexion despues de varios intentos: {}".format(e)
-                    )
+                    raise ConnectionError("No se pudo restablecer la conexión después de varios intentos.")
         return None
     return wrapper
-
-def connect_with_credentials_dialog(max_attempts=3):
-    """Conecta a la DB. Si falla con OperationalError (auth, SSL, host),
-    muestra un dialog para que el usuario corrija las credenciales.
-    Reintenta hasta max_attempts veces.
-
-    Returns:
-        True si la conexion se establecio OK. False si el usuario cancelo
-        o si se agotaron los intentos.
-    """
-    from peewee import OperationalError as PeeweeOperationalError
-    from controladores.ConfiguracionDB import pedir_credenciales_db
-    from PyQt5.QtWidgets import QApplication
-
-    app = QApplication.instance()
-    parent = None
-    if app is not None:
-        try:
-            parent = app.activeWindow()
-        except Exception:
-            parent = None
-
-    carpeta = os.getcwd() + "\\"
-
-    for intento in range(1, max_attempts + 1):
-        try:
-            db.connect(reuse_if_open=True)
-            return True
-        except PeeweeOperationalError as exc:
-            code, msg = exc.args if len(exc.args) >= 2 else (0, str(exc))
-            mensaje = (
-                "No se pudo conectar a la base de datos.\n\n"
-                "Error MySQL {}: {}\n\n"
-                "Verifica los datos o consulta con el administrador."
-            ).format(code, msg)
-            nueva = pedir_credenciales_db(
-                parent=parent,
-                carpeta=carpeta,
-                mensaje=mensaje,
-            )
-            if nueva is None:
-                return False
-    return False
-
 
 class ModeloBase(Model):
 

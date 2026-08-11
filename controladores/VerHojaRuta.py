@@ -12,9 +12,11 @@ from vistas.VerHojaRuta import ModificaHojaDeRutaView, VerHojaRutaView
 
 
 class VerHojaRutaController(ControladorBase):
-    def __init__(self):
+    def __init__(self, fecha_inicial=None):
         super().__init__()
         self.view = VerHojaRutaView()
+        if fecha_inicial is not None:
+            self.view.fecha_reparto.setFecha(fecha_inicial)
         self.conectarWidgets()
     
     def conectarWidgets(self):

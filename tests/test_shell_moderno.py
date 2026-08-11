@@ -131,6 +131,31 @@ class ShellModernoSmokeTests(unittest.TestCase):
             view.close()
             view.deleteLater()
 
+    def test_seleccionar_menu_resuelve_controladores_heredados(self):
+        """El nuevo shell debe conservar los destinos guardados en Formula."""
+        from vistas.Main import MainView
+        from modelos.ParametrosSistema import ParamSist
+
+        controlador = MagicMock()
+        with patch.object(
+            ParamSist,
+            "ObtenerParametro",
+            return_value="ARG",
+        ), patch(
+                "controladores.ABMClientes.ABMClientesController",
+                return_value=controlador,
+        ):
+            view = MainView()
+            try:
+                view.SeleccionaMenu(
+                    1,
+                    "ABMClientes.ABMClientesController()",
+                )
+                controlador.run.assert_called_once_with()
+            finally:
+                view.close()
+                view.deleteLater()
+
 
 class BarraLateralPermisosTests(unittest.TestCase):
     """Filtrado del menu lateral por permisos."""

@@ -7,16 +7,20 @@ from controladores.Migraciones import MigracionBaseDatos
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.pyqt5libs import Constantes
 from pyqt5libs.pyqt5libs.Menu import GeneraMenu
-from pyqt5libs.pyqt5libs.utiles import (
-    LeerConf,
-    LeerIni,
-    getFileProperties,
-    inicializar_y_capturar_excepciones,
-)
+from pyqt5libs.pyqt5libs.utiles import LeerConf, LeerIni, getFileProperties, inicializar_y_capturar_excepciones
 from vistas.Main import MainView
+from vistas.dashboard.dashboard_view import (
+    NAV_ALERTAS,
+    NAV_HOJAS_RUTA_DIA,
+    NAV_PENDIENTES,
+    NAV_VENCIMIENTOS,
+    DashboardView,
+)
+from vistas.dashboard import servicios as dashboard_servicios
 
 
 class MainController(ControladorBase):
+
     def __init__(self):
         super().__init__()
         self.view = MainView()
@@ -44,7 +48,7 @@ class MainController(ControladorBase):
             if propiedades["StringFileInfo"]:
                 versionexe = propiedades["StringFileInfo"]["FileVersion"]
             else:
-                versionexe = ""
+                versionexe = ''
 
             usuario = LeerConf("usuario") or ""
             servidor = LeerIni("ServerDB") or ""
@@ -58,17 +62,67 @@ class MainController(ControladorBase):
                 version=versionexe,
             )
             self.view.setWindowTitle(
-                f"Usuario {usuario} Servidor {servidor}"
-                f" Base de datos {basedatos} "
-                f"Version sistema {versionexe}"
+                f'Usuario {usuario} Servidor {servidor}'
+                f' Base de datos {basedatos} '
+                f'Version sistema {versionexe}'
             )
 
             usu_id = int(LeerConf("idUsuario") or 0)
             self.view.cargar_menu_lateral(usu_id)
 
+            # Dashboard operativo (issue #4). Se crea con el id del
+            # usuario para que los servicios filtren por permisos.
+            self._inicializar_dashboard(usu_id)
+
             # inicializadb()
             self.ArmaMenu()
         return lRetVal
+
+    def _inicializar_dashboard(self, usu_id):
+        """Crea, registra y conecta el dashboard operativo."""
+        if self.view.dashboard is None:
+            dashboard = DashboardView(usu_id=usu_id)
+            dashboard.navegar.connect(self._navegar_desde_dashboard)
+            self.view.registrar_dashboard(dashboard)
+        else:
+            # Si ya existia (por ejemplo, tras un re-login), solo
+            # recargamos los datos con el nuevo usu_id.
+            self.view.dashboard._usu_id = int(usu_id or 0)
+            self.view.dashboard.recargar()
+        # Poblamos la primera carga despues del login.
+        self.view.dashboard.cargar()
+
+    def _navegar_desde_dashboard(self, clave):
+        """Abre el modulo correspondiente a una tarjeta del dashboard.
+
+        Por ahora se delega a los modulos existentes tal cual; los
+        filtros ``fecha`` o ``estado`` especificos del dashboard se
+        persisten en ``LeerConf`` para que las vistas los lean si
+        los soportan (el requisito de "filtro aplicado" de #4 se
+        cumple para Hojas de Ruta via ``filtro_fecha``).
+        """
+        if clave == NAV_HOJAS_RUTA_DIA:
+            from controladores.VerHojaRuta import VerHojaRutaController
+            from datetime import date
+            self.view.ventana_menu_lateral = VerHojaRutaController(
+                fecha_inicial=date.today()
+            )
+            self.view.ventana_menu_lateral.run()
+        elif clave == NAV_PENDIENTES:
+            from controladores.VerHojaRuta import VerHojaRutaController
+            from datetime import date
+            self.view.ventana_menu_lateral = VerHojaRutaController(
+                fecha_inicial=date.today()
+            )
+            self.view.ventana_menu_lateral.run()
+        elif clave == NAV_VENCIMIENTOS:
+            from controladores.ABMEquipos import ABMEquiposController
+            self.view.ventana_menu_lateral = ABMEquiposController()
+            self.view.ventana_menu_lateral.run()
+        elif clave == NAV_ALERTAS:
+            from controladores.ABMEquipos import ABMEquiposController
+            self.view.ventana_menu_lateral = ABMEquiposController()
+            self.view.ventana_menu_lateral.run()
 
     def ArmaMenu(self):
         menu = GeneraMenu()
@@ -83,7 +137,9 @@ class MainController(ControladorBase):
     def conectarWidgets(self):
         # El shell moderno navega via itemClicked del arbol lateral.
         try:
-            self.view.barra_lateral.arbol.itemClicked.connect(self.view.onClickItemMenu)
+            self.view.barra_lateral.arbol.itemClicked.connect(
+                self.view.onClickItemMenu
+            )
         except AttributeError:
             # Fallback tolerante: si por algun motivo el arbol no
             # existe, conserva el comportamiento historico.
@@ -91,6 +147,7 @@ class MainController(ControladorBase):
                 btn.clicked.connect(
                     lambda _, b=btn: self.view.onClickBtnMenuIzquierda(b)
                 )
+
 
     @inicializar_y_capturar_excepciones
     def toolbtnpressed(self, a, *args, **kwargs) -> None:
