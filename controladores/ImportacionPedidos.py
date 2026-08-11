@@ -41,7 +41,8 @@ class ImportacionPedidosController(ControladorBase):
         
         cArchivo = openFileNameDialog(
             title='Importar',
-            files="Archivos importacion (*.xlsx;*.xls)")
+            files="Archivos importacion (*.xlsx;*.xls)"
+        )
         if cArchivo:
             self.view.txt_archivo.setText(cArchivo)
             if self.view.empresa_proveedora.valor() == "15":
@@ -68,53 +69,63 @@ class ImportacionPedidosController(ControladorBase):
         archivo = self.view.txt_archivo.text()
         hoja = self.view.cbo_hoja.text()
 
-        # Leer sin cabecera para tener control total
+        # Leer sin cabecera para tener control total sobre las filas del Excel.
         df = pd.read_excel(archivo, sheet_name=hoja, header=None)
-
-        # Obtener número de fila que contiene las cabeceras (supongamos que viene de un campo o es fijo)
-        try:
-            fila_cabeceras = int(self.view.txt_fila_inicio.text()) - 1  # Restamos 1 por índice 0
-        except ValueError:
-            showAlert("Sistema", "La fila de cabeceras debe ser un número válido")
+        if df.empty:
+            showAlert("Sistema", "La hoja seleccionada no contiene datos")
             return
+
+        texto_fila_inicio = self.view.txt_fila_inicio.text().strip()
+        texto_fila_fin = self.view.txt_fila_fin.text().strip()
+
+        # Por defecto la primera fila de la hoja es la cabecera. Si se informa
+        # fila inicio se conserva el comportamiento histórico: esa fila indica
+        # dónde están las cabeceras y los datos comienzan en la fila siguiente.
+        if texto_fila_inicio:
+            try:
+                fila_cabeceras = int(texto_fila_inicio) - 1
+            except ValueError:
+                showAlert("Sistema", "La fila de inicio debe ser un número válido")
+                return
+        else:
+            fila_cabeceras = 0
 
         if fila_cabeceras >= len(df) or fila_cabeceras < 0:
-            showAlert("Sistema", "La fila de cabeceras especificada está fuera del rango")
+            showAlert("Sistema", "La fila de inicio especificada está fuera del rango")
             return
 
-        # Extraer las cabeceras desde la fila indicada
-        cabeceras = df.iloc[fila_cabeceras].tolist()  # Lista de nombres de columnas
-        cabeceras = ['Importa'] + cabeceras  # Añadir la columna personalizada al inicio
+        cabeceras = df.iloc[fila_cabeceras].tolist()
+        cabeceras = ['Importa'] + cabeceras
 
-        # Definir desde dónde empiezan los datos (después de la fila de cabeceras)
         inicio_datos = fila_cabeceras + 1
         df_datos = df.iloc[inicio_datos:].reset_index(drop=True)
-
-        # Renombrar columnas del DataFrame de datos para facilitar el acceso (opcional)
         df_datos.columns = df.iloc[fila_cabeceras]
 
-        # Configurar la grilla con las nuevas cabeceras
         self.view.grid_datos.ArmaCabeceras(cabeceras=cabeceras)
 
-        # Rango de filas a importar (basado en UI)
-        try:
-            fila_inicio = int(self.view.txt_fila_inicio.text()) - 1  # Convertir a índice base 0
-            fila_fin = int(self.view.txt_fila_fin.text()) - 1
-        except ValueError:
-            showAlert("Sistema", "Las filas de inicio y fin deben ser números válidos")
+        # Si no se informa un rango, se importan todos los registros disponibles.
+        idx_inicio = 0
+        idx_fin = len(df_datos)
+
+        # Fila fin es opcional. Se interpreta como número absoluto de fila del Excel,
+        # igual que en el comportamiento previo.
+        if texto_fila_fin:
+            try:
+                fila_fin = int(texto_fila_fin) - 1
+            except ValueError:
+                showAlert("Sistema", "La fila de fin debe ser un número válido")
+                return
+
+            if fila_fin < inicio_datos:
+                showAlert("Sistema", "Rango de filas no válido")
+                return
+
+            idx_fin = min(len(df_datos), fila_fin - inicio_datos + 1)
+
+        if idx_fin <= idx_inicio:
+            showAlert("Sistema", "No hay filas de datos para importar en el rango seleccionado")
             return
 
-        # Validar rango
-        if fila_inicio < 0 or fila_fin < fila_inicio:
-            showAlert("Sistema", "Rango de filas no válido")
-            return
-
-        # Ajustar índices respecto al df_datos (que empieza en `inicio_datos`)
-        # Suponiendo que `txt_fila_inicio` y `txt_fila_fin` se refieren al número de fila absoluto en el Excel
-        idx_inicio = max(0, fila_inicio - inicio_datos)
-        idx_fin = min(len(df_datos), fila_fin - inicio_datos + 1)
-
-        # Progreso
         avance = 0
         total_filas = idx_fin - idx_inicio
 
@@ -124,8 +135,8 @@ class ImportacionPedidosController(ControladorBase):
             self.view.avance.actualizar(avance / total_filas * 100)
 
             row = df_datos.iloc[i]
-            item = [True]  # Columna 'Importa'
-            item.extend(row.tolist())  # Añadir cada celda de la fila
+            item = [True]
+            item.extend(row.tolist())
             self.view.grid_datos.AgregaItem(item)
 
         self.view.avance.actualizar(100)
