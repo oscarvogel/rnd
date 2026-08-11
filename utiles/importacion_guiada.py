@@ -20,6 +20,13 @@ class ResumenImportacion:
     pendientes: int = 0
     errores: int = 0
 
+    def __post_init__(self):
+        # Mantiene disponible en memoria el último estado operativo del día.
+        # Esto permite que el dashboard (#4/#24) lo consulte sin duplicar
+        # lógica ni tocar los importadores existentes.
+        if any((self.leidos, self.importados, self.omitidos, self.pendientes, self.errores)):
+            _ULTIMA_IMPORTACION_POR_FECHA[date.today()] = self
+
     @property
     def parcial(self):
         return self.importados > 0 and (self.omitidos > 0 or self.pendientes > 0 or self.errores > 0)
