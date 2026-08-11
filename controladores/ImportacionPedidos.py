@@ -277,13 +277,13 @@ class ImportacionPedidosController(ControladorBase):
         self.view.avance.actualizar(100)
 
     def ir_siguiente_paso(self):
-        """Continúa al reparto o devuelve al operador a corregir la importación."""
+        """Continúa a la bandeja operativa o devuelve al operador a corregir."""
         if self.resumen_actual.siguiente_accion == ACCION_CORREGIR:
             self.view.txt_archivo.setFocus()
             return
-        from controladores.VerHojaRuta import VerHojaRutaController
+        from controladores.BandejaPedidos import BandejaPedidosController
 
-        self.ventana_siguiente = VerHojaRutaController(
+        self.ventana_siguiente = BandejaPedidosController(
             fecha_inicial=self.view.fecha_reparto.valor()
         )
         self.ventana_siguiente.run()
