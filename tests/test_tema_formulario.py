@@ -7,8 +7,9 @@ Historia:
   (qdark/darkblue, fondo azul oscuro). Ese fallback podia activarse cuando el
   QSS global no estaba disponible y dejaba el formulario ilegible.
 
-  Fix: ``EstablecerTema`` ya no aplica CSS legado; con o sin QSS global, el
-  formulario hereda el tema de QApplication o conserva el estilo nativo de Qt.
+  Fix: cuando ``main.py`` aplica el tema global, marca la QApplication con la
+  propiedad ``rnd_tema_global``. ``Formulario`` usa esa propiedad para evitar
+  aplicar un stylesheet propio y pisar el QSS global.
 
   Estos tests no deben depender de una conexion MySQL real. El parametro TEMA
   se simula para mantener la prueba enfocada exclusivamente en el comportamiento
@@ -44,6 +45,7 @@ class EstablecerTemaTests(unittest.TestCase):
 
     def setUp(self):
         self.app.setStyleSheet("")
+        self.app.setProperty("rnd_tema_global", False)
         self.param_tema = patch.object(
             ParamSist,
             "ObtenerParametro",
@@ -51,10 +53,13 @@ class EstablecerTemaTests(unittest.TestCase):
         )
         self.param_tema.start()
         self.addCleanup(self.param_tema.stop)
+        self.addCleanup(lambda: self.app.setProperty("rnd_tema_global", False))
 
     def test_con_stylesheet_global_no_aplica_css_del_formulario(self):
-        # Simula el arranque real: main.py aplico vogel2026.qss a la app.
+        # Simula el arranque real: main.py aplica el QSS y marca que existe
+        # un tema global activo para que los formularios no lo pisen.
         self.app.setStyleSheet("/* Vogel 2026 */ QDialog { background-color: #F8FAFC; }")
+        self.app.setProperty("rnd_tema_global", True)
         form = Formulario()
         try:
             self.assertEqual(
@@ -65,16 +70,14 @@ class EstablecerTemaTests(unittest.TestCase):
         finally:
             form.close()
 
-    def test_sin_stylesheet_global_no_aplica_css_legacy(self):
-        # Sin tema global, el formulario debe conservar el estilo nativo de
-        # Qt. El fallback oscuro leido desde TEMA es la causa del contraste
-        # roto y no debe volver a aplicarse automaticamente.
-        with patch.object(
-            Formulario, "setStyleSheet", create=True
-        ) as mock_set:
+    def test_sin_tema_global_puede_aplicar_tema_configurado(self):
+        # Sin el flag global, Formulario mantiene su comportamiento legacy:
+        # puede resolver y aplicar el tema configurado localmente.
+        self.app.setProperty("rnd_tema_global", False)
+        with patch.object(Formulario, "setStyleSheet", create=True) as mock_set:
             form = Formulario()
             form.close()
-            mock_set.assert_not_called()
+            mock_set.assert_called_once()
 
     def test_no_crashea_sin_qapplication(self):
         with patch.object(QApplication, "instance", return_value=None):
