@@ -10,7 +10,7 @@ import pytest
 
 repository_root = Path(__file__).resolve().parents[1]
 vendored_package = types.ModuleType("vendored_pyqt5libs")
-vendored_package.__path__ = [str(repository_root)]
+vendored_package.__path__ = [str(repository_root / "pyqt5libs")]
 sys.modules.setdefault("vendored_pyqt5libs", vendored_package)
 utiles = importlib.import_module("vendored_pyqt5libs.pyqt5libs.utiles")
 

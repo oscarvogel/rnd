@@ -20,7 +20,8 @@ from unittest.mock import patch
 # Forzar plataforma offscreen antes de importar PyQt5 widgets.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtGui import QColor, QImage, QPalette
+from PyQt5.QtWidgets import QApplication, QWidget
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,6 +75,18 @@ class CargaQSSTests(unittest.TestCase):
             "barraLateralShell",
             "menuLateralArbol",
             "areaCentralShell",
+            "dashboardRoot",
+            "dashboardContenido",
+            "dashboardCabecera",
+            "dashboardTitulo",
+            "dashboardSubtitulo",
+            "dashboardBotonRecargar",
+            "dashboardTarjetaHero",
+            "dashboardHeroTitulo",
+            "dashboardHeroValor",
+            "dashboardTarjetaSecundaria",
+            "dashboardSecTitulo",
+            "dashboardSecValor",
         ):
             with self.subTest(object_name=object_name):
                 self.assertIn(object_name, contenido)
@@ -90,6 +103,7 @@ class CargaQSSTests(unittest.TestCase):
         self.assertTrue(exito)
         # El QSS queda en el stylesheet de la app
         self.assertIn("Vogel 2026", self.app.styleSheet())
+        self.assertTrue(self.app.property("rnd_tema_global"))
 
     def test_aplicar_tema_usa_nombre_por_defecto(self):
         # No pasamos nombre -> debe usar TEMA_ACTIVO
@@ -191,6 +205,67 @@ class SmokeVisualTests(unittest.TestCase):
             finally:
                 view.close()
                 view.deleteLater()
+
+    def test_formularios_no_sobrescriben_el_tema_global(self):
+        from pyqt5libs.pyqt5libs.Formulario import Formulario
+
+        self.app.setProperty("rnd_tema_global", True)
+        with patch.object(Formulario, "EstablecerTema") as tema_local:
+            formulario = Formulario()
+            try:
+                tema_local.assert_not_called()
+            finally:
+                formulario.close()
+                formulario.deleteLater()
+
+    def test_formulario_legacy_renderiza_fondo_claro_con_tema_global(self):
+        from pyqt5libs.pyqt5libs.Formulario import Formulario
+
+        formulario = Formulario()
+        formulario.resize(320, 160)
+        formulario.show()
+        self.app.processEvents()
+        try:
+            captura = formulario.grab().toImage().convertToFormat(
+                QImage.Format_RGB32
+            )
+            self.assertEqual(
+                captura.pixelColor(5, 5).name().lower(),
+                "#f8fafc",
+            )
+        finally:
+            formulario.close()
+            formulario.deleteLater()
+
+    def test_widget_base_no_expone_la_paleta_oscura_del_sistema(self):
+        """El tema debe pintar su fondo, aunque Windows use modo oscuro.
+
+        Un ``background-color: transparent`` global deja que una paleta
+        nativa oscura reaparezca en formularios y contenedores sin un
+        selector particular. Esa es exactamente la regresion que se ve en
+        los formularios legacy.
+        """
+        paleta_original = self.app.palette()
+        paleta_oscura = QPalette(paleta_original)
+        paleta_oscura.setColor(QPalette.Window, QColor("#000000"))
+        self.app.setPalette(paleta_oscura)
+
+        widget = QWidget()
+        widget.resize(240, 120)
+        widget.show()
+        self.app.processEvents()
+        try:
+            captura = widget.grab().toImage().convertToFormat(
+                QImage.Format_RGB32
+            )
+            self.assertEqual(
+                captura.pixelColor(5, 5).name().lower(),
+                "#f8fafc",
+            )
+        finally:
+            widget.close()
+            widget.deleteLater()
+            self.app.setPalette(paleta_original)
 
 
 if __name__ == "__main__":

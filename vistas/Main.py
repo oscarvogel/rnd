@@ -27,6 +27,7 @@ class MainView(QMainWindow):
         # ``itemClicked`` (ver ``controladores.Main.conectarWidgets``).
         self.botones = []
         self.ventana_menu_lateral = None
+        self.dashboard = None
         self.initUi()
         self.showMaximized()
 
@@ -82,6 +83,12 @@ class MainView(QMainWindow):
             for j in range(padre.childCount()):
                 self.botones.append(padre.child(j))
         return visibles
+
+    def registrar_dashboard(self, dashboard):
+        """Registra y muestra el dashboard operativo en el area central."""
+        self.dashboard = dashboard
+        self.area_central.registrar_pagina("dashboard", dashboard)
+        self.area_central.mostrar("dashboard")
 
     def actualizar_encabezado(
         self, usuario, servidor, base, estado="Conectado", version=""

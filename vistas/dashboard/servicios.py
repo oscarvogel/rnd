@@ -20,8 +20,9 @@ from datetime import date
 from typing import Optional
 
 from modelos.Accesos import Acceso
-from modelos.Equipos import get_vencimientos_proximos
+from modelos.Equipos import Vencimientos, get_vencimientos_proximos
 from modelos.HojaRuta import HojaDeRuta
+from modelos.ParametrosSistema import ParamSist
 
 
 # --- Codigos de permiso usados por el dashboard ---------------------------
@@ -102,6 +103,36 @@ def hojas_ruta_del_dia(usu_id, fecha=None):
     return _to_resultado("ok", cantidad=cantidad, fecha=fecha)
 
 
+def hojas_ruta_pendientes(usu_id, fecha=None):
+    """Registros del dia que aun conservan chofer o camion generico."""
+    fecha = fecha or date.today()
+    if not _validar_permiso(usu_id, PERMISO_HOJA_RUTA):
+        return _to_resultado("sin_permiso", fecha=fecha)
+    try:
+        camion_generico = int(
+            ParamSist.ObtenerParametro("CAMION_GENERICO", "1") or 1
+        )
+        empleado_generico = int(
+            ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23") or 23
+        )
+        cantidad = (
+            HojaDeRuta.select()
+            .where(
+                HojaDeRuta.fecha == fecha,
+                (
+                    (HojaDeRuta.equipo_asignado == camion_generico)
+                    | (HojaDeRuta.responsable == empleado_generico)
+                ),
+            )
+            .count()
+        )
+    except Exception as exc:
+        return _to_resultado("error", detalle=str(exc), fecha=fecha)
+    if cantidad == 0:
+        return _to_resultado("vacio", fecha=fecha)
+    return _to_resultado("ok", cantidad=cantidad, fecha=fecha)
+
+
 def vencimientos_proximos(usu_id, dias=10, fecha=None):
     """Cantidad de vencimientos de equipos/personal en los proximos dias.
 
@@ -116,6 +147,24 @@ def vencimientos_proximos(usu_id, dias=10, fecha=None):
         # Para mantener la fecha coherente con el resto del dashboard
         # la exponemos en el resultado aunque la query no la use.
         cantidad = sum(1 for _ in get_vencimientos_proximos())
+    except Exception as exc:
+        return _to_resultado("error", detalle=str(exc), fecha=fecha)
+    if cantidad == 0:
+        return _to_resultado("vacio", fecha=fecha)
+    return _to_resultado("ok", cantidad=cantidad, fecha=fecha)
+
+
+def alertas_vencidas(usu_id, fecha=None):
+    """Vencimientos anteriores a hoy que requieren atencion."""
+    fecha = fecha or date.today()
+    if not _validar_permiso(usu_id, PERMISO_EQUIPOS):
+        return _to_resultado("sin_permiso", fecha=fecha)
+    try:
+        cantidad = (
+            Vencimientos.select()
+            .where(Vencimientos.fecha_vencimiento < fecha)
+            .count()
+        )
     except Exception as exc:
         return _to_resultado("error", detalle=str(exc), fecha=fecha)
     if cantidad == 0:

@@ -58,6 +58,16 @@ def _prevenir_conexion_mysql():
     )
 
 
+def _dashboard_sincrono(usu_id=1):
+    from vistas.dashboard.dashboard_view import DashboardView
+    from vistas.dashboard.ejecutor import EjecutorConsultasSincrono
+
+    return DashboardView(
+        usu_id=usu_id,
+        ejecutor=EjecutorConsultasSincrono(),
+    )
+
+
 class ServiciosDashboardTests(unittest.TestCase):
     """Capa de datos del dashboard: permisos, fechas y errores."""
 
@@ -162,6 +172,38 @@ class ServiciosDashboardTests(unittest.TestCase):
         self.assertEqual(resultado.estado, "error")
         self.assertIn("timeout", resultado.detalle)
 
+    def test_hojas_ruta_pendientes_usa_asignaciones_genericas(self):
+        from vistas.dashboard import servicios
+
+        mock_query = MagicMock()
+        mock_query.where.return_value.count.return_value = 4
+        self.mock_hoja.return_value = mock_query
+        with patch.object(
+            servicios.ParamSist,
+            "ObtenerParametro",
+            side_effect=("1", "23"),
+        ):
+            resultado = servicios.hojas_ruta_pendientes(
+                usu_id=1,
+                fecha=date(2026, 1, 1),
+            )
+        self.assertEqual(resultado.estado, "ok")
+        self.assertEqual(resultado.cantidad, 4)
+
+    def test_alertas_vencidas_cuenta_vencimientos_anteriores_a_hoy(self):
+        from modelos.Equipos import Vencimientos
+        from vistas.dashboard import servicios
+
+        mock_query = MagicMock()
+        mock_query.where.return_value.count.return_value = 2
+        with patch.object(Vencimientos, "select", return_value=mock_query):
+            resultado = servicios.alertas_vencidas(
+                usu_id=1,
+                fecha=date(2026, 1, 1),
+            )
+        self.assertEqual(resultado.estado, "ok")
+        self.assertEqual(resultado.cantidad, 2)
+
 
 class DashboardViewTests(unittest.TestCase):
     """UI del dashboard: tarjetas, estados, navegacion y errores."""
@@ -200,8 +242,7 @@ class DashboardViewTests(unittest.TestCase):
         self._p_venc.stop()
 
     def test_sin_permisos_todas_las_tarjetas_quedan_ocultas(self):
-        from vistas.dashboard.dashboard_view import DashboardView
-        d = DashboardView(usu_id=1)
+        d = _dashboard_sincrono()
         d.cargar()
         # ``isVisible`` requiere que los padres esten mostrados;
         # sin ventana padre usamos ``isHidden`` que refleja la
@@ -210,13 +251,45 @@ class DashboardViewTests(unittest.TestCase):
         self.assertTrue(d.tarjeta_vencimientos.isHidden())
         d.deleteLater()
 
+    def test_cargar_delega_consultas_y_no_bloquea_el_hilo_de_ui(self):
+        from vistas.dashboard.dashboard_view import DashboardView
+
+        ejecutor = MagicMock()
+        d = DashboardView(usu_id=1, ejecutor=ejecutor)
+        try:
+            d.cargar()
+            self.assertEqual(ejecutor.ejecutar.call_count, 4)
+            self.mock_hoja.assert_not_called()
+            self.mock_venc.assert_not_called()
+        finally:
+            d.deleteLater()
+
+    def test_dashboard_incluye_resumen_completo_y_recarga_visible(self):
+        d = _dashboard_sincrono()
+        try:
+            self.assertEqual(d.boton_recargar.text(), "Actualizar")
+            self.assertFalse(d.boton_recargar.isHidden())
+            self.assertEqual(
+                d.tarjeta_pendientes._etiqueta_titulo.text(),
+                "Pendientes de asignacion",
+            )
+            self.assertEqual(
+                d.tarjeta_vencimientos._etiqueta_titulo.text(),
+                "Vencimientos proximos",
+            )
+            self.assertEqual(
+                d.tarjeta_alertas._etiqueta_titulo.text(),
+                "Alertas vencidas",
+            )
+        finally:
+            d.deleteLater()
+
     def test_hero_visible_con_ok_si_hay_permiso_y_datos(self):
         self.mock_perm.return_value = True
         mock_q = MagicMock()
         mock_q.where.return_value.count.return_value = 5
         self.mock_hoja.return_value = mock_q
-        from vistas.dashboard.dashboard_view import DashboardView
-        d = DashboardView(usu_id=1)
+        d = _dashboard_sincrono()
         d.cargar()
         self.assertFalse(d.hero.isHidden())
         self.assertEqual(d.hero._etiqueta_valor.text(), "5")
@@ -228,8 +301,7 @@ class DashboardViewTests(unittest.TestCase):
         mock_q = MagicMock()
         mock_q.where.return_value.count.return_value = 0
         self.mock_hoja.return_value = mock_q
-        from vistas.dashboard.dashboard_view import DashboardView
-        d = DashboardView(usu_id=1)
+        d = _dashboard_sincrono()
         d.cargar()
         self.assertFalse(d.hero.isHidden())
         self.assertEqual(d.hero._etiqueta_valor.text(), "0")
@@ -241,8 +313,7 @@ class DashboardViewTests(unittest.TestCase):
         mock_q = MagicMock()
         mock_q.where.return_value.count.side_effect = RuntimeError("boom")
         self.mock_hoja.return_value = mock_q
-        from vistas.dashboard.dashboard_view import DashboardView
-        d = DashboardView(usu_id=1)
+        d = _dashboard_sincrono()
         d.cargar()
         self.assertFalse(d.hero.isHidden())
         self.assertFalse(d.hero._boton_reintentar.isHidden())
@@ -261,8 +332,7 @@ class DashboardViewTests(unittest.TestCase):
         self.mock_hoja.return_value = mock_hoja_q
         # venc -> 2
         self.mock_venc.return_value = [MagicMock(), MagicMock()]
-        from vistas.dashboard.dashboard_view import DashboardView
-        d = DashboardView(usu_id=1)
+        d = _dashboard_sincrono()
         d.cargar()
         self.assertFalse(d.hero.isHidden())
         self.assertFalse(d.hero._boton_reintentar.isHidden())
@@ -277,9 +347,8 @@ class DashboardViewTests(unittest.TestCase):
         self.mock_hoja.return_value = mock_q
         from vistas.dashboard.dashboard_view import (
             NAV_HOJAS_RUTA_DIA,
-            DashboardView,
         )
-        d = DashboardView(usu_id=1)
+        d = _dashboard_sincrono()
         d.cargar()
         capturados = []
         d.navegar.connect(lambda c: capturados.append(c))
@@ -295,9 +364,8 @@ class DashboardViewTests(unittest.TestCase):
         self.mock_venc.return_value = [MagicMock()]
         from vistas.dashboard.dashboard_view import (
             NAV_VENCIMIENTOS,
-            DashboardView,
         )
-        d = DashboardView(usu_id=1)
+        d = _dashboard_sincrono()
         d.cargar()
         capturados = []
         d.navegar.connect(lambda c: capturados.append(c))
@@ -312,8 +380,7 @@ class DashboardViewTests(unittest.TestCase):
         mock_q = MagicMock()
         mock_q.where.return_value.count.return_value = 3
         self.mock_hoja.return_value = mock_q
-        from vistas.dashboard.dashboard_view import DashboardView
-        d = DashboardView(usu_id=1)
+        d = _dashboard_sincrono()
         d.cargar()
         d.recargar()
         # El servicio de hoja se llamo al menos dos veces
@@ -321,14 +388,29 @@ class DashboardViewTests(unittest.TestCase):
         d.deleteLater()
 
     def test_objetos_expuestos_con_objectName_para_qss(self):
-        from vistas.dashboard.dashboard_view import DashboardView
-        d = DashboardView(usu_id=1)
+        d = _dashboard_sincrono()
         self.assertEqual(d.objectName(), "dashboardRoot")
         self.assertEqual(d.hero.objectName(), "dashboardTarjetaHero")
         self.assertEqual(
             d.tarjeta_vencimientos.objectName(), "dashboardTarjetaSecundaria"
         )
         d.deleteLater()
+
+    def test_click_hojas_ruta_abre_controlador_con_fecha_de_hoy(self):
+        from controladores.Main import MainController
+        from vistas.dashboard.dashboard_view import NAV_HOJAS_RUTA_DIA
+
+        controller = MainController.__new__(MainController)
+        controller.view = MagicMock()
+        destino = MagicMock()
+        with patch(
+            "controladores.VerHojaRuta.VerHojaRutaController",
+            return_value=destino,
+        ) as crear:
+            controller._navegar_desde_dashboard(NAV_HOJAS_RUTA_DIA)
+
+        crear.assert_called_once_with(fecha_inicial=date.today())
+        destino.run.assert_called_once_with()
 
 
 if __name__ == "__main__":
