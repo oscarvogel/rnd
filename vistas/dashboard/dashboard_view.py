@@ -21,6 +21,7 @@ from vistas.dashboard.tarjeta import TarjetaDashboard, TarjetaHero
 
 
 NAV_IMPORTAR_PEDIDOS = "importar_pedidos"
+NAV_ORGANIZAR_PEDIDOS = "organizar_pedidos"
 NAV_HOJAS_RUTA_DIA = "hojas_ruta_dia"
 NAV_PENDIENTES = "hojas_ruta_pendientes"
 NAV_VENCIMIENTOS = "vencimientos"
@@ -54,9 +55,7 @@ class DashboardView(QWidget):
         titulo = QLabel("Resumen operativo")
         titulo.setObjectName("dashboardTitulo")
         textos.addWidget(titulo)
-        subtitulo = QLabel(
-            "Estado del dia {}".format(date.today().strftime("%d/%m/%Y"))
-        )
+        subtitulo = QLabel("Estado del dia {}".format(date.today().strftime("%d/%m/%Y")))
         subtitulo.setObjectName("dashboardSubtitulo")
         textos.addWidget(subtitulo)
         layout_cabecera.addLayout(textos)
@@ -70,7 +69,6 @@ class DashboardView(QWidget):
         layout_cabecera.addWidget(self.boton_recargar)
         raiz.addWidget(cabecera)
 
-        # Acción operativa inicial del nuevo circuito guiado (#20).
         acceso_importar = QWidget()
         acceso_importar.setObjectName("dashboardAccionImportar")
         fila_importar = QHBoxLayout(acceso_importar)
@@ -80,20 +78,26 @@ class DashboardView(QWidget):
         titulo_importar.setObjectName("dashboardAccionTitulo")
         textos_importar.addWidget(titulo_importar)
         detalle_importar = QLabel(
-            "Comenzá importando los pedidos del proveedor. RND te va a guiar hasta dejarlos listos para organizar."
+            "Importá los pedidos y luego organizalos por ruta antes de asignar chofer y camión."
         )
         detalle_importar.setWordWrap(True)
         detalle_importar.setObjectName("dashboardAccionDetalle")
         textos_importar.addWidget(detalle_importar)
         fila_importar.addLayout(textos_importar, stretch=1)
+
         self.boton_importar = QPushButton("Importar pedidos")
         self.boton_importar.setObjectName("dashboardBotonImportar")
         self.boton_importar.setProperty("role", "primary")
         self.boton_importar.setCursor(Qt.PointingHandCursor)
-        self.boton_importar.clicked.connect(
-            lambda: self.navegar.emit(NAV_IMPORTAR_PEDIDOS)
-        )
+        self.boton_importar.clicked.connect(lambda: self.navegar.emit(NAV_IMPORTAR_PEDIDOS))
         fila_importar.addWidget(self.boton_importar)
+
+        self.boton_organizar = QPushButton("Pedidos para organizar")
+        self.boton_organizar.setObjectName("dashboardBotonOrganizar")
+        self.boton_organizar.setProperty("role", "secondary")
+        self.boton_organizar.setCursor(Qt.PointingHandCursor)
+        self.boton_organizar.clicked.connect(lambda: self.navegar.emit(NAV_ORGANIZAR_PEDIDOS))
+        fila_importar.addWidget(self.boton_organizar)
         raiz.addWidget(acceso_importar)
 
         scroll = QScrollArea()
@@ -115,23 +119,17 @@ class DashboardView(QWidget):
         grid.addWidget(self.hero, 0, 0, 1, 2)
 
         self.tarjeta_pendientes = TarjetaDashboard("Pendientes de asignacion")
-        self.tarjeta_pendientes.clicked.connect(
-            lambda: self.navegar.emit(NAV_PENDIENTES)
-        )
+        self.tarjeta_pendientes.clicked.connect(lambda: self.navegar.emit(NAV_PENDIENTES))
         self.tarjeta_pendientes.conectar_reintentar(self._cargar_pendientes)
         grid.addWidget(self.tarjeta_pendientes, 1, 0)
 
         self.tarjeta_vencimientos = TarjetaDashboard("Vencimientos proximos")
-        self.tarjeta_vencimientos.clicked.connect(
-            lambda: self.navegar.emit(NAV_VENCIMIENTOS)
-        )
+        self.tarjeta_vencimientos.clicked.connect(lambda: self.navegar.emit(NAV_VENCIMIENTOS))
         self.tarjeta_vencimientos.conectar_reintentar(self._cargar_vencimientos)
         grid.addWidget(self.tarjeta_vencimientos, 1, 1)
 
         self.tarjeta_alertas = TarjetaDashboard("Alertas vencidas")
-        self.tarjeta_alertas.clicked.connect(
-            lambda: self.navegar.emit(NAV_ALERTAS)
-        )
+        self.tarjeta_alertas.clicked.connect(lambda: self.navegar.emit(NAV_ALERTAS))
         self.tarjeta_alertas.conectar_reintentar(self._cargar_alertas)
         grid.addWidget(self.tarjeta_alertas, 1, 2)
 
@@ -163,9 +161,7 @@ class DashboardView(QWidget):
         self.tarjeta_vencimientos.mostrar_cargando()
         self._ejecutor.ejecutar(
             lambda: servicios.vencimientos_proximos(self._usu_id),
-            lambda resultado: self._aplicar_resultado(
-                self.tarjeta_vencimientos, resultado, False
-            ),
+            lambda resultado: self._aplicar_resultado(self.tarjeta_vencimientos, resultado, False),
             lambda exc: self.tarjeta_vencimientos.mostrar_error(str(exc)),
         )
 
@@ -173,9 +169,7 @@ class DashboardView(QWidget):
         self.tarjeta_pendientes.mostrar_cargando()
         self._ejecutor.ejecutar(
             lambda: servicios.hojas_ruta_pendientes(self._usu_id),
-            lambda resultado: self._aplicar_resultado(
-                self.tarjeta_pendientes, resultado, False
-            ),
+            lambda resultado: self._aplicar_resultado(self.tarjeta_pendientes, resultado, False),
             lambda exc: self.tarjeta_pendientes.mostrar_error(str(exc)),
         )
 
@@ -183,9 +177,7 @@ class DashboardView(QWidget):
         self.tarjeta_alertas.mostrar_cargando()
         self._ejecutor.ejecutar(
             lambda: servicios.alertas_vencidas(self._usu_id),
-            lambda resultado: self._aplicar_resultado(
-                self.tarjeta_alertas, resultado, False
-            ),
+            lambda resultado: self._aplicar_resultado(self.tarjeta_alertas, resultado, False),
             lambda exc: self.tarjeta_alertas.mostrar_error(str(exc)),
         )
 
