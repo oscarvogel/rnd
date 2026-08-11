@@ -112,6 +112,9 @@ class BandejaPedidosController(ControladorBase):
         self.cargar_pedidos()
 
     def ir_asignacion(self):
-        from controladores.VerHojaRuta import VerHojaRutaController
-        self.ventana_siguiente = VerHojaRutaController(fecha_inicial=self.fecha_actual())
+        from controladores.AsignacionRecursos import AsignacionRecursosController
+        self.ventana_siguiente = AsignacionRecursosController(
+            fecha_inicial=self.fecha_actual(),
+            ruta_inicial=self.view.ruta_destino(),
+        )
         self.ventana_siguiente.run()
