@@ -103,17 +103,17 @@ class DashboardView(QWidget):
         grid = QGridLayout(contenido)
         grid.setSpacing(16)
 
-        self.hero = TarjetaHero("Hojas de ruta del día")
+        self.hero = TarjetaHero("Hojas de ruta del dia")
         self.hero.clicked.connect(lambda: self.navegar.emit(NAV_HOJAS_RUTA_DIA))
         self.hero.conectar_reintentar(self._cargar_hero)
         grid.addWidget(self.hero, 0, 0, 1, 2)
 
-        self.tarjeta_pendientes = TarjetaDashboard("Pendientes de asignación")
+        self.tarjeta_pendientes = TarjetaDashboard("Pendientes de asignacion")
         self.tarjeta_pendientes.clicked.connect(lambda: self.navegar.emit(NAV_PENDIENTES))
         self.tarjeta_pendientes.conectar_reintentar(self._cargar_pendientes)
         grid.addWidget(self.tarjeta_pendientes, 1, 0)
 
-        self.tarjeta_vencimientos = TarjetaDashboard("Vencimientos próximos")
+        self.tarjeta_vencimientos = TarjetaDashboard("Vencimientos proximos")
         self.tarjeta_vencimientos.clicked.connect(lambda: self.navegar.emit(NAV_VENCIMIENTOS))
         self.tarjeta_vencimientos.conectar_reintentar(self._cargar_vencimientos)
         grid.addWidget(self.tarjeta_vencimientos, 1, 1)
