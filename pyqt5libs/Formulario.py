@@ -4,7 +4,7 @@ import sys
 from os.path import join
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QDesktopWidget, QHBoxLayout
+from PyQt5.QtWidgets import QApplication, QDialog, QDesktopWidget, QHBoxLayout
 
 from .EntradaTexto import EntradaTexto
 from .Etiquetas import Etiqueta
@@ -37,7 +37,9 @@ class Formulario(QDialog):
         flags = Qt.WindowMinMaxButtonsHint | Qt.WindowCloseButtonHint
         self.setWindowFlags(flags)
         self.setMinimumSize(420, 160)
-        self.EstablecerTema()
+        app = QApplication.instance()
+        if app is None or not app.property("rnd_tema_global"):
+            self.EstablecerTema()
         # self.EstablecerOrden()
 
     def Cerrar(self):

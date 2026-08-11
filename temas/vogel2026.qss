@@ -44,9 +44,28 @@ QDialog {
 }
 
 QWidget {
-    background-color: transparent;
+    /* Fondo seguro para cualquier formulario o contenedor sin selector.
+     * No usar transparent aqui: en Windows con paleta oscura expone negro
+     * mientras el texto global sigue siendo #0F172A. */
+    background-color: #F8FAFC;
     selection-background-color: #2563EB;
     selection-color: #FFFFFF;
+}
+
+/* Los formularios legacy heredan QDialog y no tienen objectName propio.
+ * Esta regla debe quedar despues de QWidget: de otro modo el fondo
+ * transparente expone el respaldo negro de la ventana nativa. */
+QDialog {
+    background-color: #F8FAFC;
+    color: #0F172A;
+}
+
+/* Estos controles deben integrarse visualmente con la superficie que los
+ * contiene; la transparencia queda acotada y ya no afecta contenedores. */
+QLabel,
+QCheckBox,
+QRadioButton {
+    background-color: transparent;
 }
 
 
@@ -189,6 +208,137 @@ QLabel#areaCentralPlaceholderTexto {
     color: #475569;
     font-size: 12pt;
     padding: 24px;
+}
+
+
+/* -----------------------------------------------------------------------
+ * Dashboard operativo
+ * --------------------------------------------------------------------- */
+QWidget#dashboardRoot,
+QWidget#dashboardContenido,
+QWidget#dashboardCabecera,
+QScrollArea#dashboardScroll,
+QScrollArea#dashboardScroll QWidget#qt_scrollarea_viewport {
+    background-color: #F8FAFC;
+    border: none;
+}
+
+QLabel#dashboardTitulo {
+    color: #0D1F3C;
+    font-size: 20pt;
+    font-weight: 700;
+}
+
+QLabel#dashboardSubtitulo {
+    color: #64748B;
+    font-size: 10pt;
+}
+
+QPushButton#dashboardBotonRecargar {
+    background-color: #FFFFFF;
+    color: #1D4ED8;
+    border: 1px solid #BFDBFE;
+    border-radius: 8px;
+    padding: 7px 16px;
+    min-height: 30px;
+    font-weight: 600;
+}
+
+QPushButton#dashboardBotonRecargar:hover {
+    background-color: #EFF6FF;
+    border-color: #2563EB;
+}
+
+QFrame#dashboardTarjetaHero {
+    background-color: #FFFFFF;
+    border: 1px solid #D8E2EE;
+    border-left: 5px solid #2563EB;
+    border-radius: 12px;
+    min-height: 190px;
+}
+
+QFrame#dashboardTarjetaHero:hover {
+    border-color: #2563EB;
+    border-left: 5px solid #2563EB;
+}
+
+QFrame#dashboardTarjetaHero:focus {
+    border: 2px solid #F5C518;
+    border-left: 5px solid #2563EB;
+}
+
+QLabel#dashboardHeroTitulo {
+    color: #475569;
+    font-size: 11pt;
+    font-weight: 600;
+}
+
+QLabel#dashboardHeroValor {
+    color: #0D1F3C;
+    font-size: 34pt;
+    font-weight: 700;
+}
+
+QLabel#dashboardHeroDetalle {
+    color: #64748B;
+    font-size: 10pt;
+}
+
+QLabel#dashboardHeroEstado {
+    color: #15803D;
+    font-size: 9pt;
+    font-weight: 600;
+}
+
+QFrame#dashboardTarjetaSecundaria {
+    background-color: #FFFFFF;
+    border: 1px solid #D8E2EE;
+    border-radius: 10px;
+    min-height: 130px;
+}
+
+QFrame#dashboardTarjetaSecundaria:hover {
+    background-color: #F8FBFF;
+    border-color: #2563EB;
+}
+
+QFrame#dashboardTarjetaSecundaria:focus {
+    border: 2px solid #F5C518;
+}
+
+QLabel#dashboardSecTitulo {
+    color: #475569;
+    font-size: 10pt;
+    font-weight: 600;
+}
+
+QLabel#dashboardSecValor {
+    color: #0D1F3C;
+    font-size: 24pt;
+    font-weight: 700;
+}
+
+QLabel#dashboardSecDetalle {
+    color: #64748B;
+    font-size: 9pt;
+}
+
+QProgressBar#dashboardHeroBarra,
+QProgressBar#dashboardSecBarra {
+    max-height: 5px;
+    min-height: 5px;
+    border: none;
+    background-color: #DBEAFE;
+    text-align: left;
+}
+
+QPushButton#dashboardHeroBotonReintentar,
+QPushButton#dashboardSecBotonReintentar {
+    background-color: transparent;
+    color: #1D4ED8;
+    border: 1px solid #2563EB;
+    border-radius: 6px;
+    padding: 5px 12px;
 }
 
 

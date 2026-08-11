@@ -10,7 +10,9 @@ from pyqt5libs.pyqt5libs.Menu import GeneraMenu
 from pyqt5libs.pyqt5libs.utiles import LeerConf, LeerIni, getFileProperties, inicializar_y_capturar_excepciones
 from vistas.Main import MainView
 from vistas.dashboard.dashboard_view import (
+    NAV_ALERTAS,
     NAV_HOJAS_RUTA_DIA,
+    NAV_PENDIENTES,
     NAV_VENCIMIENTOS,
     DashboardView,
 )
@@ -102,14 +104,22 @@ class MainController(ControladorBase):
         if clave == NAV_HOJAS_RUTA_DIA:
             from controladores.VerHojaRuta import VerHojaRutaController
             from datetime import date
-            # Filtro: hoy. La vista lo lee si la version instalada
-            # del modulo lo soporta; si no, queda en conf para
-            # extensiones futuras.
-            from pyqt5libs.pyqt5libs.utiles import GrabaConf
-            GrabaConf(clave="dashboard_filtro_fecha", valor=date.today().isoformat())
-            self.view.ventana_menu_lateral = VerHojaRutaController()
+            self.view.ventana_menu_lateral = VerHojaRutaController(
+                fecha_inicial=date.today()
+            )
+            self.view.ventana_menu_lateral.run()
+        elif clave == NAV_PENDIENTES:
+            from controladores.VerHojaRuta import VerHojaRutaController
+            from datetime import date
+            self.view.ventana_menu_lateral = VerHojaRutaController(
+                fecha_inicial=date.today()
+            )
             self.view.ventana_menu_lateral.run()
         elif clave == NAV_VENCIMIENTOS:
+            from controladores.ABMEquipos import ABMEquiposController
+            self.view.ventana_menu_lateral = ABMEquiposController()
+            self.view.ventana_menu_lateral.run()
+        elif clave == NAV_ALERTAS:
             from controladores.ABMEquipos import ABMEquiposController
             self.view.ventana_menu_lateral = ABMEquiposController()
             self.view.ventana_menu_lateral.run()

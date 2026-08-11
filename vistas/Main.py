@@ -1,5 +1,8 @@
 # coding=utf-8
 
+import importlib
+import re
+
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QMainWindow, qApp
@@ -119,8 +122,36 @@ class MainView(QMainWindow):
             usu_id=int(LeerConf("idUsuario") or 0),
             for_valid=dato_menu.for_id.for_valid,
         ):
-            self.ventana_menu_lateral = eval(dato_menu.for_id.for_arch)
+            self.ventana_menu_lateral = self._crear_controlador_menu(
+                dato_menu.for_id.for_arch
+            )
             self.ventana_menu_lateral.run()
+
+    @staticmethod
+    def _crear_controlador_menu(archivo):
+        """Instancia un destino historico ``Modulo.Controlador()``.
+
+        Los nombres viven en ``Formula.for_arch``. La ventana anterior
+        dependia de imports globales y ``eval``; al retirar aquellos imports
+        el nuevo shell dejo de poder abrir los modulos. La resolucion tardia
+        conserva el formato de datos existente sin importar todos los ABM al
+        iniciar ni ejecutar expresiones arbitrarias.
+        """
+        expresion = (archivo or "").strip()
+        coincidencia = re.fullmatch(
+            r"([A-Za-z_]\w*)\.([A-Za-z_]\w*)\(\)",
+            expresion,
+        )
+        if coincidencia is None:
+            raise ValueError(
+                "Destino de menu no valido: {!r}".format(expresion)
+            )
+        modulo_nombre, controlador_nombre = coincidencia.groups()
+        modulo = importlib.import_module(
+            "controladores.{}".format(modulo_nombre)
+        )
+        controlador = getattr(modulo, controlador_nombre)
+        return controlador()
 
     # ------------------------------------------------------------------
     # API heredada (deprecada, mantenida por compatibilidad transitoria)
@@ -146,7 +177,7 @@ class MainView(QMainWindow):
 
     def SeleccionaMenu(self, idMenu, Archivo):
         if Archivo:
-            self.ventana = eval(Archivo)
+            self.ventana = self._crear_controlador_menu(Archivo)
             self.ventana.run()
         else:
             Ventanas.showAlert("Error", u"Opcion de menu no establecida")
@@ -167,7 +198,9 @@ class MainView(QMainWindow):
             dato_menu = MenuLateral.get_by_id(boton.id)
             if Acceso.ValidaMenu(usu_id=LeerConf('idUsuario'),
                                  for_valid=dato_menu.for_id.for_valid):
-                self.ventana_menu_lateral = eval(dato_menu.for_id.for_arch)
+                self.ventana_menu_lateral = self._crear_controlador_menu(
+                    dato_menu.for_id.for_arch
+                )
                 self.ventana_menu_lateral.run()
         except DoesNotExist:
             pass

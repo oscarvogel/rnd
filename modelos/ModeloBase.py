@@ -48,20 +48,19 @@ __version__ = "0.1"
 
 # database_proxy = Proxy()  # Create a proxy for our db.
 from pyqt5libs.pyqt5libs.utiles import LeerConf, LeerIni
+from rnd_credentials import CredentialError, resolve_mysql_password
 
 db = None
 
 dbsqlite = SqliteDatabase(':memory:', pragmas={'journal_mode': 'wal'})
 
-def _env_secret(*names):
-    for name in names:
-        value = os.getenv(name)
-        if value:
-            return value
-    return ''
-
 def _mysql_password():
-    return _env_secret('RND_DB_PASSWORD', 'MYSQL_PASSWORD', 'DB_PASSWORD')
+    try:
+        return resolve_mysql_password()
+    except CredentialError:
+        # La importación de modelos no debe exigir conexión. El arranque
+        # interactivo valida la credencial antes de cargar este módulo.
+        return ''
 
 
 class RecycledMySQLDatabase(MySQLDatabase):

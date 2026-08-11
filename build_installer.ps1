@@ -24,7 +24,11 @@ function Invoke-Step {
 
     Write-Host ""
     Write-Host "==> $Message"
+    $global:LASTEXITCODE = 0
     & $Action
+    if ($LASTEXITCODE -ne 0) {
+        throw "Falló el paso '$Message' con código de salida $LASTEXITCODE."
+    }
 }
 
 Set-Location $Root

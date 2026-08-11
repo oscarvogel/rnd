@@ -56,6 +56,7 @@ def aplicar_tema(qapp, nombre=TEMA_ACTIVO):
     """
     if qapp is None:
         return False
+    qapp.setProperty("rnd_tema_global", False)
     qss = cargar_qss(nombre)
     if not qss:
         return False
@@ -64,4 +65,5 @@ def aplicar_tema(qapp, nombre=TEMA_ACTIVO):
     except Exception as exc:  # pragma: no cover - defensivo
         log.warning("Fallo al aplicar QSS '%s': %s", nombre, exc)
         return False
+    qapp.setProperty("rnd_tema_global", True)
     return True
