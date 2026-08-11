@@ -15,6 +15,7 @@ from vistas.dashboard.dashboard_view import (
     NAV_ALERTAS,
     NAV_HOJAS_RUTA_DIA,
     NAV_IMPORTAR_PEDIDOS,
+    NAV_ORGANIZAR_PEDIDOS,
     NAV_PENDIENTES,
     NAV_VENCIMIENTOS,
     DashboardView,
@@ -81,6 +82,14 @@ class MainController(ControladorBase):
 
             self.view.ventana_menu_lateral = ImportacionPedidosController()
             self.view.ventana_menu_lateral.run()
+        elif clave == NAV_ORGANIZAR_PEDIDOS:
+            from datetime import date
+            from controladores.BandejaPedidos import BandejaPedidosController
+
+            self.view.ventana_menu_lateral = BandejaPedidosController(
+                fecha_inicial=date.today()
+            )
+            self.view.ventana_menu_lateral.run()
         elif clave == NAV_HOJAS_RUTA_DIA:
             from datetime import date
             from controladores.VerHojaRuta import VerHojaRutaController
@@ -91,9 +100,9 @@ class MainController(ControladorBase):
             self.view.ventana_menu_lateral.run()
         elif clave == NAV_PENDIENTES:
             from datetime import date
-            from controladores.VerHojaRuta import VerHojaRutaController
+            from controladores.BandejaPedidos import BandejaPedidosController
 
-            self.view.ventana_menu_lateral = VerHojaRutaController(
+            self.view.ventana_menu_lateral = BandejaPedidosController(
                 fecha_inicial=date.today()
             )
             self.view.ventana_menu_lateral.run()
