@@ -2,11 +2,14 @@
 """Utilidades puras para el flujo guiado de importación de pedidos."""
 
 from dataclasses import dataclass
+from datetime import date
 
 
 ACCION_REVISAR = "revisar_pendientes"
 ACCION_CONTINUAR = "continuar_reparto"
 ACCION_CORREGIR = "corregir_importacion"
+
+_ULTIMA_IMPORTACION_POR_FECHA = {}
 
 
 @dataclass(frozen=True)
@@ -53,6 +56,23 @@ class ResumenImportacion:
             "Registros leídos: {0} · Pedidos importados: {1} · "
             "Omitidos: {2} · Pendientes: {3} · Errores: {4}"
         ).format(self.leidos, self.importados, self.omitidos, self.pendientes, self.errores)
+
+
+def registrar_resultado_dia(resumen, fecha=None):
+    """Conserva el último resultado del día para el dashboard de esta sesión."""
+    clave = fecha or date.today()
+    _ULTIMA_IMPORTACION_POR_FECHA[clave] = resumen
+    return resumen
+
+
+def obtener_resultado_dia(fecha=None):
+    """Devuelve el último resumen registrado para la fecha solicitada."""
+    return _ULTIMA_IMPORTACION_POR_FECHA.get(fecha or date.today())
+
+
+def limpiar_resultados_dia():
+    """Helper para tests y reinicios controlados."""
+    _ULTIMA_IMPORTACION_POR_FECHA.clear()
 
 
 def ayuda_proveedor(proveedor_id):
