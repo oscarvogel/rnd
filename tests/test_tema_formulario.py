@@ -9,6 +9,10 @@ Historia:
 
   Fix: ``EstablecerTema`` ya no aplica CSS legado; con o sin QSS global, el
   formulario hereda el tema de QApplication o conserva el estilo nativo de Qt.
+
+  Estos tests no deben depender de una conexion MySQL real. El parametro TEMA
+  se simula para mantener la prueba enfocada exclusivamente en el comportamiento
+  visual del formulario.
 """
 
 import os
@@ -19,6 +23,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtWidgets import QApplication
 
+from modelos.ParametrosSistema import ParamSist
 from pyqt5libs.pyqt5libs.Formulario import Formulario
 
 
@@ -39,6 +44,13 @@ class EstablecerTemaTests(unittest.TestCase):
 
     def setUp(self):
         self.app.setStyleSheet("")
+        self.param_tema = patch.object(
+            ParamSist,
+            "ObtenerParametro",
+            return_value="forestal_moderno.css",
+        )
+        self.param_tema.start()
+        self.addCleanup(self.param_tema.stop)
 
     def test_con_stylesheet_global_no_aplica_css_del_formulario(self):
         # Simula el arranque real: main.py aplico vogel2026.qss a la app.
