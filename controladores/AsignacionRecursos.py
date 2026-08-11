@@ -163,7 +163,9 @@ class AsignacionRecursosController(ControladorBase):
         self.cargar_hoja()
 
     def ir_validacion(self):
-        # #23 reemplazará este destino por la validación operativa dedicada.
-        from controladores.VerHojaRuta import VerHojaRutaController
-        self.ventana_siguiente = VerHojaRutaController(fecha_inicial=self.fecha_actual())
+        from controladores.ValidacionHojaRuta import ValidacionHojaRutaController
+        self.ventana_siguiente = ValidacionHojaRutaController(
+            fecha_inicial=self.fecha_actual(),
+            ruta_inicial=self.view.ruta_id(),
+        )
         self.ventana_siguiente.run()
