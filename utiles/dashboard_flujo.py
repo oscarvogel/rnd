@@ -21,6 +21,7 @@ class EstadoFlujoDashboard:
     en_preparacion_completos: int = 0
     listas: int = 0
     despachadas: int = 0
+    ruta_recomendada: int = 0
 
     @property
     def accion(self):
@@ -67,7 +68,7 @@ class EstadoFlujoDashboard:
         }[self.accion]
 
     def pasos(self):
-        """Devuelve los cinco pasos con estado: completo, pendiente o atencion."""
+        """Devuelve los cinco pasos con estado: completo, pendiente o atención."""
         importado = self.pedidos > 0
         revisar_ok = not (self.pendientes_importacion or self.errores_importacion)
         organizar_ok = importado and self.sin_ruta == 0
