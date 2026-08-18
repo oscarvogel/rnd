@@ -12,6 +12,7 @@ import win32crypt
 
 CREDENTIAL_DESCRIPTION = "RND MySQL"
 CREDENTIAL_FILENAME = "mysql.credential"
+CREDENTIAL_PROFILE_ENV = "RND_CREDENTIAL_PROFILE"
 CRYPTPROTECT_UI_FORBIDDEN = 0x1
 CRYPTPROTECT_LOCAL_MACHINE = 0x4
 
@@ -101,10 +102,28 @@ def save_mysql_settings(settings: MySQLSettings, ini_path: Path) -> None:
         raise SettingsWriteError() from exc
 
 
+def _credential_filename(environ: Mapping[str, str]) -> str:
+    """Devuelve el nombre de credencial según el perfil activo.
+
+    Sin perfil se conserva exactamente el nombre histórico de producción.
+    Un perfil explícito, por ejemplo ``local``, usa un archivo separado.
+    """
+    profile = (environ.get(CREDENTIAL_PROFILE_ENV) or "").strip().lower()
+    if not profile:
+        return CREDENTIAL_FILENAME
+
+    safe_profile = "".join(
+        char for char in profile if char.isalnum() or char in ("-", "_")
+    )
+    if not safe_profile:
+        return CREDENTIAL_FILENAME
+    return "mysql.{}.credential".format(safe_profile)
+
+
 def credential_path(environ: Optional[Mapping[str, str]] = None) -> Path:
     environment = os.environ if environ is None else environ
     program_data = environment.get("ProgramData") or r"C:\ProgramData"
-    return Path(program_data) / "RND" / CREDENTIAL_FILENAME
+    return Path(program_data) / "RND" / _credential_filename(environment)
 
 
 def save_machine_password(password: str, path: Optional[Path] = None) -> None:

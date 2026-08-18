@@ -1,0 +1,13 @@
+[param]
+nombre_sistema = sistema RND (desarrollo local)
+sucursal = 0
+host = 127.0.0.1
+basedatos = rnd
+InicioSistema = .\
+port = 3306
+homo = S
+debug = S
+icono = vogel_consultoria_oficial.ico
+logo = vogel_consultoria_oficial.png
+user = root
+sistema = 1
