@@ -8,6 +8,7 @@ from peewee import DoesNotExist
 
 from modelos.Accesos import Acceso
 from modelos.Formula import MenuLateral
+from modelos.ModeloBase import reconnect_if_needed
 from pyqt5libs.pyqt5libs import Ventanas
 from pyqt5libs.pyqt5libs.utiles import BorrarConf, LeerConf
 
@@ -112,20 +113,7 @@ class MainView(QMainWindow):
     )
 
     def _normalizar_target_menu(self, target):
-        """Convierte un ``for_arch`` de la DB a ``(modulo, clase)``.
-
-        Acepta los formatos historicos:
-
-        * ``"ABMClientes.ABMClientesController()"`` (legacy de
-          ``eval('self.ventana.' + for_arch)``): se eliminan los
-          parentesis finales y eventuales prefijos ``self.ventana.``.
-        * ``"controladores.ABMClientes.ABMClientesController"``:
-          moderno, modulo con prefijo y clase.
-        * ``"ABMClientes"`` - sin clase; se devuelve ``None`` como clase
-          y el caller resuelve la primera subclase de ``QWidget``.
-
-        Devuelve ``(modulo_relativo, clase_name)``.
-        """
+        """Convierte un ``for_arch`` de la DB a ``(modulo, clase)``."""
         if not target:
             return None, None
         raw = str(target).strip()
@@ -133,7 +121,6 @@ class MainView(QMainWindow):
             if raw.startswith(pref):
                 raw = raw[len(pref) :]
         raw = raw.rstrip()
-        # Quitar llamada de instanciacion: "Paquete.Mod.Clase()" -> Clase
         if raw.endswith(")"):
             paren = raw.rfind("(")
             if paren != -1:
@@ -150,19 +137,7 @@ class MainView(QMainWindow):
         return mod_path.strip(), (class_name.strip() if class_name else None)
 
     def _importar_menu_modulo(self, mod_path):
-        """Importa ``mod_path`` probando los prefijos de paquete.
-
-        ``mod_path`` puede venir sin prefijo (ej. ``ABMClientes``) porque
-        los registros viejos de ``formulafor.for_arch`` se escribieron
-        para un ``eval('self.ventana.' + ...)``. Probamos con cada
-        prefijo de ``PREFIJOS_MODULO_MENU`` hasta que alguno importe.
-
-        Si ``mod_path`` ya trae un prefijo conocido (``controladores.*``
-        o ``vistas.*``), se intenta directo primero sin re-prefijar.
-
-        Propaga cualquier error que no sea ``ModuleNotFoundError`` para
-        no enmascarar imports que fallan por razones reales.
-        """
+        """Importa ``mod_path`` probando los prefijos de paquete."""
         import importlib
 
         if not mod_path:
@@ -180,28 +155,17 @@ class MainView(QMainWindow):
                 return importlib.import_module(full)
             except ModuleNotFoundError as exc:
                 ultimo_exc = exc
-                # Si el modulo top resolvio pero un hermano rompe,
-                # propagamos ese error real en vez de probar el siguiente
-                # prefijo (sino ocultamos un bug genuino).
                 if exc.name and exc.name != full.split(".")[0]:
                     raise
                 continue
         raise ultimo_exc or ModuleNotFoundError(mod_path)
 
     def _resolver_clase_menu(self, target):
-        """Devuelve la clase instanciable a partir de un ``for_arch``.
-
-        Centraliza la logica de normalizacion + import con fallback de
-        prefijo de paquete + resolucion de clase (explicita o primera
-        subclase de QWidget con prioridad a ControladorBase*) para que
-        ``onClickItemMenu``, ``SeleccionaMenu`` y
-        ``onClickBtnMenuIzquierda`` compartan el mismo comportamiento.
-        """
+        """Devuelve la clase instanciable a partir de un ``for_arch``."""
         mod_path, class_name = self._normalizar_target_menu(target)
         modulo = self._importar_menu_modulo(mod_path)
         if class_name:
             return getattr(modulo, class_name)
-        # Sin clase explicita: priorizar ControladorBase* si existe.
         from PyQt5.QtWidgets import QWidget
 
         for nombre_pref in ("ControladorBase", "ControladorBaseABM"):
@@ -242,33 +206,40 @@ class MainView(QMainWindow):
         )
         box.exec_()
 
+    @reconnect_if_needed
+    def _leer_opcion_menu(self, menu_id):
+        """Lee opcion y permiso con preflight de DB antes del callback Qt."""
+        dato_menu = MenuLateral.get_by_id(menu_id)
+        permitido = Acceso.ValidaMenu(
+            usu_id=int(LeerConf("idUsuario") or 0),
+            for_valid=dato_menu.for_id.for_valid,
+        )
+        return dato_menu, permitido
+
     def onClickItemMenu(self, item, _columna=0):
-        """Maneja clicks sobre items del arbol de navegacion lateral."""
+        """Maneja clicks sobre items del arbol de navegacion lateral.
+
+        Toda la lectura DB queda dentro de un try del propio slot. De esta
+        forma una conexion muerta tras inactividad no escapa al event loop de
+        Qt ni puede cerrar el proceso silenciosamente.
+        """
         if item is None:
             return
         menu_id = item.data(0, Qt.UserRole)
         if menu_id is None:
             return
+
+        target = "opcion de menu id {}".format(menu_id)
         try:
-            dato_menu = MenuLateral.get_by_id(menu_id)
-        except DoesNotExist:
-            return
-        if not Acceso.ValidaMenu(
-            usu_id=int(LeerConf("idUsuario") or 0),
-            for_valid=dato_menu.for_id.for_valid,
-        ):
-            return
-        # ``for_arch`` historicamente guardaba expresiones tipo
-        # ``ABMClientes.ABMClientesController()`` pensadas para
-        # ``eval('self.ventana.' + for_arch)``. Normalizamos y
-        # resolvemos por importlib con fallback de prefijo de paquete.
-        # Si aun asi falla, lo mostramos al operador para que sepa que
-        # el path en la DB no es resoluble.
-        target = dato_menu.for_id.for_arch
-        try:
+            dato_menu, permitido = self._leer_opcion_menu(menu_id)
+            if not permitido:
+                return
+            target = dato_menu.for_id.for_arch
             clase = self._resolver_clase_menu(target)
             self.ventana_menu_lateral = clase()
             self.ventana_menu_lateral.run()
+        except DoesNotExist:
+            return
         except Exception as exc:
             self._mostrar_error_menu(target, exc)
 
@@ -317,14 +288,15 @@ class MainView(QMainWindow):
         if boton.text().replace("&", "").upper() == "CERRAR":
             qApp.exit()
             return
+
+        target = "opcion de menu id {}".format(getattr(boton, "id", "?"))
         try:
-            dato_menu = MenuLateral.get_by_id(boton.id)
-            if Acceso.ValidaMenu(
-                usu_id=LeerConf("idUsuario"), for_valid=dato_menu.for_id.for_valid
-            ):
-                self.ventana_menu_lateral = self._resolver_clase_menu(
-                    dato_menu.for_id.for_arch
-                )()
+            dato_menu, permitido = self._leer_opcion_menu(boton.id)
+            if permitido:
+                target = dato_menu.for_id.for_arch
+                self.ventana_menu_lateral = self._resolver_clase_menu(target)()
                 self.ventana_menu_lateral.run()
         except DoesNotExist:
             pass
+        except Exception as exc:
+            self._mostrar_error_menu(target, exc)
