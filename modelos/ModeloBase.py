@@ -64,32 +64,41 @@ def _mysql_password():
 
 
 class RecycledMySQLDatabase(MySQLDatabase):
-    """MySQLDatabase que recicla la conexion cuando pasa DB_STALE_TIMEOUT.
-
-    peewee 4.x no trae pool automatico; esto evita que conexiones muy viejas
-    se rompan silenciosamente por el wait_timeout del server MySQL.
-    """
+    """MySQLDatabase que recicla conexiones viejas antes de volver a usarlas."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._stale_timeout = DB_STALE_TIMEOUT
         self._connected_at = 0.0
 
+    def connection_is_stale(self):
+        return bool(
+            self._stale_timeout > 0
+            and self._connected_at
+            and (time.monotonic() - self._connected_at) >= self._stale_timeout
+        )
+
     def connect(self, *args, **kwargs):
-        now = time.monotonic()
-        if self._stale_timeout > 0 and self._connected_at and (now - self._connected_at) >= self._stale_timeout:
+        if self.connection_is_stale():
             try:
                 if not self.is_closed():
                     super().close()
-            except Exception:
-                pass
+                    print("[DB] Conexion vencida reciclada antes de reutilizarse")
+            except (OperationalError, InterfaceError):
+                # Si el socket ya murio, lo importante es descartarlo y abrir otro.
+                try:
+                    super().close()
+                except Exception:
+                    pass
         result = super().connect(*args, **kwargs)
         self._connected_at = time.monotonic()
         return result
 
     def close(self):
-        super().close()
-        self._connected_at = 0.0
+        try:
+            super().close()
+        finally:
+            self._connected_at = 0.0
 
 
 if LeerIni(clave='base') == 'sqlite':
@@ -129,31 +138,70 @@ def default_serializer(obj):
     raise TypeError(f"Object of type {obj} is not JSON serializable")
 
 
+def _cerrar_conexion_rota():
+    try:
+        if not db.is_closed():
+            db.close()
+    except Exception:
+        # Una conexion rota puede fallar incluso al cerrarse. No debe impedir
+        # que el siguiente intento abra un socket nuevo.
+        pass
+
+
+def _preflight_db_connection():
+    """Garantiza una conexion util antes de iniciar una operacion protegida.
+
+    El chequeo ocurre antes del metodo de negocio para poder reintentar la
+    conexion sin repetir INSERT/UPDATE cuya ejecucion pudiera ser incierta.
+    """
+    if isinstance(db, SqliteDatabase):
+        return
+
+    if isinstance(db, RecycledMySQLDatabase) and db.connection_is_stale():
+        print("[DB] Conexion vencida; reciclando preventivamente")
+        db.connect(reuse_if_open=True)
+        return
+
+    if db.is_closed():
+        print("[DB] Conexion cerrada; conectando")
+        db.connect(reuse_if_open=True)
+        return
+
+    # is_closed() solo refleja el estado local de Peewee. SELECT 1 detecta el
+    # caso comun en VPS donde MySQL/firewall ya cerro el socket por inactividad.
+    try:
+        db.execute_sql("SELECT 1")
+    except (OperationalError, InterfaceError):
+        print("[DB] Ping fallido; descartando socket y reconectando")
+        _cerrar_conexion_rota()
+        db.connect(reuse_if_open=True)
+
+
 def reconnect_if_needed(method):
     @wraps(method)
     def wrapper(self, *args, **kwargs):
+        # Solo el preflight puede reintentarse. El metodo se invoca exactamente
+        # una vez para evitar duplicar escrituras si la respuesta del servidor
+        # se pierde despues de haber ejecutado el SQL.
         for intento in range(1, MAX_REINTENTOS + 1):
             try:
-                # Verificar si la conexión está cerrada y reconectar si es necesario
-                if db.is_closed():
-                    print(f"[Intento {intento}] La conexión a la base de datos está cerrada. Reconectando...")
-                    db.connect(reuse_if_open=True)
+                _preflight_db_connection()
+                break
+            except (OperationalError, InterfaceError, ConnectionError) as e:
+                print("[DB] Fallo de conexion en preflight (intento {}): {}".format(intento, e))
+                _cerrar_conexion_rota()
+                if intento >= MAX_REINTENTOS:
+                    raise ConnectionError(
+                        "No se pudo restablecer la conexión después de varios intentos."
+                    ) from e
+                delay = min(RETRY_BASE_DELAY * (2 ** (intento - 1)), RETRY_MAX_DELAY)
+                print("[DB] Reintentando conexion en {:.1f} segundo(s)...".format(delay))
+                time.sleep(delay)
 
-                # Ejecutar el método original
-                return method(self, *args, **kwargs)
+        # Importante: queda fuera del try anterior. NameError, AttributeError y
+        # tambien fallos DB ocurridos durante una escritura se propagan tal cual.
+        return method(self, *args, **kwargs)
 
-            except (OperationalError, InterfaceError, ConnectionError, Exception) as e:
-                print(f"Error al conectarse a la base de datos: {e}")
-                db.close()  # Cerramos la conexión rota si existe
-
-                if intento < MAX_REINTENTOS:
-                    # Backoff exponencial: 1s, 2s, 4s, 8s, ... capeado por RETRY_MAX_DELAY.
-                    delay = min(RETRY_BASE_DELAY * (2 ** (intento - 1)), RETRY_MAX_DELAY)
-                    print(f"Reintentando en {delay:.1f} segundo(s)...")
-                    time.sleep(delay)
-                else:
-                    raise ConnectionError("No se pudo restablecer la conexión después de varios intentos.")
-        return None
     return wrapper
 
 class ModeloBase(Model):
