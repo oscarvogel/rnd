@@ -58,6 +58,7 @@ $RepoRoot    = (Resolve-Path "$PSScriptRoot\..").ProviderPath
 $VenvPython  = Join-Path $RepoRoot '.venv-build\Scripts\python.exe'
 $PyInstaller = Join-Path $RepoRoot '.venv-build\Scripts\pyinstaller.exe'
 $VersionFile = Join-Path $RepoRoot 'version.txt'
+$MainFile    = Join-Path $RepoRoot 'main.py'
 $GeneratedDir = Join-Path $RepoRoot 'build\generated'
 $GeneratedVersionFile = Join-Path $GeneratedDir 'version.txt'
 $StateFile = Join-Path $RepoRoot 'installer\.production_build_state'
@@ -116,6 +117,7 @@ Write-Step "Pre-flight checks"
 if (-not (Test-Path $VenvPython)) { throw "No se encontro el venv: $VenvPython. Correr 'python -m venv .venv-build && pip install -r requirements.txt' primero." }
 if (-not (Test-Path $PySpec))     { throw "No se encontro $PySpec" }
 if (-not (Test-Path $VersionFile)){ throw "No se encontro $VersionFile" }
+if (-not (Test-Path $MainFile))   { throw "No se encontro $MainFile" }
 if (-not (Test-Path $IssFile))    { throw "No se encontro $IssFile" }
 Write-OK "Venv OK"
 Write-OK "Archivos de build presentes"
