@@ -1,4 +1,11 @@
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QGroupBox
+from PyQt5.QtWidgets import (
+    QApplication,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QGroupBox,
+    QProgressBar,
+)
 from modelos.Proveedores import ValidaProveedor
 from pyqt5libs.libs.vistas.VistaBase import VistaBase
 from pyqt5libs.pyqt5libs.ComboBox import Combo
@@ -7,8 +14,46 @@ from pyqt5libs.pyqt5libs.Botones import Boton
 from pyqt5libs.pyqt5libs.Etiquetas import Etiqueta
 from pyqt5libs.pyqt5libs.Fechas import Fecha
 from pyqt5libs.pyqt5libs.Grillas import Grilla
-from pyqt5libs.pyqt5libs.ProgressBar import Avance
 from pyqt5libs.pyqt5libs.utiles import imagen
+
+
+class BarraProgresoImportacion(QProgressBar):
+    """Barra de progreso que nunca se oculta durante el flujo de importación."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setRange(0, 100)
+        self.setValue(0)
+        self.setTextVisible(True)
+        self.setMinimumHeight(24)
+        self.setFormat("Listo para comenzar — %p%")
+        self.setObjectName("importacionProgreso")
+        self.show()
+
+    def iniciar(self, texto):
+        self.setValue(0)
+        self.setFormat("{} — %p%".format(texto))
+        self.show()
+        QApplication.processEvents()
+
+    def actualizar(self, valor, texto=None):
+        valor = max(0, min(100, int(round(float(valor)))))
+        self.setValue(valor)
+        if texto:
+            self.setFormat("{} — %p%".format(texto))
+        self.show()
+        QApplication.processEvents()
+
+    def finalizar(self, texto="Proceso finalizado"):
+        self.setValue(100)
+        self.setFormat("{} — %p%".format(texto))
+        self.show()
+        QApplication.processEvents()
+
+    def marcar_error(self, texto="Proceso interrumpido"):
+        self.setFormat("{} — %p%".format(texto))
+        self.show()
+        QApplication.processEvents()
 
 
 class ImportacionPedidosView(VistaBase):
@@ -35,7 +80,7 @@ class ImportacionPedidosView(VistaBase):
         bajada.setObjectName("importacionBajada")
         layoutPpal.addWidget(bajada)
 
-        self.avance = Avance()
+        self.avance = BarraProgresoImportacion()
         layoutPpal.addWidget(self.avance)
 
         # Paso 1: contexto operativo
