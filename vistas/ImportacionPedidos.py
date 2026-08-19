@@ -1,4 +1,11 @@
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QGroupBox
+from PyQt5.QtWidgets import (
+    QApplication,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QGroupBox,
+    QProgressBar,
+)
 from modelos.Proveedores import ValidaProveedor
 from pyqt5libs.libs.vistas.VistaBase import VistaBase
 from pyqt5libs.pyqt5libs.ComboBox import Combo
@@ -7,8 +14,46 @@ from pyqt5libs.pyqt5libs.Botones import Boton
 from pyqt5libs.pyqt5libs.Etiquetas import Etiqueta
 from pyqt5libs.pyqt5libs.Fechas import Fecha
 from pyqt5libs.pyqt5libs.Grillas import Grilla
-from pyqt5libs.pyqt5libs.ProgressBar import Avance
 from pyqt5libs.pyqt5libs.utiles import imagen
+
+
+class BarraProgresoImportacion(QProgressBar):
+    """Barra de progreso que nunca se oculta durante el flujo de importación."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setRange(0, 100)
+        self.setValue(0)
+        self.setTextVisible(True)
+        self.setMinimumHeight(24)
+        self.setFormat("Listo para comenzar — %p%")
+        self.setObjectName("importacionProgreso")
+        self.show()
+
+    def iniciar(self, texto):
+        self.setValue(0)
+        self.setFormat("{} — %p%".format(texto))
+        self.show()
+        QApplication.processEvents()
+
+    def actualizar(self, valor, texto=None):
+        valor = max(0, min(100, int(round(float(valor)))))
+        self.setValue(valor)
+        if texto:
+            self.setFormat("{} — %p%".format(texto))
+        self.show()
+        QApplication.processEvents()
+
+    def finalizar(self, texto="Proceso finalizado"):
+        self.setValue(100)
+        self.setFormat("{} — %p%".format(texto))
+        self.show()
+        QApplication.processEvents()
+
+    def marcar_error(self, texto="Proceso interrumpido"):
+        self.setFormat("{} — %p%".format(texto))
+        self.show()
+        QApplication.processEvents()
 
 
 class ImportacionPedidosView(VistaBase):
@@ -35,10 +80,9 @@ class ImportacionPedidosView(VistaBase):
         bajada.setObjectName("importacionBajada")
         layoutPpal.addWidget(bajada)
 
-        self.avance = Avance()
+        self.avance = BarraProgresoImportacion()
         layoutPpal.addWidget(self.avance)
 
-        # Paso 1: contexto operativo
         grupo_origen = QGroupBox("1. Elegir origen y fecha de reparto")
         grupo_origen.setObjectName("importacionPasoOrigen")
         layout_origen = QVBoxLayout(grupo_origen)
@@ -59,7 +103,6 @@ class ImportacionPedidosView(VistaBase):
         layout_origen.addWidget(self.lbl_ayuda_proveedor)
         layoutPpal.addWidget(grupo_origen)
 
-        # Paso 2: archivo. Los parámetros técnicos quedan disponibles, pero secundarios.
         grupo_archivo = QGroupBox("2. Seleccionar archivo")
         grupo_archivo.setObjectName("importacionPasoArchivo")
         layout_archivo = QVBoxLayout(grupo_archivo)
@@ -101,7 +144,6 @@ class ImportacionPedidosView(VistaBase):
         layout_archivo.addWidget(nota_opciones)
         layoutPpal.addWidget(grupo_archivo)
 
-        # Paso 3: vista previa
         grupo_previa = QGroupBox("3. Revisar vista previa")
         grupo_previa.setObjectName("importacionPasoPrevia")
         layout_previa = QVBoxLayout(grupo_previa)
@@ -120,7 +162,6 @@ class ImportacionPedidosView(VistaBase):
         layout_previa.addWidget(self.grid_datos)
         layoutPpal.addWidget(grupo_previa, stretch=1)
 
-        # Paso 4: resultado y siguiente acción
         self.grupo_resultado = QGroupBox("4. Resultado")
         self.grupo_resultado.setObjectName("importacionResultado")
         layout_resultado = QVBoxLayout(self.grupo_resultado)
