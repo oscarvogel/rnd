@@ -74,10 +74,6 @@ class ImportacionPedidosController(ControladorBase):
             return
 
         self.view.txt_archivo.setText(cArchivo)
-
-        # Los nuevos formatos se detectan por estructura y no por ID de proveedor.
-        # Si no se reconoce ninguno, se conserva el flujo historico (Tremblay u
-        # otros proveedores configurados mediante proceso_lista).
         archivo_normalizado = normalizar_archivo_pedidos(
             cArchivo,
             progreso=self._actualizar_avance_preprocesamiento,
@@ -263,7 +259,8 @@ class ImportacionPedidosController(ControladorBase):
 
                 observaciones = self.obtener_proceso_list(proveedor, "Observaciones")
                 if observaciones:
-                    hoja_ruta.observaciones = self.view.grid_datos.ObtenerItem(fila=row, col=observaciones)
+                    valor_observaciones = self.view.grid_datos.ObtenerItem(fila=row, col=observaciones)
+                    hoja_ruta.observaciones = "" if pd.isna(valor_observaciones) else valor_observaciones
                 hoja_ruta.ruta = codigo_cliente.cliente.ruta_reparto_id
                 hoja_ruta.nombre_cliente = nombre_cliente
                 hoja_ruta.responsable = ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23")
@@ -275,6 +272,8 @@ class ImportacionPedidosController(ControladorBase):
                         fila=row,
                         col=columna_comprobante,
                     )
+                    if pd.isna(comprobante):
+                        comprobante = ""
                     hoja_ruta.comprobante = str(comprobante or "").replace(".", "")
                 else:
                     hoja_ruta.comprobante = ""
@@ -325,8 +324,6 @@ class ImportacionPedidosController(ControladorBase):
                 ProcesoLista.codigo == columna,
             ).columna
         except peewee.DoesNotExist:
-            # Los archivos normalizados tienen un contrato estable y no requieren
-            # filas proceso_lista para cada nuevo proveedor.
             return COLUMNAS_NORMALIZADAS.get(columna)
 
     def importa_pdf_tremblay(self):
