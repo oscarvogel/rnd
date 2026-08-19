@@ -100,7 +100,7 @@ def test_detalle_ventas_detecta_encabezado_y_no_confunde_codigo(tmp_path):
     assert df.iloc[0]["codigo_cliente"] != "12311"
     assert df.iloc[0]["destino"] == "ELDORADO"
     assert df.iloc[0]["producto"] == "FIAMBRE COCIDO"
-    assert df.iloc[0]["comprobante"] == ""
+    assert pd.isna(df.iloc[0]["comprobante"])
     assert "Producto: 12311" in df.iloc[0]["observaciones"]
 
 
