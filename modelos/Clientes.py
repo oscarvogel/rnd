@@ -1,4 +1,6 @@
 import peewee
+from PyQt5.QtWidgets import QMessageBox
+
 from modelos.ModeloBase import ModeloBase
 from modelos.ParametrosSistema import ParamSist
 from modelos.Proveedores import Proveedor
@@ -120,4 +122,60 @@ class BuscadorCliente(Buscador):
     solo_numeros = True
     textoEtiqueta = "Buscar Clientes"
     valorRetorno = None
-    lRetval = False  # indica si presiono en aceptar o cancelar        
+    lRetval = False  # indica si presiono en aceptar o cancelar
+
+    def buscar(self, parent=None):
+        """Busca un cliente y ofrece alta rápida si no se seleccionó ninguno."""
+        super().buscar(parent)
+        if self.lRetval:
+            return
+
+        nombre_cliente = str(getattr(self, "valor_busqueda", "") or "").strip()
+        if not nombre_cliente or nombre_cliente.lower() == "nan":
+            return
+
+        mensaje = QMessageBox(parent)
+        mensaje.setWindowTitle("Cliente no encontrado")
+        mensaje.setIcon(QMessageBox.Question)
+        mensaje.setText(
+            'No se seleccionó un cliente para "{}".'.format(nombre_cliente)
+        )
+        mensaje.setInformativeText(
+            "¿Desea darlo de alta ahora para continuar con la importación?"
+        )
+        btn_crear = mensaje.addButton("Crear cliente", QMessageBox.AcceptRole)
+        mensaje.addButton("Dejar pendiente", QMessageBox.RejectRole)
+        mensaje.exec_()
+
+        if mensaje.clickedButton() is not btn_crear:
+            return
+
+        try:
+            cliente = Cliente.get_or_none(
+                peewee.fn.LOWER(Cliente.razon_social) == nombre_cliente.lower()
+            )
+            if cliente is None:
+                with Cliente._meta.database.atomic():
+                    cliente = Cliente.create(razon_social=nombre_cliente)
+        except peewee.IntegrityError:
+            cliente = Cliente.get_or_none(
+                peewee.fn.LOWER(Cliente.razon_social) == nombre_cliente.lower()
+            )
+        except Exception as exc:
+            QMessageBox.critical(
+                parent,
+                "Alta de cliente",
+                "No se pudo crear el cliente: {}".format(exc),
+            )
+            return
+
+        if cliente is None:
+            QMessageBox.warning(
+                parent,
+                "Alta de cliente",
+                "No se pudo recuperar el cliente después del alta.",
+            )
+            return
+
+        self.valorRetorno = cliente.id
+        self.lRetval = True
