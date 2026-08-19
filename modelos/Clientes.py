@@ -1,5 +1,5 @@
 import peewee
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import QMessageBox, QPushButton
 
 from modelos.ModeloBase import ModeloBase
 from modelos.ParametrosSistema import ParamSist
@@ -124,60 +124,14 @@ class BuscadorCliente(Buscador):
     valorRetorno = None
     lRetval = False  # indica si presiono en aceptar o cancelar
 
-    def _buscar_con_nombre_precargado(self):
-        """Abre el buscador mostrando de entrada el cliente recibido del proveedor."""
-        nombre_cliente = str(getattr(self, "valor_busqueda", "") or "").strip()
+    def _nombre_cliente_actual(self):
+        nombre = str(getattr(self, "valor_busqueda", "") or "").strip()
+        if not nombre or nombre.lower() == "nan":
+            return ""
+        return nombre
 
-        ventana = UiBusqueda()
-        ventana.modelo = self.modelo
-        ventana.cOrden = self.cOrden
-        ventana.campos = self.campos
-        ventana.campoBusqueda = self.campos_busqueda if self.campos_busqueda else self.campoRetorno.column_name
-        ventana.camposTabla = self.campos
-        ventana.campoRetorno = self.codigo.column_name if isinstance(self.codigo, str) else self.codigo
-        ventana.condiciones = self.condiciones
-
-        if nombre_cliente and nombre_cliente.lower() != "nan":
-            ventana.setWindowTitle("Buscar cliente — {}".format(nombre_cliente))
-            # setText dispara CargaDatos por la señal textChanged y deja visible
-            # exactamente qué cliente del archivo estamos intentando asociar.
-            ventana.lineEdit.setText(nombre_cliente)
-        else:
-            ventana.CargaDatos()
-
-        ventana.exec_()
-        if ventana.lRetval:
-            self.valorRetorno = ventana.ValorRetorno
-            self.lRetval = True
-            return self.valorRetorno
-        return None
-
-    def buscar(self, parent=None):
-        """Busca un cliente y ofrece alta rápida si no se seleccionó ninguno."""
-        self._buscar_con_nombre_precargado()
-        if self.lRetval:
-            return self.valorRetorno
-
-        nombre_cliente = str(getattr(self, "valor_busqueda", "") or "").strip()
-        if not nombre_cliente or nombre_cliente.lower() == "nan":
-            return
-
-        mensaje = QMessageBox(parent)
-        mensaje.setWindowTitle("Cliente no encontrado")
-        mensaje.setIcon(QMessageBox.Question)
-        mensaje.setText(
-            'No se seleccionó un cliente para "{}".'.format(nombre_cliente)
-        )
-        mensaje.setInformativeText(
-            "¿Desea darlo de alta ahora para continuar con la importación?"
-        )
-        btn_crear = mensaje.addButton("Crear cliente", QMessageBox.AcceptRole)
-        mensaje.addButton("Dejar pendiente", QMessageBox.RejectRole)
-        mensaje.exec_()
-
-        if mensaje.clickedButton() is not btn_crear:
-            return
-
+    def _obtener_o_crear_cliente(self, nombre_cliente, parent=None):
+        """Reutiliza un cliente homónimo o lo crea, devolviendo la instancia."""
         try:
             cliente = Cliente.get_or_none(
                 peewee.fn.LOWER(Cliente.razon_social) == nombre_cliente.lower()
@@ -195,7 +149,7 @@ class BuscadorCliente(Buscador):
                 "Alta de cliente",
                 "No se pudo crear el cliente: {}".format(exc),
             )
-            return
+            return None
 
         if cliente is None:
             QMessageBox.warning(
@@ -203,8 +157,52 @@ class BuscadorCliente(Buscador):
                 "Alta de cliente",
                 "No se pudo recuperar el cliente después del alta.",
             )
-            return
+        return cliente
 
-        self.valorRetorno = cliente.id
-        self.lRetval = True
-        return self.valorRetorno
+    def buscar(self, parent=None):
+        """Busca/asocia un cliente y permite crearlo desde el mismo diálogo."""
+        nombre_cliente = self._nombre_cliente_actual()
+
+        ventana = UiBusqueda()
+        ventana.modelo = self.modelo
+        ventana.cOrden = self.cOrden
+        ventana.campos = self.campos
+        ventana.campoBusqueda = self.campos_busqueda if self.campos_busqueda else self.campoRetorno.column_name
+        ventana.camposTabla = self.campos
+        ventana.campoRetorno = self.codigo.column_name if isinstance(self.codigo, str) else self.codigo
+        ventana.condiciones = self.condiciones
+
+        if nombre_cliente:
+            ventana.setWindowTitle("Buscar cliente — {}".format(nombre_cliente))
+
+            btn_crear = QPushButton("Crear cliente")
+            btn_crear.setToolTip(
+                'Crear "{}" y continuar con la importación'.format(nombre_cliente)
+            )
+            ventana.horizontalLayout.insertWidget(0, btn_crear)
+
+            def crear_y_seleccionar():
+                cliente = self._obtener_o_crear_cliente(nombre_cliente, parent=ventana)
+                if cliente is None:
+                    return
+                ventana.ValorRetorno = str(cliente.id)
+                ventana.lRetval = True
+                ventana.accept()
+
+            btn_crear.clicked.connect(crear_y_seleccionar)
+
+            # Deja visible exactamente a quién estamos intentando asociar y filtra
+            # automáticamente la grilla desde que se abre el diálogo.
+            ventana.lineEdit.setText(nombre_cliente)
+        else:
+            ventana.CargaDatos()
+
+        ventana.exec_()
+        if ventana.lRetval:
+            self.valorRetorno = ventana.ValorRetorno
+            self.lRetval = True
+            return self.valorRetorno
+
+        self.valorRetorno = None
+        self.lRetval = False
+        return None
