@@ -10,6 +10,7 @@ from modelos.Proveedores import ProcesoLista
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.pyqt5libs.Ventanas import showAlert
 from pyqt5libs.pyqt5libs.utiles import inicializar_y_capturar_excepciones, openFileNameDialog
+from utiles.importacion_proveedores_excel import normalizar_archivo_pedidos
 from utiles.importacion_tremblay_excel import procesar_archivo_tremblay_excel
 from utiles.importacion_tremblay_pdf import procesar_pdf_despacho
 from utiles.importacion_informe_tremblay import procesar_informe_tremblay
@@ -19,6 +20,18 @@ from utiles.importacion_guiada import (
     ayuda_proveedor,
 )
 from vistas.ImportacionPedidos import ImportacionPedidosView
+
+
+COLUMNAS_NORMALIZADAS = {
+    "Cliente": "codigo_cliente",
+    "Nombre_Cliente": "detalle_cliente",
+    "Comprobante": "comprobante",
+    "Producto": "producto",
+    "Cantidad": "cantidad",
+    "KG": "kilos",
+    "Bultos": "bultos",
+    "Observaciones": "observaciones",
+}
 
 
 class ImportacionPedidosController(ControladorBase):
@@ -41,6 +54,10 @@ class ImportacionPedidosController(ControladorBase):
             ayuda_proveedor(self.view.empresa_proveedora.valor())
         )
 
+    def _actualizar_avance_preprocesamiento(self, porcentaje):
+        self.view.avance.actualizar(porcentaje)
+        QApplication.processEvents()
+
     @inicializar_y_capturar_excepciones
     def seleccionar_archivo(self, *args, **kwargs):
         """Selecciona el archivo y prepara sus hojas para la vista previa."""
@@ -57,7 +74,18 @@ class ImportacionPedidosController(ControladorBase):
             return
 
         self.view.txt_archivo.setText(cArchivo)
-        if self.view.empresa_proveedora.valor() == "15":
+
+        # Los nuevos formatos se detectan por estructura y no por ID de proveedor.
+        # Si no se reconoce ninguno, se conserva el flujo historico (Tremblay u
+        # otros proveedores configurados mediante proceso_lista).
+        archivo_normalizado = normalizar_archivo_pedidos(
+            cArchivo,
+            progreso=self._actualizar_avance_preprocesamiento,
+        )
+        if archivo_normalizado:
+            cArchivo = archivo_normalizado
+            self.view.txt_archivo.setText(cArchivo)
+        elif self.view.empresa_proveedora.valor() == "15":
             self.importa_tremblay()
             cArchivo = self.view.txt_archivo.text()
             if not cArchivo:
@@ -179,20 +207,14 @@ class ImportacionPedidosController(ControladorBase):
                 omitidos += 1
                 continue
 
-            try:
-                columna_cliente = ProcesoLista.get(
-                    ProcesoLista.proveedor == proveedor,
-                    ProcesoLista.codigo == "Cliente",
-                ).columna
-            except peewee.DoesNotExist:
+            columna_cliente = self.obtener_proceso_list(proveedor, "Cliente")
+            columna_nombre = self.obtener_proceso_list(proveedor, "Nombre_Cliente")
+            if not columna_cliente or not columna_nombre:
                 errores += 1
                 continue
 
             cliente = self.view.grid_datos.ObtenerItem(fila=row, col=columna_cliente)
-            nombre_cliente = self.view.grid_datos.ObtenerItem(
-                fila=row,
-                col=self.obtener_proceso_list(proveedor, "Nombre_Cliente"),
-            )
+            nombre_cliente = self.view.grid_datos.ObtenerItem(fila=row, col=columna_nombre)
 
             try:
                 codigo_cliente = CodigoClienteProveedor.get(
@@ -246,11 +268,17 @@ class ImportacionPedidosController(ControladorBase):
                 hoja_ruta.nombre_cliente = nombre_cliente
                 hoja_ruta.responsable = ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23")
                 hoja_ruta.equipo_asignado = ParamSist.ObtenerParametro("CAMION_GENERICO", "1")
-                hoja_ruta.comprobante = self.view.grid_datos.ObtenerItem(
-                    fila=row,
-                    col=self.obtener_proceso_list(proveedor, "Comprobante"),
-                )
-                hoja_ruta.comprobante = str(hoja_ruta.comprobante).replace(".", "")
+
+                columna_comprobante = self.obtener_proceso_list(proveedor, "Comprobante")
+                if columna_comprobante:
+                    comprobante = self.view.grid_datos.ObtenerItem(
+                        fila=row,
+                        col=columna_comprobante,
+                    )
+                    hoja_ruta.comprobante = str(comprobante or "").replace(".", "")
+                else:
+                    hoja_ruta.comprobante = ""
+
                 hoja_ruta.producto = producto
                 hoja_ruta.cantidad = self.view.grid_datos.ObtenerItem(
                     fila=row, col=self.obtener_proceso_list(proveedor, "Cantidad")
@@ -297,7 +325,9 @@ class ImportacionPedidosController(ControladorBase):
                 ProcesoLista.codigo == columna,
             ).columna
         except peewee.DoesNotExist:
-            return None
+            # Los archivos normalizados tienen un contrato estable y no requieren
+            # filas proceso_lista para cada nuevo proveedor.
+            return COLUMNAS_NORMALIZADAS.get(columna)
 
     def importa_pdf_tremblay(self):
         if not self.view.txt_archivo.text():
