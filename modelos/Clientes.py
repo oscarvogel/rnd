@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import QMessageBox
 from modelos.ModeloBase import ModeloBase
 from modelos.ParametrosSistema import ParamSist
 from modelos.Proveedores import Proveedor
-from pyqt5libs.libs.vistas.Busqueda import Buscador
+from pyqt5libs.libs.vistas.Busqueda import Buscador, UiBusqueda
 from pyqt5libs.pyqt5libs.ComboBox import ComboSQL
 from pyqt5libs.pyqt5libs.Validaciones import ValidaConTexto
 
@@ -124,11 +124,39 @@ class BuscadorCliente(Buscador):
     valorRetorno = None
     lRetval = False  # indica si presiono en aceptar o cancelar
 
+    def _buscar_con_nombre_precargado(self):
+        """Abre el buscador mostrando de entrada el cliente recibido del proveedor."""
+        nombre_cliente = str(getattr(self, "valor_busqueda", "") or "").strip()
+
+        ventana = UiBusqueda()
+        ventana.modelo = self.modelo
+        ventana.cOrden = self.cOrden
+        ventana.campos = self.campos
+        ventana.campoBusqueda = self.campos_busqueda if self.campos_busqueda else self.campoRetorno.column_name
+        ventana.camposTabla = self.campos
+        ventana.campoRetorno = self.codigo.column_name if isinstance(self.codigo, str) else self.codigo
+        ventana.condiciones = self.condiciones
+
+        if nombre_cliente and nombre_cliente.lower() != "nan":
+            ventana.setWindowTitle("Buscar cliente — {}".format(nombre_cliente))
+            # setText dispara CargaDatos por la señal textChanged y deja visible
+            # exactamente qué cliente del archivo estamos intentando asociar.
+            ventana.lineEdit.setText(nombre_cliente)
+        else:
+            ventana.CargaDatos()
+
+        ventana.exec_()
+        if ventana.lRetval:
+            self.valorRetorno = ventana.ValorRetorno
+            self.lRetval = True
+            return self.valorRetorno
+        return None
+
     def buscar(self, parent=None):
         """Busca un cliente y ofrece alta rápida si no se seleccionó ninguno."""
-        super().buscar(parent)
+        self._buscar_con_nombre_precargado()
         if self.lRetval:
-            return
+            return self.valorRetorno
 
         nombre_cliente = str(getattr(self, "valor_busqueda", "") or "").strip()
         if not nombre_cliente or nombre_cliente.lower() == "nan":
@@ -179,3 +207,4 @@ class BuscadorCliente(Buscador):
 
         self.valorRetorno = cliente.id
         self.lRetval = True
+        return self.valorRetorno
