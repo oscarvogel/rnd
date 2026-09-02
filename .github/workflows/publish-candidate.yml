@@ -1,0 +1,167 @@
+name: Publish RND candidate
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rnd-publish-candidate
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    runs-on: windows-latest
+    timeout-minutes: 50
+    env:
+      RELEASE_REPO: oscarvogel/vogel-releases
+      RELEASE_TAG: candidate
+      ASSET_NAME: RND_Setup.exe
+      GH_TOKEN: ${{ secrets.VOGEL_RELEASES_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Configure Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+          cache: pip
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements.txt
+
+      - name: Run validation
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -m compileall -q main.py controladores modelos utiles vistas
+          python -m pytest -q --disable-warnings --maxfail=1 --ignore=tests/test_utiles_smtp.py
+
+      - name: Validate publication credentials
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:GH_TOKEN)) { throw 'Falta VOGEL_RELEASES_TOKEN' }
+
+      - name: Generate build metadata
+        shell: pwsh
+        run: |
+          $now = (Get-Date).ToUniversalTime()
+          $version = $now.ToString('yyyy.MM.dd.HHmmss')
+          "BUILD_VERSION=$version" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+          $content = @"
+          APP_ID = "rnd"
+          BUILD_VERSION = "$version"
+          MANIFEST_URL = "https://raw.githubusercontent.com/oscarvogel/vogel-releases/main/apps/rnd/latest.json"
+          def manifest_url_for(app_id=APP_ID):
+              if app_id != APP_ID:
+                  raise ValueError(f"app_id desconocido: {app_id!r}")
+              return MANIFEST_URL
+          "@
+          [IO.File]::WriteAllText((Join-Path $pwd 'utiles/build_info.py'), $content, (New-Object Text.UTF8Encoding($false)))
+
+          $parts = $version.Split('.')
+          $tuple = "($($parts[0]), $($parts[1]), $($parts[2]), $($parts[3]))"
+          $versionText = @"
+          # UTF-8
+          VSVersionInfo(
+            ffi=FixedFileInfo(filevers=$tuple, prodvers=$tuple, mask=0x3f, flags=0x0, OS=0x4, fileType=0x1, subtype=0x0, date=(0, 0)),
+            kids=[
+              StringFileInfo([StringTable(u'040904b0', [
+                StringStruct(u'CompanyName', u'Jose Oscar Vogel'),
+                StringStruct(u'ProductName', u'RND'),
+                StringStruct(u'ProductVersion', u'$version'),
+                StringStruct(u'InternalName', u'RND'),
+                StringStruct(u'OriginalFilename', u'main.exe'),
+                StringStruct(u'FileVersion', u'$version'),
+                StringStruct(u'FileDescription', u'RND - Gestion de hojas de ruta'),
+                StringStruct(u'LegalCopyright', u'Copyright 2026, Jose Oscar Vogel')
+              ])]),
+              VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
+            ]
+          )
+          "@
+          [IO.File]::WriteAllText((Join-Path $pwd 'version.txt'), $versionText, (New-Object Text.UTF8Encoding($false)))
+
+      - name: Build executable
+        shell: pwsh
+        run: python -m PyInstaller --clean --noconfirm main.spec
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          & $iscc "/DMyAppVersion=$env:BUILD_VERSION" 'installer\RND.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup fallo' }
+          $asset = Join-Path $pwd 'dist\installer\RND_Setup.exe'
+          if (-not (Test-Path $asset)) { throw 'No se genero RND_Setup.exe' }
+          "ASSET_PATH=$asset" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Calculate SHA256
+        shell: pwsh
+        run: |
+          $sha = (Get-FileHash -Algorithm SHA256 $env:ASSET_PATH).Hash.ToLowerInvariant()
+          "ASSET_SHA256=$sha" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload candidate asset
+        shell: pwsh
+        run: |
+          gh release view $env:RELEASE_TAG --repo $env:RELEASE_REPO *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $env:RELEASE_TAG --repo $env:RELEASE_REPO --title 'Candidate' --notes 'Builds candidatas pendientes de validacion.'
+          }
+          gh release upload $env:RELEASE_TAG $env:ASSET_PATH --repo $env:RELEASE_REPO --clobber
+
+      - name: Checkout release repository
+        uses: actions/checkout@v6
+        with:
+          repository: oscarvogel/vogel-releases
+          token: ${{ secrets.VOGEL_RELEASES_TOKEN }}
+          path: vogel-releases
+
+      - name: Write candidate manifest
+        shell: pwsh
+        run: |
+          $dir = Join-Path $pwd 'vogel-releases\apps\rnd'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $manifest = [ordered]@{
+            schema_version = 1
+            app_id = 'rnd'
+            channel = 'candidate'
+            version = $env:BUILD_VERSION
+            published_at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            mandatory = $false
+            download_url = 'https://github.com/oscarvogel/vogel-releases/releases/download/candidate/RND_Setup.exe'
+            sha256 = $env:ASSET_SHA256
+            source_commit = '${{ github.sha }}'
+            notes = 'Candidate RND pendiente de validacion.'
+          }
+          [IO.File]::WriteAllText((Join-Path $dir 'candidate.json'), ($manifest | ConvertTo-Json -Depth 6) + "`n", (New-Object Text.UTF8Encoding($false)))
+
+      - name: Commit candidate manifest
+        shell: pwsh
+        working-directory: vogel-releases
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/rnd/candidate.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "candidate(rnd): $env:BUILD_VERSION"
+            git push
+          }

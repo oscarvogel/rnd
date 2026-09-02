@@ -1,5 +1,8 @@
 #define AppName "RND"
-#define AppVersion "2026.8.11.1"
+#ifndef MyAppVersion
+  #define MyAppVersion "2026.8.11.1"
+#endif
+#define AppVersion MyAppVersion
 #define AppPublisher "Jose Oscar Vogel"
 #define AppExeName "main.exe"
 
@@ -14,7 +17,7 @@ DisableDirPage=yes
 DisableProgramGroupPage=yes
 UsePreviousAppDir=no
 OutputDir=..\dist\installer
-OutputBaseFilename=setup_rnd
+OutputBaseFilename=RND_Setup
 SetupIconFile=..\imagenes\vogel_consultoria_oficial.ico
 Compression=lzma2
 SolidCompression=yes
@@ -35,8 +38,6 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "{commonappdata}\RND"; Permissions: users-readexec
 
 [InstallDelete]
-; Eliminar el tema activo antes de copiarlo evita conservar un QSS obsoleto
-; de una instalacion anterior aunque cambien marcas de tiempo o atributos.
 Type: files; Name: "{app}\temas\vogel2026.qss"
 Type: filesandordirs; Name: "{app}\_internal"
 Type: filesandordirs; Name: "{app}\PyQt5"
@@ -47,8 +48,6 @@ Type: filesandordirs; Name: "{app}\PIL"
 Type: filesandordirs; Name: "{app}\fitz"
 Type: filesandordirs; Name: "{app}\pdfminer"
 Type: filesandordirs; Name: "{app}\pymongo"
-; cryptography es requerido por PyMySQL para autenticacion MySQL 8.
-; El paquete nuevo lo sobrescribe; no debe borrarse durante la actualizacion.
 Type: files; Name: "{app}\*.dll"
 Type: files; Name: "{app}\*.pyd"
 Type: files; Name: "{app}\*.zip"
