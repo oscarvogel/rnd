@@ -1,10 +1,13 @@
 # coding=utf-8
 from controladores.Login import LoginController
 from controladores.Migraciones import MigracionBaseDatos
+from PyQt5.QtCore import QTimer
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.pyqt5libs import Constantes
 from pyqt5libs.pyqt5libs.Menu import GeneraMenu
 from pyqt5libs.pyqt5libs.utiles import LeerConf, LeerIni, getFileProperties, inicializar_y_capturar_excepciones
+from utiles.actualizador import UpdateCoordinator
+from utiles.build_info import BUILD_VERSION
 from utiles.dashboard_flujo import (
     ACCION_ASIGNAR, ACCION_DESPACHAR, ACCION_IMPORTAR,
     ACCION_ORGANIZAR, ACCION_REVISAR, ACCION_VALIDAR,
@@ -20,6 +23,7 @@ class MainController(ControladorBase):
     def __init__(self):
         super().__init__()
         self.view = MainView()
+        self._update_coordinator = None
         self.view.ArmaToolBarContable()
         self.view.ArmaToolBarVentas()
         self.view.ArmaToolBarCompras()
@@ -38,13 +42,22 @@ class MainController(ControladorBase):
             usuario = LeerConf("usuario") or ""
             servidor = LeerIni("ServerDB") or ""
             basedatos = LeerIni("BaseDatos") or ""
-            self.view.actualizar_encabezado(usuario=usuario, servidor=servidor, base=basedatos, estado="Conectado", version=versionexe)
-            self.view.setWindowTitle("Usuario {} Servidor {} Base de datos {} Version sistema {}".format(usuario, servidor, basedatos, versionexe))
+            self.view.actualizar_encabezado(usuario=usuario, servidor=servidor, base=basedatos, estado="Conectado", version=versionexe or BUILD_VERSION)
+            self.view.setWindowTitle("Usuario {} Servidor {} Base de datos {} Version sistema {}".format(usuario, servidor, basedatos, versionexe or BUILD_VERSION))
             usu_id = int(LeerConf("idUsuario") or 0)
             self.view.cargar_menu_lateral(usu_id)
             self._inicializar_dashboard(usu_id)
             self.ArmaMenu()
+            self._programar_actualizaciones()
         return lRetVal
+
+    def _programar_actualizaciones(self):
+        try:
+            self._update_coordinator = UpdateCoordinator(self.view, BUILD_VERSION)
+            QTimer.singleShot(1500, self._update_coordinator.start)
+        except Exception:
+            # La actualización nunca debe impedir el uso normal del sistema.
+            self._update_coordinator = None
 
     def _inicializar_dashboard(self, usu_id):
         if self.view.dashboard is None:
