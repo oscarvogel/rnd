@@ -1,7 +1,7 @@
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QLineEdit, QComboBox,
-    QCheckBox, QTextEdit, QFormLayout,
+    QCheckBox, QTextEdit, QFormLayout, QListWidget, QAbstractItemView,
 )
 from modelos.Clientes import Cliente, cboRutaReparto
 from pyqt5libs.libs.vistas.VistaBase import VistaBase
@@ -92,7 +92,9 @@ class ABMClientesView(ABM):
     @inicializar_y_capturar_excepciones
     def BotonesAdicionales(self):
         self.btn_codigo = self.CreaBoton(texto="Codigo", imagen_str="proveedor.png")
+        self.btn_consolidar = self.CreaBoton(texto="Consolidar", imagen_str="clientes.png")
         self.horizontalLayout.addWidget(self.btn_codigo)
+        self.horizontalLayout.addWidget(self.btn_consolidar)
 
 
 class LugarEntregaView(VistaBase):
@@ -164,6 +166,76 @@ class LugarEntregaView(VistaBase):
             [(x.id, str(x)) for x in lugar.localidad._meta.model.select()] if False else [],
             lugar.localidad_id,
         )
+
+
+class ConsolidacionClientesView(VistaBase):
+    """Asistente seguro para fusionar clientes duplicados sin borrar históricos."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.initUi(self)
+
+    def initUi(self, parent):
+        self.resize(760, 620)
+        self.setWindowTitle("Consolidar clientes")
+        layout = QVBoxLayout(parent)
+
+        ayuda = QLabel(
+            "Seleccione el cliente que quedará activo y uno o más clientes origen. "
+            "Primero ejecute Simular. Los clientes origen no se borran: quedan inactivos."
+        )
+        ayuda.setWordWrap(True)
+        layout.addWidget(ayuda)
+
+        form = QFormLayout()
+        self.cbo_destino = QComboBox()
+        form.addRow("Cliente destino", self.cbo_destino)
+        layout.addLayout(form)
+
+        layout.addWidget(QLabel("Clientes a consolidar"))
+        self.lst_origenes = QListWidget()
+        self.lst_origenes.setSelectionMode(QAbstractItemView.MultiSelection)
+        layout.addWidget(self.lst_origenes)
+
+        layout.addWidget(QLabel("Vista previa / simulación"))
+        self.txt_resumen = QTextEdit()
+        self.txt_resumen.setReadOnly(True)
+        self.txt_resumen.setMinimumHeight(180)
+        layout.addWidget(self.txt_resumen)
+
+        botones = QHBoxLayout()
+        self.btn_simular = self.CreaBoton("Simular", imagen_str="search.png")
+        self.btn_consolidar = self.CreaBoton("Consolidar", imagen_str="save.png")
+        self.btn_consolidar.setEnabled(False)
+        self.btn_cerrar = self.CreaBoton("Cerrar", imagen_str="close.png")
+        botones.addWidget(self.btn_simular)
+        botones.addWidget(self.btn_consolidar)
+        botones.addStretch(1)
+        botones.addWidget(self.btn_cerrar)
+        layout.addLayout(botones)
+
+    def cargar_clientes(self, clientes, destino_preseleccionado=None):
+        self.cbo_destino.clear()
+        self.lst_origenes.clear()
+        for cliente_id, razon_social in clientes:
+            self.cbo_destino.addItem(razon_social, cliente_id)
+            self.lst_origenes.addItem("{} - {}".format(cliente_id, razon_social))
+            item = self.lst_origenes.item(self.lst_origenes.count() - 1)
+            item.setData(32, cliente_id)
+        if destino_preseleccionado:
+            idx = self.cbo_destino.findData(destino_preseleccionado)
+            if idx >= 0:
+                self.cbo_destino.setCurrentIndex(idx)
+
+    def destino_id(self):
+        return self.cbo_destino.currentData()
+
+    def origenes_ids(self):
+        return [item.data(32) for item in self.lst_origenes.selectedItems()]
+
+    def mostrar_resumen(self, texto, habilitar=False):
+        self.txt_resumen.setPlainText(texto or "")
+        self.btn_consolidar.setEnabled(bool(habilitar))
 
 
 class CodigoClienteProveedorView(VistaBase):
