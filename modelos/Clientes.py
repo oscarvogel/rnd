@@ -67,6 +67,84 @@ class Cliente(ModeloBase):
     def __str__(self):
         return self.razon_social
 
+
+class LugarEntrega(ModeloBase):
+    """Destino operativo asociado a un cliente.
+
+    Los campos direccion/localidad/ruta existentes en Cliente se conservan por
+    compatibilidad con instalaciones anteriores. Los nuevos flujos deben usar
+    este modelo para permitir múltiples destinos por cliente.
+    """
+
+    id = peewee.AutoField(primary_key=True)
+    cliente = peewee.ForeignKeyField(
+        model=Cliente,
+        backref='lugares_entrega',
+        null=False,
+        on_update='CASCADE',
+        on_delete='CASCADE',
+        verbose_name='Cliente',
+    )
+    nombre = peewee.CharField(max_length=100, null=False, verbose_name='Nombre / Referencia')
+    direccion = peewee.CharField(max_length=150, null=True, verbose_name='Dirección')
+    localidad = peewee.ForeignKeyField(
+        model=Localidades,
+        backref='lugares_entrega',
+        null=True,
+        on_update='CASCADE',
+        on_delete='RESTRICT',
+        verbose_name='Localidad',
+    )
+    ruta_reparto = peewee.ForeignKeyField(
+        model=RutaReparto,
+        backref='lugares_entrega',
+        null=True,
+        on_update='CASCADE',
+        on_delete='RESTRICT',
+        verbose_name='Ruta de Reparto',
+    )
+    principal = peewee.BooleanField(default=False, verbose_name='Principal')
+    activo = peewee.BooleanField(default=True, verbose_name='Activo')
+    observaciones = peewee.TextField(null=True, verbose_name='Observaciones')
+
+    class Meta:
+        db_table = 'lugares_entrega'
+        indexes = (
+            (('cliente', 'nombre'), True),
+        )
+
+    def __str__(self):
+        return self.nombre
+
+    @classmethod
+    def activos_cliente(cls, cliente_id):
+        return cls.select().where(
+            (cls.cliente == cliente_id) & (cls.activo == True)
+        ).order_by(cls.principal.desc(), cls.nombre)
+
+    @classmethod
+    def principal_cliente(cls, cliente_id):
+        return cls.get_or_none(
+            (cls.cliente == cliente_id) &
+            (cls.principal == True) &
+            (cls.activo == True)
+        )
+
+    def save(self, *args, **kwargs):
+        with self._meta.database.atomic():
+            resultado = super().save(*args, **kwargs)
+            if self.principal:
+                (LugarEntrega
+                 .update(principal=False)
+                 .where(
+                     (LugarEntrega.cliente == self.cliente_id) &
+                     (LugarEntrega.id != self.id) &
+                     (LugarEntrega.principal == True)
+                 )
+                 .execute())
+            return resultado
+
+
 class CodigoClienteProveedor(ModeloBase):
     id = peewee.AutoField(primary_key=True)
     codigo = peewee.CharField(max_length=100, null=False, verbose_name='Código')
@@ -120,4 +198,4 @@ class BuscadorCliente(Buscador):
     solo_numeros = True
     textoEtiqueta = "Buscar Clientes"
     valorRetorno = None
-    lRetval = False  # indica si presiono en aceptar o cancelar        
+    lRetval = False  # indica si presiono en aceptar o cancelar
