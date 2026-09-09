@@ -4,7 +4,7 @@ import traceback
 import threading
 import peewee
 
-from modelos.Clientes import CodigoClienteProveedor
+from modelos.Clientes import CodigoClienteProveedor, LugarEntrega, Cliente
 from modelos.Empleados import ConceptoLiquidacion
 from modelos.EstadoHojaRuta import EstadoHojaRuta
 from modelos.HojaRuta import HojaDeRuta
@@ -45,6 +45,7 @@ class MigracionBaseDatos:
         modelos = [
             (CodigoClienteProveedor, "CodigoClienteProveedor"),
             (Localidades, "Localidades"),
+            (LugarEntrega, "LugarEntrega"),
             (HojaDeRuta, "HojaDeRuta"),
             (ProcesoLista, "ProcesoLista"),
             (ConceptoLiquidacion, "ConceptoLiquidacion"),
@@ -55,6 +56,57 @@ class MigracionBaseDatos:
                 modelo().create_table()
             except peewee.OperationalError:
                 logging.debug("Tabla %s ya existe, no se crea de nuevo", nombre)
+
+        # El FK se agrega después de crear lugares_entrega para instalaciones existentes.
+        migraciones_lugares = [
+            migrator.add_column(
+                'hoja_de_ruta',
+                'lugar_entrega_id',
+                IntegerField(null=True),
+            ),
+            migrator.add_foreign_key_constraint(
+                'hoja_de_ruta',
+                'lugar_entrega_id',
+                'lugares_entrega',
+                'id',
+                on_delete='RESTRICT',
+                on_update='CASCADE',
+            ),
+        ]
+        self.migraciones = migraciones_lugares
+        self.RealizaMigraciones()
+        self._crear_lugares_iniciales()
+
+    def _crear_lugares_iniciales(self):
+        """Preserva dirección/ruta actuales creando un destino principal inicial.
+
+        Es idempotente: sólo crea el lugar cuando el cliente aún no posee destinos.
+        No intenta fusionar clientes duplicados porque esa decisión requiere revisión
+        humana y no debe ocurrir automáticamente en una migración.
+        """
+        try:
+            for cliente in Cliente.select():
+                if LugarEntrega.select().where(LugarEntrega.cliente == cliente.id).exists():
+                    continue
+                if not (cliente.direccion or cliente.localidad_id or cliente.ruta_reparto_id):
+                    continue
+                nombre = "Principal"
+                if cliente.localidad_id:
+                    try:
+                        nombre = cliente.localidad.descripcion
+                    except Exception:
+                        pass
+                LugarEntrega.create(
+                    cliente=cliente,
+                    nombre=nombre,
+                    direccion=cliente.direccion,
+                    localidad=cliente.localidad_id,
+                    ruta_reparto=cliente.ruta_reparto_id,
+                    principal=True,
+                    activo=True,
+                )
+        except Exception:
+            logging.exception("No se pudieron crear los lugares de entrega iniciales")
                     
     def RealizaMigraciones(self):
         IGNORAR = {1060, 1022, 1061, 1091}

@@ -1,5 +1,5 @@
 import peewee
-from modelos.Clientes import Cliente, RutaReparto
+from modelos.Clientes import Cliente, RutaReparto, LugarEntrega
 from modelos.Empleados import Empleado
 from modelos.Equipos import Equipos
 from modelos.ModeloBase import ModeloBase
@@ -10,6 +10,14 @@ class HojaDeRuta(ModeloBase):
     fecha = peewee.DateField()
     cliente = peewee.ForeignKeyField(Cliente, backref="hoja_ruta", on_update='CASCADE', on_delete='RESTRICT')
     nombre_cliente = peewee.CharField(max_length=100, default='')
+    lugar_entrega = peewee.ForeignKeyField(
+        LugarEntrega,
+        backref="hoja_ruta",
+        null=True,
+        on_update='CASCADE',
+        on_delete='RESTRICT',
+        verbose_name='Lugar de Entrega',
+    )
     ruta = peewee.ForeignKeyField(RutaReparto, backref="hoja_ruta", on_update='CASCADE', on_delete='RESTRICT')
     comprobante = peewee.CharField(max_length=20)
     producto = peewee.CharField(max_length=100)

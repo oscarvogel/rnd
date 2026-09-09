@@ -1,4 +1,6 @@
 # coding=utf-8
+import os
+
 from controladores.Login import LoginController
 from controladores.Migraciones import MigracionBaseDatos
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
@@ -32,23 +34,35 @@ class MainController(ControladorBase):
         logincontroller.exec_()
         lRetVal = logincontroller.lRetVal
         if lRetVal:
-            MigracionBaseDatos()
-            propiedades = getFileProperties("main.exe")
-            versionexe = propiedades["StringFileInfo"]["FileVersion"] if propiedades["StringFileInfo"] else ""
+            demo_mode = os.getenv("RND_DEMO_MODE") == "1"
+            ejecutor = None
+            if demo_mode:
+                versionexe = "DEMO"
+                servidor = "LOCAL"
+                basedatos = "SQLite Demo"
+                # Las consultas del dashboard corren en QThreadPool por defecto.
+                # En el demo SQLite eso corrompe el heap (peewee + hilos Qt +
+                # hilos de fondo de pymongo), asi que las corremos sincrono.
+                from vistas.dashboard.ejecutor import EjecutorConsultasSincrono
+                ejecutor = EjecutorConsultasSincrono()
+            else:
+                MigracionBaseDatos()
+                propiedades = getFileProperties("main.exe")
+                versionexe = propiedades["StringFileInfo"]["FileVersion"] if propiedades["StringFileInfo"] else ""
+                servidor = LeerIni("ServerDB") or ""
+                basedatos = LeerIni("BaseDatos") or ""
             usuario = LeerConf("usuario") or ""
-            servidor = LeerIni("ServerDB") or ""
-            basedatos = LeerIni("BaseDatos") or ""
             self.view.actualizar_encabezado(usuario=usuario, servidor=servidor, base=basedatos, estado="Conectado", version=versionexe)
             self.view.setWindowTitle("Usuario {} Servidor {} Base de datos {} Version sistema {}".format(usuario, servidor, basedatos, versionexe))
             usu_id = int(LeerConf("idUsuario") or 0)
             self.view.cargar_menu_lateral(usu_id)
-            self._inicializar_dashboard(usu_id)
+            self._inicializar_dashboard(usu_id, ejecutor=ejecutor)
             self.ArmaMenu()
         return lRetVal
 
-    def _inicializar_dashboard(self, usu_id):
+    def _inicializar_dashboard(self, usu_id, ejecutor=None):
         if self.view.dashboard is None:
-            dashboard = DashboardView(usu_id=usu_id)
+            dashboard = DashboardView(usu_id=usu_id, ejecutor=ejecutor)
             dashboard.navegar.connect(self._navegar_desde_dashboard)
             self.view.registrar_dashboard(dashboard)
         else:
