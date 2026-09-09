@@ -1,5 +1,7 @@
 from PyQt5.QtWidgets import QMessageBox
 
+from peewee import JOIN
+
 from modelos.Clientes import (
     Cliente, CodigoClienteProveedor, LugarEntrega, Localidades, RutaReparto,
 )
@@ -153,9 +155,9 @@ class ABMClientesController(ControladorBaseABM):
 
         lugares = (
             LugarEntrega.select(LugarEntrega, Localidades, RutaReparto)
-            .join(Localidades, join_type='LEFT OUTER', on=(LugarEntrega.localidad == Localidades.id))
+            .join(Localidades, join_type=JOIN.LEFT_OUTER, on=(LugarEntrega.localidad == Localidades.id))
             .switch(LugarEntrega)
-            .join(RutaReparto, join_type='LEFT OUTER', on=(LugarEntrega.ruta_reparto == RutaReparto.id))
+            .join(RutaReparto, join_type=JOIN.LEFT_OUTER, on=(LugarEntrega.ruta_reparto == RutaReparto.id))
             .where(LugarEntrega.cliente == cliente_id)
             .order_by(LugarEntrega.principal.desc(), LugarEntrega.nombre)
         )
