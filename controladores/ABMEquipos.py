@@ -64,23 +64,50 @@ class ABMEquiposController(ControladorBaseABM):
     @reconnect_if_needed
     @inicializar_y_capturar_excepciones
     def onClickBtnAceptar(self, *args, **kwargs):
-        ultimo_chofer = ChoferEquipo.ultimo_chofer(self.view.idtabla)
-        if self.view.tipo == 'M' and ultimo_chofer:
-            if self.view.chofer_asignado.valor() != str(ultimo_chofer.empleado.id):
+        if not self.model:
+            Ventanas.showAlert("Sistema", "Debes establecer un modelo a actualizar")
+            return
+        if self.campoclave is None:
+            Ventanas.showAlert("Sistema", "Debes establecer un campo clave a actualizar")
+            return
+        if not self.onPreClickAceptar():
+            self.onPostClickAceptar()
+            return
+
+        with self.model._meta.database.atomic():
+            if self.view.tipo == 'M':
+                dato = self.model.get_by_id(
+                    self.view.controles[self.campoclave].text()
+                )
+            else:
+                dato = self.model()
+
+            for control in self.view.controles:
+                dato.__data__[control] = self.view.controles[control].valor()
+
+            dato.save(force_insert=self.view.tipo == 'A')
+            id_equipo = dato.id
+            chofer_id = self.view.chofer_asignado.valor()
+            ultimo_chofer = ChoferEquipo.ultimo_chofer(id_equipo)
+
+            if ultimo_chofer and str(ultimo_chofer.empleado.id) != str(chofer_id or ""):
                 ultimo_chofer.fecha_fin = datetime.date.today() - datetime.timedelta(days=1)
                 ultimo_chofer.save()
-                ##si cambia el chofer, se crea un nuevo registro
+
+            if chofer_id and (
+                not ultimo_chofer
+                or str(ultimo_chofer.empleado.id) != str(chofer_id)
+            ):
                 ChoferEquipo.create(
-                    movil=self.view.idtabla,
-                    empleado=self.view.chofer_asignado.valor(),
+                    movil=id_equipo,
+                    empleado=chofer_id,
                     fecha_inicio=datetime.date.today()
                 )
-        else:
-            ChoferEquipo.create(
-                movil=self.view.idtabla,
-                empleado=self.view.chofer_asignado.valor(),
-                fecha_inicio=datetime.date.today()
-            )
+
+            self.view.idtabla = id_equipo
+
+        self.view.btnAceptarClicked()
+        self.onPostClickAceptar()
            
     
 class VencimientosController(ControladorBase):
