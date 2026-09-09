@@ -1,12 +1,14 @@
 from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout
+from PyQt5.QtWidgets import (
+    QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QLineEdit, QComboBox,
+    QCheckBox, QTextEdit, QFormLayout,
+)
 from modelos.Clientes import Cliente, cboRutaReparto
 from pyqt5libs.libs.vistas.VistaBase import VistaBase
 from pyqt5libs.libs.vistas.ABM import ABM
-from pyqt5libs.pyqt5libs.Botones import Boton
 from pyqt5libs.pyqt5libs.EntradaTexto import TextEdit
 from pyqt5libs.pyqt5libs.Grillas import Grilla
-from pyqt5libs.pyqt5libs.utiles import imagen, inicializar_y_capturar_excepciones
+from pyqt5libs.pyqt5libs.utiles import inicializar_y_capturar_excepciones
 
 
 class ABMClientesView(ABM):
@@ -19,6 +21,7 @@ class ABMClientesView(ABM):
     dynamicBackColor = {Cliente.activo.name: {'valor': False, 'color': QColor(128, 128, 128)}}
 
     def __init__(self, *args, **kwargs):
+        self.on_cargar_lugares = None
         super().__init__(*args, **kwargs)
         
     @inicializar_y_capturar_excepciones
@@ -31,11 +34,137 @@ class ABMClientesView(ABM):
         contacto = self.ArmaEntrada(Cliente.contacto)
         self.ArmaEntrada(Cliente.ruta_reparto, boxlayout=contacto, control=cboRutaReparto())
         self.ArmaEntrada(Cliente.observaciones, control=TextEdit())
+        self._arma_lugares_entrega()
+
+    def _arma_lugares_entrega(self):
+        self.grp_lugares = QGroupBox("Lugares de entrega")
+        layout = QVBoxLayout(self.grp_lugares)
+
+        self.lbl_lugares_ayuda = QLabel(
+            "Un cliente puede tener uno o varios destinos. La dirección y ruta operativa se toman del lugar seleccionado."
+        )
+        self.lbl_lugares_ayuda.setWordWrap(True)
+        layout.addWidget(self.lbl_lugares_ayuda)
+
+        self.grilla_lugares = Grilla()
+        self.grilla_lugares.ArmaCabeceras([
+            "Nombre / Referencia", "Dirección", "Localidad", "Ruta de Reparto",
+            "Principal", "Activo", "ID",
+        ])
+        self.grilla_lugares.permiteagregar = False
+        self.grilla_lugares.setMinimumHeight(150)
+        layout.addWidget(self.grilla_lugares)
+
+        botones = QHBoxLayout()
+        self.btn_lugar_agregar = self.CreaBoton("Agregar", imagen_str="new.png")
+        self.btn_lugar_editar = self.CreaBoton("Editar", imagen_str="edit.png")
+        self.btn_lugar_borrar = self.CreaBoton("Borrar", imagen_str="delete.png")
+        botones.addWidget(self.btn_lugar_agregar)
+        botones.addWidget(self.btn_lugar_editar)
+        botones.addWidget(self.btn_lugar_borrar)
+        botones.addStretch(1)
+        layout.addLayout(botones)
+
+        self.verticalLayoutDatos.addWidget(self.grp_lugares)
+        self.habilitar_lugares(False)
+
+    def habilitar_lugares(self, habilitado):
+        if hasattr(self, "grp_lugares"):
+            self.grp_lugares.setEnabled(bool(habilitado))
+
+    def cargar_lugares(self, filas):
+        self.grilla_lugares.limpiarGrilla()
+        for fila in filas:
+            self.grilla_lugares.AgregaItem(list(fila))
+        self.grilla_lugares.resizeColumnsToContents()
+
+    @inicializar_y_capturar_excepciones
+    def PostClickModifica(self):
+        self.habilitar_lugares(bool(self.idtabla))
+        if callable(self.on_cargar_lugares):
+            self.on_cargar_lugares()
+
+    @inicializar_y_capturar_excepciones
+    def PostClickAgrega(self):
+        self.habilitar_lugares(False)
+        self.cargar_lugares([])
     
     @inicializar_y_capturar_excepciones
     def BotonesAdicionales(self):
         self.btn_codigo = self.CreaBoton(texto="Codigo", imagen_str="proveedor.png")
         self.horizontalLayout.addWidget(self.btn_codigo)
+
+
+class LugarEntregaView(VistaBase):
+    """Formulario compacto para alta/modificación de un destino del cliente."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.initUi(self)
+
+    def initUi(self, parent):
+        self.resize(620, 460)
+        self.setWindowTitle("Lugar de entrega")
+        layout_ppal = QVBoxLayout(parent)
+        form = QFormLayout()
+
+        self.txt_nombre = QLineEdit()
+        self.txt_direccion = QLineEdit()
+        self.cbo_localidad = QComboBox()
+        self.cbo_ruta = QComboBox()
+        self.chk_principal = QCheckBox("Lugar principal")
+        self.chk_activo = QCheckBox("Activo")
+        self.chk_activo.setChecked(True)
+        self.txt_observaciones = QTextEdit()
+        self.txt_observaciones.setMaximumHeight(100)
+
+        form.addRow("Nombre / Referencia *", self.txt_nombre)
+        form.addRow("Dirección", self.txt_direccion)
+        form.addRow("Localidad", self.cbo_localidad)
+        form.addRow("Ruta de Reparto", self.cbo_ruta)
+        form.addRow("", self.chk_principal)
+        form.addRow("", self.chk_activo)
+        form.addRow("Observaciones", self.txt_observaciones)
+        layout_ppal.addLayout(form)
+
+        botones = QHBoxLayout()
+        botones.addStretch(1)
+        self.btn_cancelar = self.CreaBoton("Cancelar", imagen_str="close.png")
+        self.btn_guardar = self.CreaBoton("Guardar", imagen_str="save.png")
+        botones.addWidget(self.btn_cancelar)
+        botones.addWidget(self.btn_guardar)
+        layout_ppal.addLayout(botones)
+
+    def cargar_combobox(self, combo, elementos, seleccionado=None):
+        combo.clear()
+        combo.addItem("(Sin asignar)", None)
+        for ident, texto in elementos:
+            combo.addItem(texto, ident)
+        if seleccionado is not None:
+            idx = combo.findData(seleccionado)
+            if idx >= 0:
+                combo.setCurrentIndex(idx)
+
+    def valores(self):
+        return {
+            "nombre": self.txt_nombre.text().strip(),
+            "direccion": self.txt_direccion.text().strip() or None,
+            "localidad": self.cbo_localidad.currentData(),
+            "ruta_reparto": self.cbo_ruta.currentData(),
+            "principal": self.chk_principal.isChecked(),
+            "activo": self.chk_activo.isChecked(),
+            "observaciones": self.txt_observaciones.toPlainText().strip() or None,
+        }
+
+    def cargar_registro(self, lugar):
+        self.txt_nombre.setText(lugar.nombre or "")
+        self.txt_direccion.setText(lugar.direccion or "")
+        self.cargar_combobox(
+            self.cbo_localidad,
+            [(x.id, str(x)) for x in lugar.localidad._meta.model.select()] if False else [],
+            lugar.localidad_id,
+        )
+
 
 class CodigoClienteProveedorView(VistaBase):
     def __init__(self, *args, **kwargs):
@@ -63,4 +192,3 @@ class CodigoClienteProveedorView(VistaBase):
         layout_botones.addWidget(self.btn_borrar)
         layout_botones.addWidget(self.btn_salir)
         layout_ppal.addLayout(layout_botones)
-        
