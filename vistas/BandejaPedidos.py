@@ -33,6 +33,10 @@ class BandejaPedidosView(QWidget):
         filtros.addWidget(self.solo_pendientes)
         self.btn_actualizar = QPushButton("Actualizar")
         filtros.addWidget(self.btn_actualizar)
+        self.btn_seleccionar_todo = QPushButton("Seleccionar todo")
+        self.btn_seleccionar_todo.setToolTip("Seleccionar o deseleccionar todos los pedidos visibles")
+        self.btn_seleccionar_todo.clicked.connect(self.alternar_seleccion_todos)
+        filtros.addWidget(self.btn_seleccionar_todo)
         filtros.addStretch(1)
         raiz.addLayout(filtros)
 
@@ -85,6 +89,27 @@ class BandejaPedidosView(QWidget):
                 self.tabla.setItem(row, col, QTableWidgetItem(str(valor)))
         self.tabla.blockSignals(False)
         self.tabla.resizeColumnsToContents()
+        self._actualizar_texto_seleccionar_todo()
+        self._emitir_totales()
+
+    def alternar_seleccion_todos(self):
+        total_filas = self.tabla.rowCount()
+        if total_filas <= 0:
+            return
+
+        seleccionados = len(self.ids_seleccionados())
+        nuevo_estado = Qt.Unchecked if seleccionados == total_filas else Qt.Checked
+
+        self.tabla.blockSignals(True)
+        try:
+            for row in range(total_filas):
+                item = self.tabla.item(row, 0)
+                if item:
+                    item.setCheckState(nuevo_estado)
+        finally:
+            self.tabla.blockSignals(False)
+
+        self._actualizar_texto_seleccionar_todo()
         self._emitir_totales()
 
     def ids_seleccionados(self):
@@ -100,8 +125,18 @@ class BandejaPedidosView(QWidget):
 
     def set_totales(self, cantidad, kg, bultos):
         self.lbl_totales.setText("Seleccionados: {} · KG: {} · Bultos: {}".format(cantidad, kg, bultos))
+        self._actualizar_texto_seleccionar_todo()
+
+    def _actualizar_texto_seleccionar_todo(self):
+        total = self.tabla.rowCount()
+        seleccionados = len(self.ids_seleccionados())
+        if total > 0 and seleccionados == total:
+            self.btn_seleccionar_todo.setText("Deseleccionar todo")
+        else:
+            self.btn_seleccionar_todo.setText("Seleccionar todo")
 
     def _emitir_totales(self, *args):
+        self._actualizar_texto_seleccionar_todo()
         # El controlador conecta esta referencia para recalcular con objetos reales.
         callback = getattr(self, "on_selection_changed", None)
         if callback:

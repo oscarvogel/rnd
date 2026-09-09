@@ -4,6 +4,7 @@ import peewee
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from modelos.Clientes import BuscadorCliente, CodigoClienteProveedor
 from modelos.HojaRuta import HojaDeRuta
+import modelos.ModeloBase as modelo_base
 from modelos.ModeloBase import reconnect_if_needed
 from modelos.ParametrosSistema import ParamSist
 from modelos.Proveedores import ProcesoLista
@@ -21,6 +22,8 @@ from utiles.importacion_guiada import (
 )
 from vistas.ImportacionPedidos import ImportacionPedidosView
 
+
+ERRORES_CONEXION_DB = (peewee.OperationalError, peewee.InterfaceError)
 
 COLUMNAS_NORMALIZADAS = {
     "Cliente": "codigo_cliente",
@@ -40,6 +43,7 @@ class ImportacionPedidosController(ControladorBase):
         self.view = ImportacionPedidosView()
         self.msg_box = None
         self.resumen_actual = ResumenImportacion()
+        self.archivo_normalizado = False
         self.conectarWidgets()
 
     def conectarWidgets(self):
@@ -55,12 +59,67 @@ class ImportacionPedidosController(ControladorBase):
         )
 
     def _actualizar_avance_preprocesamiento(self, porcentaje):
-        self.view.avance.actualizar(porcentaje)
-        QApplication.processEvents()
+        self.view.avance.actualizar(porcentaje, "Normalizando archivo del proveedor")
+
+    def _reconectar_db_para_lectura(self):
+        """Descarta un socket muerto y abre uno nuevo para repetir un SELECT seguro."""
+        try:
+            if not modelo_base.db.is_closed():
+                modelo_base.db.close()
+        except Exception:
+            pass
+        modelo_base.db.connect(reuse_if_open=True)
+
+    def _leer_db_con_reintento(self, operacion, descripcion="lectura"):
+        """Reintenta una sola vez una lectura segura ante pérdida de conexión.
+
+        Solo debe utilizarse para SELECTs o búsquedas que no escriben. Las
+        escrituras se mantienen fuera de este helper para evitar duplicados si
+        el servidor alcanzó a ejecutar el SQL antes de perderse la respuesta.
+        """
+        try:
+            return operacion()
+        except ERRORES_CONEXION_DB as exc:
+            print("[DB] {} interrumpida: {}. Reconectando y reintentando una vez...".format(
+                descripcion, exc
+            ))
+            self._reconectar_db_para_lectura()
+            return operacion()
+
+    def _cargar_columnas_proveedor(self, proveedor):
+        """Obtiene el mapeo del proveedor o el contrato común ya normalizado."""
+        if self.archivo_normalizado:
+            return dict(COLUMNAS_NORMALIZADAS)
+
+        filas = self._leer_db_con_reintento(
+            lambda: list(
+                ProcesoLista.select().where(ProcesoLista.proveedor == proveedor)
+            ),
+            "lectura de configuración del importador",
+        )
+        return {str(fila.codigo): fila.columna for fila in filas}
+
+    def _marcar_interrupcion_conexion(self, procesados, total, exc):
+        """Deja la pantalla en un estado claro cuando una escritura queda incierta."""
+        detalle = (
+            "La conexión con la base de datos se interrumpió al grabar. "
+            "Se procesaron {} de {} registros. RND detuvo la importación para "
+            "evitar repetir una escritura cuyo resultado podría ser incierto."
+        ).format(procesados, total)
+        self.view.avance.marcar_error(
+            "Importación interrumpida ({}/{})".format(procesados, total)
+        )
+        self.view.lbl_resultado_titulo.setText("Importación interrumpida")
+        self.view.lbl_resultado_detalle.setText(detalle)
+        self.view.btn_siguiente.setEnabled(False)
+        showAlert(
+            "Conexión interrumpida",
+            detalle + "\n\nDetalle técnico: {}".format(exc),
+        )
 
     @inicializar_y_capturar_excepciones
     def seleccionar_archivo(self, *args, **kwargs):
-        """Selecciona el archivo y prepara sus hojas para la vista previa."""
+        """Selecciona el archivo, lo normaliza si corresponde y prepara sus hojas."""
         self._actualizar_ayuda_proveedor()
         if not self.view.empresa_proveedora.valor():
             showAlert("Sistema", "Primero seleccione el proveedor / origen de los pedidos")
@@ -73,19 +132,27 @@ class ImportacionPedidosController(ControladorBase):
         if not cArchivo:
             return
 
+        self.archivo_normalizado = False
+        self.view.avance.iniciar("Analizando archivo")
         self.view.txt_archivo.setText(cArchivo)
+
         archivo_normalizado = normalizar_archivo_pedidos(
             cArchivo,
             progreso=self._actualizar_avance_preprocesamiento,
         )
         if archivo_normalizado:
+            self.archivo_normalizado = True
             cArchivo = archivo_normalizado
             self.view.txt_archivo.setText(cArchivo)
+            self.view.avance.finalizar("Archivo normalizado")
         elif self.view.empresa_proveedora.valor() == "15":
             self.importa_tremblay()
             cArchivo = self.view.txt_archivo.text()
             if not cArchivo:
                 return
+            self.view.avance.finalizar("Archivo Tremblay procesado")
+        else:
+            self.view.avance.finalizar("Archivo seleccionado")
 
         xls = pd.ExcelFile(cArchivo)
         self.view.cbo_hoja.CargaDatos(list(xls.sheet_names))
@@ -102,6 +169,7 @@ class ImportacionPedidosController(ControladorBase):
             showAlert("Sistema", "Debe seleccionar un archivo para importar")
             return
 
+        self.view.avance.iniciar("Leyendo archivo")
         archivo = self.view.txt_archivo.text()
         hoja = self.view.cbo_hoja.text()
         try:
@@ -109,12 +177,14 @@ class ImportacionPedidosController(ControladorBase):
         except Exception as exc:
             self.resumen_actual = ResumenImportacion(errores=1)
             self.view.mostrar_resultado(self.resumen_actual)
+            self.view.avance.marcar_error("No se pudo leer el archivo")
             showAlert("Sistema", "No se pudo leer el archivo: {}".format(exc))
             return
 
         if df.empty:
             self.resumen_actual = ResumenImportacion(errores=1)
             self.view.mostrar_resultado(self.resumen_actual)
+            self.view.avance.marcar_error("Archivo sin datos")
             showAlert("Sistema", "La hoja seleccionada no contiene datos")
             return
 
@@ -124,12 +194,14 @@ class ImportacionPedidosController(ControladorBase):
             try:
                 fila_cabeceras = int(texto_fila_inicio) - 1
             except ValueError:
+                self.view.avance.marcar_error("Fila de inicio inválida")
                 showAlert("Sistema", "La fila de inicio debe ser un número válido")
                 return
         else:
             fila_cabeceras = 0
 
         if fila_cabeceras >= len(df) or fila_cabeceras < 0:
+            self.view.avance.marcar_error("Fila de inicio fuera de rango")
             showAlert("Sistema", "La fila de inicio especificada está fuera del rango")
             return
 
@@ -145,27 +217,32 @@ class ImportacionPedidosController(ControladorBase):
             try:
                 fila_fin = int(texto_fila_fin) - 1
             except ValueError:
+                self.view.avance.marcar_error("Fila final inválida")
                 showAlert("Sistema", "La fila de fin debe ser un número válido")
                 return
             if fila_fin < inicio_datos:
+                self.view.avance.marcar_error("Rango de filas inválido")
                 showAlert("Sistema", "Rango de filas no válido")
                 return
             idx_fin = min(len(df_datos), fila_fin - inicio_datos + 1)
 
         if idx_fin <= idx_inicio:
+            self.view.avance.marcar_error("Sin filas para importar")
             showAlert("Sistema", "No hay filas de datos para importar en el rango seleccionado")
             return
 
         total_filas = idx_fin - idx_inicio
         for avance, i in enumerate(range(idx_inicio, idx_fin), start=1):
-            QApplication.processEvents()
-            self.view.avance.actualizar(avance / total_filas * 100)
+            self.view.avance.actualizar(
+                avance / total_filas * 100,
+                "Cargando vista previa {}/{}".format(avance, total_filas),
+            )
             row = df_datos.iloc[i]
             item = [True]
             item.extend(row.tolist())
             self.view.grid_datos.AgregaItem(item)
 
-        self.view.avance.actualizar(100)
+        self.view.avance.finalizar("Vista previa lista")
         self.view.grid_datos.setSortingEnabled(True)
         self.view.grid_datos.resizeColumnsToContents()
         self.view.grid_datos.resizeRowsToContents()
@@ -179,7 +256,7 @@ class ImportacionPedidosController(ControladorBase):
     @inicializar_y_capturar_excepciones
     @reconnect_if_needed
     def on_click_btn_grabar(self, *args, **kwargs):
-        """Graba los pedidos y construye un resultado operativo comprensible."""
+        """Graba pedidos con retry solo de SELECTs y frena escrituras inciertas."""
         proveedor = self.view.empresa_proveedora.valor()
         if not proveedor:
             showAlert("Sistema", "Debe seleccionar un proveedor / origen")
@@ -190,83 +267,123 @@ class ImportacionPedidosController(ControladorBase):
             showAlert("Sistema", "Primero cargue la vista previa del archivo")
             return
 
+        self.view.avance.iniciar("Preparando importación")
+        try:
+            columnas = self._cargar_columnas_proveedor(proveedor)
+            columna_cliente = columnas.get("Cliente")
+            columna_nombre = columnas.get("Nombre_Cliente")
+            if not columna_cliente or not columna_nombre:
+                self.view.avance.marcar_error("Configuración incompleta")
+                showAlert(
+                    "Sistema",
+                    "No están configuradas las columnas Cliente/Nombre_Cliente para este proveedor.",
+                )
+                return
+
+            responsable_generico = self._leer_db_con_reintento(
+                lambda: ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23"),
+                "lectura de empleado genérico",
+            )
+            camion_generico = self._leer_db_con_reintento(
+                lambda: ParamSist.ObtenerParametro("CAMION_GENERICO", "1"),
+                "lectura de camión genérico",
+            )
+        except ERRORES_CONEXION_DB as exc:
+            self._marcar_interrupcion_conexion(0, total, exc)
+            return
+
         importados = 0
         omitidos = 0
         pendientes = 0
         errores = 0
+        procesados = 0
 
         for row in range(total):
-            self.view.avance.actualizar((row + 1) / total * 100)
-            QApplication.processEvents()
+            self.view.avance.actualizar(
+                (row + 1) / total * 100,
+                "Grabando pedido {}/{}".format(row + 1, total),
+            )
             importa = self.view.grid_datos.ObtenerItem(fila=row, col="Importa")
             if not importa:
                 omitidos += 1
-                continue
-
-            columna_cliente = self.obtener_proceso_list(proveedor, "Cliente")
-            columna_nombre = self.obtener_proceso_list(proveedor, "Nombre_Cliente")
-            if not columna_cliente or not columna_nombre:
-                errores += 1
+                procesados += 1
                 continue
 
             cliente = self.view.grid_datos.ObtenerItem(fila=row, col=columna_cliente)
             nombre_cliente = self.view.grid_datos.ObtenerItem(fila=row, col=columna_nombre)
 
             try:
-                codigo_cliente = CodigoClienteProveedor.get(
-                    CodigoClienteProveedor.codigo == cliente,
-                    CodigoClienteProveedor.proveedor == proveedor,
-                )
-                busqueda = codigo_cliente.cliente_id == 1
-            except peewee.DoesNotExist:
-                codigo_cliente = None
-                busqueda = True
-
-            if busqueda:
-                buscador_cliente = BuscadorCliente()
-                buscador_cliente.valor_busqueda = nombre_cliente
-                buscador_cliente.buscar(self.view)
-                if buscador_cliente.lRetval:
-                    codigo_cliente, _ = CodigoClienteProveedor.get_or_create(
-                        codigo=cliente,
-                        proveedor=proveedor,
-                        defaults={"cliente": buscador_cliente.valorRetorno},
+                try:
+                    codigo_cliente = self._leer_db_con_reintento(
+                        lambda cliente=cliente: CodigoClienteProveedor.get(
+                            CodigoClienteProveedor.codigo == cliente,
+                            CodigoClienteProveedor.proveedor == proveedor,
+                        ),
+                        "búsqueda de cliente",
                     )
-                    codigo_cliente.cliente = buscador_cliente.valorRetorno
-                    codigo_cliente.save()
-                else:
+                    busqueda = codigo_cliente.cliente_id == 1
+                except peewee.DoesNotExist:
                     codigo_cliente = None
+                    busqueda = True
 
-            if not codigo_cliente or codigo_cliente.cliente_id == 1:
-                pendientes += 1
-                continue
+                if busqueda:
+                    buscador_cliente = BuscadorCliente()
+                    buscador_cliente.valor_busqueda = nombre_cliente
+                    # Puede crear un Cliente (#45): no envolver en retry automático.
+                    buscador_cliente.buscar(self.view)
+                    if buscador_cliente.lRetval:
+                        # get_or_create/save pueden escribir: no se reintentan automáticamente.
+                        codigo_cliente, _ = CodigoClienteProveedor.get_or_create(
+                            codigo=cliente,
+                            proveedor=proveedor,
+                            defaults={"cliente": buscador_cliente.valorRetorno},
+                        )
+                        codigo_cliente.cliente = buscador_cliente.valorRetorno
+                        codigo_cliente.save()
+                    else:
+                        codigo_cliente = None
 
-            try:
+                if not codigo_cliente or codigo_cliente.cliente_id == 1:
+                    pendientes += 1
+                    procesados += 1
+                    continue
+
+                columna_producto = columnas.get("Producto")
+                if not columna_producto:
+                    raise ValueError("No está configurada la columna Producto")
                 producto = self.view.grid_datos.ObtenerItem(
                     fila=row,
-                    col=self.obtener_proceso_list(proveedor, "Producto"),
+                    col=columna_producto,
                 )
                 try:
-                    hoja_ruta = HojaDeRuta.get(
-                        HojaDeRuta.cliente == codigo_cliente.cliente_id,
-                        HojaDeRuta.fecha == self.view.fecha_reparto.valor(),
-                        HojaDeRuta.producto == producto,
+                    hoja_ruta = self._leer_db_con_reintento(
+                        lambda: HojaDeRuta.get(
+                            HojaDeRuta.cliente == codigo_cliente.cliente_id,
+                            HojaDeRuta.fecha == self.view.fecha_reparto.valor(),
+                            HojaDeRuta.producto == producto,
+                        ),
+                        "búsqueda de hoja de ruta existente",
                     )
                 except peewee.DoesNotExist:
                     hoja_ruta = HojaDeRuta()
                     hoja_ruta.cliente = codigo_cliente.cliente
                     hoja_ruta.fecha = self.view.fecha_reparto.valor()
 
-                observaciones = self.obtener_proceso_list(proveedor, "Observaciones")
+                observaciones = columnas.get("Observaciones")
                 if observaciones:
-                    valor_observaciones = self.view.grid_datos.ObtenerItem(fila=row, col=observaciones)
-                    hoja_ruta.observaciones = "" if pd.isna(valor_observaciones) else valor_observaciones
+                    valor_observaciones = self.view.grid_datos.ObtenerItem(
+                        fila=row, col=observaciones
+                    )
+                    hoja_ruta.observaciones = (
+                        "" if pd.isna(valor_observaciones) else valor_observaciones
+                    )
+
                 hoja_ruta.ruta = codigo_cliente.cliente.ruta_reparto_id
                 hoja_ruta.nombre_cliente = nombre_cliente
-                hoja_ruta.responsable = ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23")
-                hoja_ruta.equipo_asignado = ParamSist.ObtenerParametro("CAMION_GENERICO", "1")
+                hoja_ruta.responsable = responsable_generico
+                hoja_ruta.equipo_asignado = camion_generico
 
-                columna_comprobante = self.obtener_proceso_list(proveedor, "Comprobante")
+                columna_comprobante = columnas.get("Comprobante")
                 if columna_comprobante:
                     comprobante = self.view.grid_datos.ObtenerItem(
                         fila=row,
@@ -280,18 +397,27 @@ class ImportacionPedidosController(ControladorBase):
 
                 hoja_ruta.producto = producto
                 hoja_ruta.cantidad = self.view.grid_datos.ObtenerItem(
-                    fila=row, col=self.obtener_proceso_list(proveedor, "Cantidad")
+                    fila=row, col=columnas.get("Cantidad")
                 )
                 hoja_ruta.kg = self.view.grid_datos.ObtenerItem(
-                    fila=row, col=self.obtener_proceso_list(proveedor, "KG")
+                    fila=row, col=columnas.get("KG")
                 )
                 hoja_ruta.cantidad_bultos = self.view.grid_datos.ObtenerItem(
-                    fila=row, col=self.obtener_proceso_list(proveedor, "Bultos")
+                    fila=row, col=columnas.get("Bultos")
                 )
+
+                # save() es escritura. Si la conexión se pierde aquí no se repite:
+                # el servidor podría haberla ejecutado aunque no haya llegado respuesta.
                 hoja_ruta.save()
                 importados += 1
-            except Exception:
+                procesados += 1
+            except ERRORES_CONEXION_DB as exc:
+                self._marcar_interrupcion_conexion(procesados, total, exc)
+                return
+            except Exception as exc:
+                print("[ImportacionPedidos] Error en fila {}: {}".format(row + 1, exc))
                 errores += 1
+                procesados += 1
 
         self.resumen_actual = ResumenImportacion(
             leidos=total,
@@ -301,7 +427,7 @@ class ImportacionPedidosController(ControladorBase):
             errores=errores,
         )
         self.view.mostrar_resultado(self.resumen_actual)
-        self.view.avance.actualizar(100)
+        self.view.avance.finalizar("Importación finalizada")
 
     def ir_siguiente_paso(self):
         """Continúa a la bandeja operativa o devuelve al operador a corregir."""
@@ -318,13 +444,15 @@ class ImportacionPedidosController(ControladorBase):
     @reconnect_if_needed
     @inicializar_y_capturar_excepciones
     def obtener_proceso_list(self, proveedor, columna):
+        if self.archivo_normalizado:
+            return COLUMNAS_NORMALIZADAS.get(columna)
         try:
             return ProcesoLista.get(
                 ProcesoLista.proveedor == proveedor,
                 ProcesoLista.codigo == columna,
             ).columna
         except peewee.DoesNotExist:
-            return COLUMNAS_NORMALIZADAS.get(columna)
+            return None
 
     def importa_pdf_tremblay(self):
         if not self.view.txt_archivo.text():
@@ -364,11 +492,13 @@ class ImportacionPedidosController(ControladorBase):
         except (ValueError, FileNotFoundError) as exc:
             self.resumen_actual = ResumenImportacion(errores=1)
             self.view.mostrar_resultado(self.resumen_actual)
+            self.view.avance.marcar_error("No se pudo procesar el archivo")
             showAlert("Sistema", "No se pudo procesar el archivo: {}".format(exc))
             return
         if not archivo_procesado:
             self.resumen_actual = ResumenImportacion(errores=1)
             self.view.mostrar_resultado(self.resumen_actual)
+            self.view.avance.marcar_error("No se pudo procesar el archivo")
             showAlert("Sistema", "No se pudo procesar el archivo")
             return
         self.view.txt_archivo.setText(archivo_procesado)

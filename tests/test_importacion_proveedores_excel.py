@@ -17,6 +17,9 @@ from utiles.importacion_proveedores_excel import (  # noqa: E402
 )
 
 
+FIXTURE_TREMBLAY = ROOT / "tests" / "fixtures" / "informe_tremblay.xls"
+
+
 def _crear_tio_pujio(path):
     filas = [[""] * 17 for _ in range(10)]
     filas.append(["", "Fecha", "", "Tipo", "Comprobante", "", "", "", "Hormas", "", "Kilos", "", "", "", "", "", ""])
@@ -102,6 +105,16 @@ def test_detalle_ventas_detecta_encabezado_y_no_confunde_codigo(tmp_path):
     assert df.iloc[0]["producto"] == "FIAMBRE COCIDO"
     assert pd.isna(df.iloc[0]["comprobante"])
     assert "Producto: 12311" in df.iloc[0]["observaciones"]
+
+
+def test_tremblay_real_tambien_sale_con_contrato_normalizado():
+    salida = normalizar_archivo_pedidos(str(FIXTURE_TREMBLAY))
+    assert salida is not None
+    df = pd.read_excel(salida)
+    assert list(df.columns) == COLUMNAS_NORMALIZADAS
+    assert len(df) == 293
+    assert df.iloc[0]["codigo_cliente"] == 201504
+    assert "VALLE DISTRIBUCIONES SRL" in df.iloc[0]["detalle_cliente"]
 
 
 def test_dispatcher_detecta_ambos_formatos(tmp_path):

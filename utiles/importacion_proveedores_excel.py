@@ -100,8 +100,6 @@ def procesar_tio_pujio(archivo_entrada, progreso=None):
         if descripcion.upper().startswith("SUBTOTALES"):
             continue
 
-        # Las lineas de producto tienen codigo en B, descripcion en C,
-        # hormas en H y kilos en K.
         codigo_producto = textos[1] if len(textos) > 1 else ""
         hormas = valores[7] if len(valores) > 7 and not pd.isna(valores[7]) else ""
         kilos = valores[10] if len(valores) > 10 and not pd.isna(valores[10]) else ""
@@ -204,12 +202,51 @@ def procesar_detalle_ventas(archivo_entrada, progreso=None):
     return salida
 
 
+def _normalizar_salida_tremblay(ruta_procesada, progreso=None):
+    """Convierte la salida histórica de Tremblay al contrato común."""
+    df = pd.read_excel(ruta_procesada)
+    requeridas = {"Cliente", "Nombre_Cliente", "Producto", "Cantidad", "KG", "Bultos"}
+    if not requeridas.issubset(set(df.columns)):
+        raise ValueError("La salida de Tremblay no contiene las columnas esperadas")
+
+    filas = []
+    total = max(len(df), 1)
+    for indice, row in df.iterrows():
+        filas.append({
+            "codigo_cliente": row.get("Cliente", ""),
+            "detalle_cliente": _texto(row.get("Nombre_Cliente")),
+            "destino": _texto(row.get("Lugar_Entrega")),
+            "comprobante": _texto(row.get("Comprobante")),
+            "cantidad": "" if pd.isna(row.get("Cantidad")) else row.get("Cantidad"),
+            "producto": _texto(row.get("Producto")),
+            "bultos": "" if pd.isna(row.get("Bultos")) else row.get("Bultos"),
+            "kilos": "" if pd.isna(row.get("KG")) else row.get("KG"),
+            "observaciones": _texto(row.get("Observaciones")),
+        })
+        if indice % 25 == 0:
+            _notificar(progreso, 25 + int((indice + 1) / total * 65))
+
+    _notificar(progreso, 95)
+    salida = _guardar_temporal(filas)
+    _notificar(progreso, 100)
+    return salida
+
+
+def procesar_tremblay_normalizado(archivo_entrada, progreso=None):
+    """Procesa un informe .xls Tremblay y devuelve columnas normalizadas."""
+    from utiles.importacion_informe_tremblay import procesar_informe_tremblay
+
+    _notificar(progreso, 15)
+    ruta_historica = procesar_informe_tremblay(archivo_entrada)
+    return _normalizar_salida_tremblay(ruta_historica, progreso=progreso)
+
+
 def normalizar_archivo_pedidos(archivo_entrada, progreso=None):
     """Detecta formatos conocidos y devuelve un xlsx normalizado.
 
-    Retorna ``None`` si el archivo no corresponde a uno de estos dos formatos,
-    permitiendo que los importadores historicos (por ejemplo Tremblay) sigan
-    funcionando sin cambios.
+    Retorna ``None`` si el archivo no corresponde a un formato conocido. Los
+    .xls de Tremblay también se normalizan aquí para que el controlador use un
+    único contrato de columnas junto con Tío Pujio y Detalle de Ventas.
     """
     if not archivo_entrada or not os.path.exists(archivo_entrada):
         return None
@@ -225,5 +262,11 @@ def normalizar_archivo_pedidos(archivo_entrada, progreso=None):
 
     if _buscar_fila_encabezados(bruto) is not None:
         return procesar_detalle_ventas(archivo_entrada, progreso=progreso)
+
+    if str(archivo_entrada).lower().endswith(".xls"):
+        try:
+            return procesar_tremblay_normalizado(archivo_entrada, progreso=progreso)
+        except (ValueError, FileNotFoundError):
+            return None
 
     return None
