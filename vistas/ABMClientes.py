@@ -1,7 +1,8 @@
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QLineEdit, QComboBox,
-    QCheckBox, QTextEdit, QFormLayout, QListWidget, QAbstractItemView,
+    QCheckBox, QTextEdit, QFormLayout, QListWidget, QAbstractItemView, QFrame,
 )
 from modelos.Clientes import Cliente, cboRutaReparto
 from pyqt5libs.libs.vistas.VistaBase import VistaBase
@@ -23,6 +24,51 @@ class ABMClientesView(ABM):
     def __init__(self, *args, **kwargs):
         self.on_cargar_lugares = None
         super().__init__(*args, **kwargs)
+        self._ajustar_ficha_cliente()
+
+    def _ajustar_ficha_cliente(self):
+        """Mantiene las acciones visibles y compacta la ficha de clientes.
+
+        El ABM base usa scroll para formularios largos. En clientes eso dejaba
+        Guardar/Cancelar fuera de pantalla y empujaba Lugares de entrega hacia
+        abajo. Dejamos el scroll solo para el contenido y fijamos las acciones
+        al pie de la ficha.
+        """
+        self.resize(max(self.width(), 1060), max(self.height(), 720))
+
+        observaciones = self.controles.get(Cliente.observaciones.name)
+        if observaciones is not None:
+            observaciones.setMinimumHeight(80)
+            observaciones.setMaximumHeight(105)
+
+        if hasattr(self, "grp_lugares"):
+            self.grp_lugares.setMinimumHeight(250)
+
+        if hasattr(self, "scrollDetalle"):
+            self.scrollDetalle.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            self.scrollDetalle.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        if not all(hasattr(self, attr) for attr in (
+            "verticalLayoutDatos", "grdBotones", "layoutDetalle", "tabDetalle"
+        )):
+            return
+
+        # Sacar Guardar/Cancelar del contenido desplazable y dejarlos siempre
+        # visibles en un pie fijo.
+        self.verticalLayoutDatos.removeItem(self.grdBotones)
+        self.grdBotones.setParent(None)
+
+        self.footerFicha = QFrame(self.tabDetalle)
+        self.footerFicha.setObjectName("footerFichaClientes")
+        self.footerFicha.setStyleSheet(
+            "QFrame#footerFichaClientes {"
+            "background:#ffffff; border-top:1px solid #e5e7eb;"
+            "}"
+        )
+        footer_layout = QVBoxLayout(self.footerFicha)
+        footer_layout.setContentsMargins(22, 10, 22, 12)
+        footer_layout.addLayout(self.grdBotones)
+        self.layoutDetalle.addWidget(self.footerFicha)
         
     @inicializar_y_capturar_excepciones
     def ArmaCarga(self, *args, **kwargs):
