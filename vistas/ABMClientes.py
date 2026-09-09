@@ -92,7 +92,7 @@ class ABMClientesView(ABM):
     @inicializar_y_capturar_excepciones
     def BotonesAdicionales(self):
         self.btn_codigo = self.CreaBoton(texto="Codigo", imagen_str="proveedor.png")
-        self.btn_consolidar = self.CreaBoton(texto="Consolidar", imagen_str="clientes.png")
+        self.btn_consolidar = self.CreaBoton(texto="Consolidar", imagen_str="proveedor.png")
         self.horizontalLayout.addWidget(self.btn_codigo)
         self.horizontalLayout.addWidget(self.btn_consolidar)
 
@@ -204,7 +204,7 @@ class ConsolidacionClientesView(VistaBase):
         layout.addWidget(self.txt_resumen)
 
         botones = QHBoxLayout()
-        self.btn_simular = self.CreaBoton("Simular", imagen_str="search.png")
+        self.btn_simular = self.CreaBoton("Simular", imagen_str="edit.png")
         self.btn_consolidar = self.CreaBoton("Consolidar", imagen_str="save.png")
         self.btn_consolidar.setEnabled(False)
         self.btn_cerrar = self.CreaBoton("Cerrar", imagen_str="close.png")
