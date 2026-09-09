@@ -1,3 +1,5 @@
+from PyQt5.QtWidgets import QMessageBox
+
 from modelos.Clientes import (
     Cliente, CodigoClienteProveedor, LugarEntrega, Localidades, RutaReparto,
 )
@@ -7,7 +9,11 @@ from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.libs.controladores.ControladorBaseABM import ControladorBaseABM
 from pyqt5libs.pyqt5libs import Ventanas
 from pyqt5libs.pyqt5libs.utiles import inicializar_y_capturar_excepciones
-from vistas.ABMClientes import ABMClientesView, CodigoClienteProveedorView, LugarEntregaView
+from utiles.consolidacion_clientes import simular_consolidacion, consolidar_clientes
+from vistas.ABMClientes import (
+    ABMClientesView, CodigoClienteProveedorView, LugarEntregaView,
+    ConsolidacionClientesView,
+)
 
 
 class ABMClientesController(ControladorBaseABM):
@@ -24,6 +30,7 @@ class ABMClientesController(ControladorBaseABM):
     def conectarWidgets(self):
         super().conectarWidgets()
         self.view.btn_codigo.clicked.connect(self.on_click_btn_codigo)
+        self.view.btn_consolidar.clicked.connect(self.on_click_btn_consolidar)
         self.view.btn_lugar_agregar.clicked.connect(self.on_click_lugar_agregar)
         self.view.btn_lugar_editar.clicked.connect(self.on_click_lugar_editar)
         self.view.btn_lugar_borrar.clicked.connect(self.on_click_lugar_borrar)
@@ -38,6 +45,96 @@ class ABMClientesController(ControladorBaseABM):
         controlador.id_cliente = id_cliente
         controlador.CargaDatos()
         controlador.exec_()
+
+    @reconnect_if_needed
+    @inicializar_y_capturar_excepciones
+    def on_click_btn_consolidar(self, *args, **kwargs):
+        vista = ConsolidacionClientesView()
+        clientes = list(
+            Cliente.select()
+            .where(Cliente.activo == True)
+            .order_by(Cliente.razon_social)
+        )
+        if len(clientes) < 2:
+            Ventanas.showAlert("Sistema", "Se necesitan al menos dos clientes activos para consolidar")
+            return
+
+        destino_preseleccionado = None
+        row = self.view.tableView.filaSeleccionada()
+        if row != -1:
+            destino_preseleccionado = self.view.tableView.ObtenerItemNumerico(fila=row, col=0)
+        vista.cargar_clientes(
+            [(x.id, x.razon_social) for x in clientes],
+            destino_preseleccionado=destino_preseleccionado,
+        )
+
+        estado = {"resumen": None, "firma": None}
+
+        def firma_actual():
+            destino = vista.destino_id()
+            origenes = tuple(sorted(x for x in vista.origenes_ids() if x != destino))
+            return destino, origenes
+
+        def simular():
+            destino, origenes = firma_actual()
+            try:
+                resumen = simular_consolidacion(destino, origenes)
+            except Exception as exc:
+                estado["resumen"] = None
+                estado["firma"] = None
+                vista.mostrar_resumen("No se puede simular: {}".format(exc), False)
+                return
+            estado["resumen"] = resumen
+            estado["firma"] = (destino, origenes)
+            texto = resumen.texto()
+            if resumen.advertencias:
+                texto += "\n\nLa consolidación requiere revisión especial por las advertencias indicadas."
+            else:
+                texto += "\n\nLa simulación no modificó datos. Puede continuar con Consolidar."
+            vista.mostrar_resumen(texto, habilitar=not bool(resumen.advertencias))
+
+        def ejecutar():
+            destino, origenes = firma_actual()
+            if not estado["resumen"] or estado["firma"] != (destino, origenes):
+                Ventanas.showAlert("Sistema", "La selección cambió. Ejecute Simular nuevamente")
+                vista.btn_consolidar.setEnabled(False)
+                return
+            if estado["resumen"].advertencias:
+                Ventanas.showAlert(
+                    "Sistema",
+                    "Hay advertencias de identidad (por ejemplo CUIT distinto). No se consolidará automáticamente.",
+                )
+                return
+            respuesta = QMessageBox.question(
+                vista,
+                "Confirmar consolidación",
+                "Esta operación reasignará históricos, códigos y lugares de entrega dentro de una transacción. "
+                "Los clientes origen quedarán inactivos. ¿Desea continuar?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if respuesta != QMessageBox.Yes:
+                return
+            try:
+                resumen = consolidar_clientes(destino, origenes)
+            except Exception as exc:
+                Ventanas.showAlert("ERROR", "No se pudo consolidar. Se revirtieron los cambios: {}".format(exc))
+                return
+            vista.mostrar_resumen(
+                resumen.texto() + "\n\nCONSOLIDACIÓN COMPLETADA. Los clientes origen quedaron inactivos.",
+                False,
+            )
+            estado["resumen"] = None
+            estado["firma"] = None
+            try:
+                self.CargaDatos()
+            except Exception:
+                pass
+
+        vista.btn_simular.clicked.connect(simular)
+        vista.btn_consolidar.clicked.connect(ejecutar)
+        vista.btn_cerrar.clicked.connect(vista.Cerrar)
+        vista.exec_()
 
     def _cliente_ficha(self):
         try:
