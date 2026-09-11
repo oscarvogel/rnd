@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
 
 
 class BandejaPedidosView(QWidget):
-    COLUMNAS = ["Sel.", "Estado", "Cliente", "Ruta", "Comprobante", "Producto", "Cantidad", "KG", "Bultos", "Observaciones"]
+    COLUMNAS = ["Sel.", "Estado", "Cliente", "Ruta", "Comprobante", "Factura", "Remito", "Producto", "Cantidad", "KG", "Bultos", "Observaciones"]
     COLUMNA_COMPROBANTE = 4
 
     def __init__(self, parent=None):
@@ -103,8 +103,9 @@ class BandejaPedidosView(QWidget):
             self.tabla.setItem(row, 0, chk)
             valores = [
                 pedido.estado(empleado_generico, camion_generico), pedido.cliente,
-                pedido.ruta, pedido.comprobante, pedido.producto, str(pedido.cantidad),
-                str(pedido.kg), str(pedido.bultos), pedido.observaciones or "",
+                pedido.ruta, pedido.comprobante, pedido.factura, pedido.remito,
+                pedido.producto, str(pedido.cantidad), str(pedido.kg),
+                str(pedido.bultos), pedido.observaciones or "",
             ]
             for col, valor in enumerate(valores, start=1):
                 self.tabla.setItem(row, col, QTableWidgetItem(str(valor)))
