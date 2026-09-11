@@ -13,6 +13,12 @@ import unicodedata
 import pandas as pd
 
 
+IMPORTADOR_AUTO = "AUTO"
+IMPORTADOR_TREMBLAY = "TREMBLAY"
+IMPORTADOR_TIO_PUJIO = "TIO_PUJIO"
+IMPORTADOR_DETALLE_VENTAS = "DETALLE_VENTAS"
+IMPORTADOR_COLUMNAS = "COLUMNAS"
+
 COLUMNAS_NORMALIZADAS = [
     "codigo_cliente",
     "detalle_cliente",
@@ -248,15 +254,27 @@ def procesar_tremblay_normalizado(archivo_entrada, progreso=None):
     return _normalizar_salida_tremblay(ruta_historica, progreso=progreso)
 
 
-def normalizar_archivo_pedidos(archivo_entrada, progreso=None):
-    """Detecta formatos conocidos y devuelve un xlsx normalizado.
+def normalizar_archivo_pedidos(archivo_entrada, progreso=None, metodo=IMPORTADOR_AUTO):
+    """Normaliza el archivo usando el método configurado en el proveedor.
 
-    Retorna ``None`` si el archivo no corresponde a un formato conocido. Los
-    .xls de Tremblay también se normalizan aquí para que el controlador use un
-    único contrato de columnas junto con Tío Pujio y Detalle de Ventas.
+    AUTO conserva la detección histórica. COLUMNAS devuelve None porque ese
+    proveedor usa el mapeo de ProcesoLista directamente sobre su archivo.
     """
     if not archivo_entrada or not os.path.exists(archivo_entrada):
         return None
+
+    metodo = str(metodo or IMPORTADOR_AUTO).strip().upper()
+    if metodo == IMPORTADOR_COLUMNAS:
+        return None
+    if metodo == IMPORTADOR_TREMBLAY:
+        try:
+            return procesar_tremblay_normalizado(archivo_entrada, progreso=progreso)
+        except (ValueError, FileNotFoundError):
+            return None
+    if metodo == IMPORTADOR_TIO_PUJIO:
+        return procesar_tio_pujio(archivo_entrada, progreso=progreso)
+    if metodo == IMPORTADOR_DETALLE_VENTAS:
+        return procesar_detalle_ventas(archivo_entrada, progreso=progreso)
 
     try:
         bruto = pd.read_excel(archivo_entrada, sheet_name=0, header=None)
