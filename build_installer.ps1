@@ -76,7 +76,7 @@ Invoke-Step 'Compiling Inno Setup installer' {
 }
 
 Invoke-Step 'Verifying installer output' {
-    $Installer = Join-Path $Root 'dist\installer\setup_rnd.exe'
+    $Installer = Join-Path $Root 'dist\installer\RND_Setup.exe'
     if (-not (Test-Path $Installer)) {
         throw "Missing installer output: $Installer"
     }
