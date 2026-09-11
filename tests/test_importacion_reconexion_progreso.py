@@ -3,11 +3,12 @@ from unittest.mock import Mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
 from peewee import OperationalError
 
 import controladores.ImportacionPedidos as importacion
-from vistas.ImportacionPedidos import BarraProgresoImportacion
+from vistas.ImportacionPedidos import BarraProgresoImportacion, ImportacionPedidosView
 
 
 def test_lectura_segura_reconecta_y_reintenta_una_sola_vez(monkeypatch):
@@ -55,3 +56,11 @@ def test_controlador_no_envuelve_save_en_retry_de_lectura():
     source = open("controladores/ImportacionPedidos.py", encoding="utf-8").read()
     assert "hoja_ruta.save()" in source
     assert "self._leer_db_con_reintento(\n                    lambda: hoja_ruta.save()" not in source
+
+
+def test_importacion_pedidos_abre_maximizada():
+    app = QApplication.instance() or QApplication([])
+    view = ImportacionPedidosView()
+    assert view.windowState() & Qt.WindowMaximized
+    view.close()
+    app.processEvents()
