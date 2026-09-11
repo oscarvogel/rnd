@@ -24,7 +24,7 @@ class PedidoBandeja:
     lugar_entrega: str = ""
     lugar_entrega_id: int = 0
     comprobante: str = ""
-    producto: str
+    producto: str = ""
     cantidad: object = 0
     kg: object = 0
     bultos: object = 0
