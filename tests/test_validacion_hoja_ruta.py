@@ -5,9 +5,10 @@ from modelos.EstadoHojaRuta import EstadoHojaRuta
 from utiles.validacion_hoja_ruta import puede_transicionar, validar_hoja
 
 
-def pedido(cliente=10, comprobante="A-1", cantidad=1, kg=100, bultos=5, responsable=7, equipo=8):
+def pedido(cliente=10, lugar=20, comprobante="A-1", cantidad=1, kg=100, bultos=5, responsable=7, equipo=8):
     return SimpleNamespace(
         cliente_id=cliente,
+        lugar_entrega_id=lugar,
         comprobante=comprobante,
         cantidad=cantidad,
         kg=kg,
@@ -66,3 +67,10 @@ def test_despachada_no_retrocede_automaticamente():
     permitido, mensaje = puede_transicionar(EstadoHojaRuta.DESPACHADA, EstadoHojaRuta.LISTA, resultado)
     assert permitido is False
     assert "no puede retroceder" in mensaje
+
+
+def test_sin_cliente_o_lugar_bloquea_cierre():
+    resultado = validar_hoja([pedido(cliente=0)], object(), 3, 23, 1)
+    assert any(item.codigo == "datos" and not item.cumplido for item in resultado.items)
+    resultado = validar_hoja([pedido(lugar=0)], object(), 3, 23, 1)
+    assert any(item.codigo == "datos" and not item.cumplido for item in resultado.items)
