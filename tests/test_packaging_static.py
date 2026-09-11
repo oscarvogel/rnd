@@ -10,7 +10,7 @@ class PackagingStaticTests(unittest.TestCase):
     def test_pyinstaller_spec_includes_runtime_resources(self):
         spec = (ROOT / "main.spec").read_text(encoding="utf-8")
 
-        for resource in ("imagenes", "temas", "sistema.ini", "rnd.ini"):
+        for resource in ("assets", "imagenes", "temas", "sistema.ini", "rnd.ini"):
             with self.subTest(resource=resource):
                 self.assertIn(resource, spec)
 
