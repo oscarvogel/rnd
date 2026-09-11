@@ -49,6 +49,12 @@ class ImportacionPedidosController(ControladorBase):
         self.archivo_normalizado = False
         self.conectarWidgets()
 
+    def run(self):
+        """Muestra el importador maximizado y al frente de la ventana principal."""
+        self.view.showMaximized()
+        self.view.raise_()
+        self.view.activateWindow()
+
     def conectarWidgets(self):
         self.view.btn_examinar.clicked.connect(self.seleccionar_archivo)
         self.view.btn_importar.clicked.connect(self.importar_pedidos)
