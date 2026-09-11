@@ -30,6 +30,7 @@ class Proveedor(ModeloBase):
     contacto = peewee.CharField(max_length=100, null=True, verbose_name='Contacto')
     activo = peewee.BooleanField(default=True, verbose_name='Activo')
     observaciones = peewee.TextField(null=True, verbose_name='Observaciones')
+    metodo_importacion = peewee.CharField(max_length=30, default="COLUMNAS", verbose_name="Método importación")
     
     def __str__(self):
         return self.razon_social

@@ -12,7 +12,7 @@ from pyqt5libs.pyqt5libs.utiles import imagen, inicializar_y_capturar_excepcione
 
 class ABMProveedoresView(ABM):
     model = Proveedor
-    camposAMostrar = [Proveedor.id, Proveedor.razon_social, Proveedor.direccion, Proveedor.telefono, Proveedor.cuit, Proveedor.contacto, Proveedor.activo]
+    camposAMostrar = [Proveedor.id, Proveedor.razon_social, Proveedor.direccion, Proveedor.telefono, Proveedor.cuit, Proveedor.contacto, Proveedor.metodo_importacion, Proveedor.activo]
     ordenBusqueda = [Proveedor.razon_social]
     campoClave = Proveedor.id
     titulo = "Tabla de Fabricantes y Proveedores"
@@ -30,4 +30,5 @@ class ABMProveedoresView(ABM):
         self.ArmaEntrada(Proveedor.telefono, boxlayout=direccion)
         cuit = self.ArmaEntrada(Proveedor.cuit, boxlayout=direccion)
         self.ArmaEntrada(Proveedor.contacto, boxlayout=cuit)
-        self.ArmaEntrada(Proveedor.observaciones, control=TextEdit())
+        metodo = self.ArmaEntrada(Proveedor.metodo_importacion)
+        self.ArmaEntrada(Proveedor.observaciones, control=TextEdit(), boxlayout=metodo)

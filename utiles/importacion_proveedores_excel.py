@@ -13,6 +13,11 @@ import unicodedata
 import pandas as pd
 
 
+METODO_COLUMNAS = "COLUMNAS"
+METODO_TIO_PUJIO = "TIO_PUJIO"
+METODO_DETALLE_VENTAS = "DETALLE_VENTAS"
+METODO_TREMBLAY = "TREMBLAY"
+
 COLUMNAS_NORMALIZADAS = [
     "codigo_cliente",
     "detalle_cliente",
@@ -248,15 +253,20 @@ def procesar_tremblay_normalizado(archivo_entrada, progreso=None):
     return _normalizar_salida_tremblay(ruta_historica, progreso=progreso)
 
 
-def normalizar_archivo_pedidos(archivo_entrada, progreso=None):
-    """Detecta formatos conocidos y devuelve un xlsx normalizado.
+def normalizar_archivo_pedidos(archivo_entrada, progreso=None, metodo=None):
+    """Normaliza usando el método explícito del proveedor.
 
-    Retorna ``None`` si el archivo no corresponde a un formato conocido. Los
-    .xls de Tremblay también se normalizan aquí para que el controlador use un
-    único contrato de columnas junto con Tío Pujio y Detalle de Ventas.
+    Si metodo es None conserva autodetección únicamente por compatibilidad.
+    El flujo de UI debe pasar siempre el método configurado en el proveedor.
     """
     if not archivo_entrada or not os.path.exists(archivo_entrada):
         return None
+
+    metodo = (metodo or "").strip().upper()
+    if metodo == METODO_COLUMNAS:
+        return None
+    if metodo == METODO_TREMBLAY:
+        return procesar_tremblay_normalizado(archivo_entrada, progreso=progreso)
 
     try:
         bruto = pd.read_excel(archivo_entrada, sheet_name=0, header=None)
@@ -264,16 +274,27 @@ def normalizar_archivo_pedidos(archivo_entrada, progreso=None):
         return None
 
     _notificar(progreso, 5)
-    if _es_tio_pujio(bruto):
+
+    if metodo == METODO_TIO_PUJIO:
+        if not _es_tio_pujio(bruto):
+            raise ValueError("El archivo no coincide con el formato Tío Pujio configurado para este proveedor")
         return procesar_tio_pujio(archivo_entrada, progreso=progreso)
 
-    if _buscar_fila_encabezados(bruto) is not None:
+    if metodo == METODO_DETALLE_VENTAS:
+        if _buscar_fila_encabezados(bruto) is None:
+            raise ValueError("El archivo no coincide con el formato Detalle de Ventas configurado para este proveedor")
         return procesar_detalle_ventas(archivo_entrada, progreso=progreso)
 
+    if metodo:
+        raise ValueError("Método de importación desconocido: {}".format(metodo))
+
+    if _es_tio_pujio(bruto):
+        return procesar_tio_pujio(archivo_entrada, progreso=progreso)
+    if _buscar_fila_encabezados(bruto) is not None:
+        return procesar_detalle_ventas(archivo_entrada, progreso=progreso)
     if str(archivo_entrada).lower().endswith(".xls"):
         try:
             return procesar_tremblay_normalizado(archivo_entrada, progreso=progreso)
         except (ValueError, FileNotFoundError):
             return None
-
     return None
