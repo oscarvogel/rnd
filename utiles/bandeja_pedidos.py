@@ -61,3 +61,30 @@ def validar_reasignacion(pedidos, ruta_id):
     if len(ids) != len(set(ids)):
         return False, "La selección contiene pedidos duplicados"
     return True, ""
+
+
+def clave_factura(pedido):
+    """Identifica una factura dentro de la bandeja sin depender del producto."""
+    comprobante = str(getattr(pedido, "comprobante", "") or "").strip()
+    cliente = str(getattr(pedido, "cliente", "") or "").strip().casefold()
+    if not comprobante:
+        return None
+    return comprobante, cliente
+
+
+def expandir_seleccion_por_factura(pedidos, seleccionados):
+    """Incluye todas las líneas/productos de las facturas seleccionadas.
+
+    Basta seleccionar una línea de una factura para que la operación se aplique
+    a todas sus líneas. Los registros sin comprobante se mantienen sólo si
+    fueron seleccionados explícitamente.
+    """
+    pedidos = list(pedidos or [])
+    seleccionados = list(seleccionados or [])
+    ids_explicitos = {p.id for p in seleccionados}
+    claves = {clave_factura(p) for p in seleccionados}
+    claves.discard(None)
+    return [
+        p for p in pedidos
+        if p.id in ids_explicitos or clave_factura(p) in claves
+    ]
