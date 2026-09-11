@@ -44,7 +44,13 @@ class ResumenImportacionTests(unittest.TestCase):
         self.assertIs(obtener_resultado_dia(fecha), resumen)
 
     def test_tremblay_tiene_ayuda_especifica(self):
-        self.assertIn("Tremblay", ayuda_proveedor("15"))
+        self.assertIn("Tremblay", ayuda_proveedor("TREMBLAY"))
+
+    def test_columnas_configuradas_tiene_ayuda(self):
+        self.assertIn("Columnas configuradas", ayuda_proveedor("COLUMNAS"))
+
+    def test_auto_indica_que_puede_configurarse_en_maestros(self):
+        self.assertIn("Maestros > Proveedores", ayuda_proveedor("AUTO"))
 
 
 if __name__ == "__main__":
