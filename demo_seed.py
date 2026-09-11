@@ -153,8 +153,13 @@ def prepare_demo_database() -> None:
             "contacto": "Administracion",
             "activo": True,
             "observaciones": "Proveedor de demostracion",
+            "metodo_importacion": "TREMBLAY",
         },
     )
+    if proveedor.metodo_importacion != "TREMBLAY":
+        proveedor.metodo_importacion = "TREMBLAY"
+        proveedor.save()
+
     for idx, cliente in enumerate(clientes, start=1):
         CodigoClienteProveedor.get_or_create(
             codigo=f"CLI-{idx:03d}",
