@@ -1,18 +1,25 @@
 from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout
 
-from modelos.Proveedores import Proveedor
+from modelos.Proveedores import IMPORTADORES_PROVEEDOR, Proveedor
 from pyqt5libs.libs.vistas.VistaBase import VistaBase
 from pyqt5libs.libs.vistas.ABM import ABM
 from pyqt5libs.pyqt5libs.Botones import Boton
+from pyqt5libs.pyqt5libs.ComboBox import Combo
 from pyqt5libs.pyqt5libs.EntradaTexto import TextEdit
 from pyqt5libs.pyqt5libs.Grillas import Grilla
 from pyqt5libs.pyqt5libs.utiles import imagen, inicializar_y_capturar_excepciones
 
 
+class ComboImportador(Combo):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.CargaDatosValores(IMPORTADORES_PROVEEDOR)
+
+
 class ABMProveedoresView(ABM):
     model = Proveedor
-    camposAMostrar = [Proveedor.id, Proveedor.razon_social, Proveedor.direccion, Proveedor.telefono, Proveedor.cuit, Proveedor.contacto, Proveedor.activo]
+    camposAMostrar = [Proveedor.id, Proveedor.razon_social, Proveedor.direccion, Proveedor.telefono, Proveedor.cuit, Proveedor.contacto, Proveedor.importador, Proveedor.activo]
     ordenBusqueda = [Proveedor.razon_social]
     campoClave = Proveedor.id
     titulo = "Tabla de Fabricantes y Proveedores"
@@ -30,4 +37,6 @@ class ABMProveedoresView(ABM):
         self.ArmaEntrada(Proveedor.telefono, boxlayout=direccion)
         cuit = self.ArmaEntrada(Proveedor.cuit, boxlayout=direccion)
         self.ArmaEntrada(Proveedor.contacto, boxlayout=cuit)
+        self.ArmaEntrada(Proveedor.importador, control=ComboImportador())
+        self.ArmaEntrada(Proveedor.activo)
         self.ArmaEntrada(Proveedor.observaciones, control=TextEdit())
