@@ -9,7 +9,7 @@ from utiles.bandeja_pedidos import (
 
 def pedido(**kwargs):
     base = dict(
-        id=1, cliente="Cliente", comprobante="A1", producto="Producto",
+        id=1, cliente="Cliente", cliente_id=10, lugar_entrega="Central", lugar_entrega_id=20, comprobante="A1", producto="Producto",
         cantidad=1, kg=100, bultos=2, ruta_id=1, ruta="Centro",
         responsable_id=23, equipo_id=1,
     )
@@ -48,3 +48,8 @@ def test_reasignacion_rechaza_ids_duplicados():
     valido, mensaje = validar_reasignacion(duplicados, 2)
     assert valido is False
     assert "duplicados" in mensaje.lower()
+
+
+def test_pedido_sin_cliente_o_lugar_queda_observado():
+    assert pedido(cliente_id=0, lugar_entrega_id=0).estado("23", "1") == ESTADO_OBSERVADO
+    assert pedido(lugar_entrega_id=0).estado("23", "1") == ESTADO_OBSERVADO
