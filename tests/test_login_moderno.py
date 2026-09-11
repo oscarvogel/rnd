@@ -19,20 +19,21 @@ def test_login_moderno_mantiene_contrato_y_marca():
         assert atributo in source
 
     assert "RND Logística - Inicio de sesión" in source
-    assert "Desarrollado por" in source
-    assert "vogelconsultoria.com.ar" in source
+    assert "rnd_login_mockup.b64" in source
 
 
-def test_login_usa_recursos_svg_y_no_dibujo_manual():
+def test_login_usa_mockup_aprobado_y_controles_reales():
     source = LOGIN.read_text(encoding="utf-8")
 
-    assert 'SvgImageLabel("rnd_hero.svg")' in source
-    assert 'SvgImageLabel("rnd_logo.svg")' in source
-    assert 'SvgImageLabel("vogel_logo.svg")' in source
-    assert "paintEvent" not in source
+    assert "base64.b64decode" in source
+    assert "self.background" in source
+    assert "self.cboUsuario = CboUsuario(Form)" in source
+    assert "self.textPass = Password(Form)" in source
+    assert "self.btnIngresar = QPushButton" in source
+    assert "self.btnCerrar = QPushButton" in source
     assert "QPainter" not in source
+    assert "paintEvent" not in source
 
-    for filename in ("rnd_hero.svg", "rnd_logo.svg", "vogel_logo.svg"):
-        path = ASSETS / filename
-        assert path.exists()
-        assert "<svg" in path.read_text(encoding="utf-8")
+    asset = ASSETS / "rnd_login_mockup.b64"
+    assert asset.exists()
+    assert len(asset.read_text(encoding="ascii").strip()) > 10000
