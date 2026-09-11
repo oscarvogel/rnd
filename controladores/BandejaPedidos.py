@@ -2,8 +2,10 @@
 from datetime import date
 
 from PyQt5.QtCore import QDate
+from PyQt5.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from peewee import JOIN
 
-from modelos.Clientes import RutaReparto
+from modelos.Clientes import Cliente, LugarEntrega, RutaReparto
 from modelos.HojaRuta import HojaDeRuta
 from modelos.ModeloBase import reconnect_if_needed
 from modelos.ParametrosSistema import ParamSist
@@ -32,6 +34,7 @@ class BandejaPedidosController(ControladorBase):
         self.view.btn_actualizar.clicked.connect(self.cargar_pedidos)
         self.view.solo_pendientes.toggled.connect(self.cargar_pedidos)
         self.view.btn_organizar.clicked.connect(self.organizar_seleccion)
+        self.view.btn_cliente_lugar.clicked.connect(self.asignar_cliente_lugar)
         self.view.btn_siguiente.clicked.connect(self.ir_asignacion)
 
     def fecha_actual(self):
@@ -49,7 +52,7 @@ class BandejaPedidosController(ControladorBase):
     def cargar_pedidos(self, *args, **kwargs):
         query = (
             HojaDeRuta.select(HojaDeRuta, RutaReparto)
-            .join(RutaReparto)
+            .join(RutaReparto, JOIN.LEFT_OUTER)
             .where(HojaDeRuta.fecha == self.fecha_actual())
             .order_by(HojaDeRuta.ruta, HojaDeRuta.nombre_cliente, HojaDeRuta.id)
         )
@@ -64,9 +67,28 @@ class BandejaPedidosController(ControladorBase):
         self.actualizar_totales()
 
     def _convertir(self, h):
+        cliente_nombre = ""
+        if h.cliente_id:
+            try:
+                cliente_nombre = h.cliente.razon_social or ""
+            except Exception:
+                cliente_nombre = h.nombre_cliente or ""
+        else:
+            cliente_nombre = h.nombre_cliente or ""
+
+        lugar_nombre = ""
+        if h.lugar_entrega_id:
+            try:
+                lugar_nombre = h.lugar_entrega.nombre or ""
+            except Exception:
+                lugar_nombre = ""
+
         return PedidoBandeja(
             id=h.id,
-            cliente=h.nombre_cliente or "",
+            cliente=cliente_nombre,
+            cliente_id=h.cliente_id or 0,
+            lugar_entrega=lugar_nombre,
+            lugar_entrega_id=h.lugar_entrega_id or 0,
             comprobante=h.comprobante or "",
             producto=h.producto or "",
             cantidad=h.cantidad or 0,
@@ -86,6 +108,142 @@ class BandejaPedidosController(ControladorBase):
     def actualizar_totales(self):
         totales = totales_seleccion(self.pedidos_seleccionados())
         self.view.set_totales(totales["pedidos"], totales["kg"], totales["bultos"])
+
+    @reconnect_if_needed
+    @inicializar_y_capturar_excepciones
+    def asignar_cliente_lugar(self, *args, **kwargs):
+        pedidos = self.pedidos_seleccionados()
+        if not pedidos:
+            showAlert("Sistema", "Seleccione al menos un pedido para asignar cliente y lugar de entrega")
+            return
+
+        dialogo = QDialog(self.view)
+        dialogo.setWindowTitle("Asignar cliente y lugar de entrega")
+        dialogo.setMinimumWidth(520)
+        layout = QVBoxLayout(dialogo)
+        layout.addWidget(QLabel(
+            "La asignación se aplicará a {} pedido(s) seleccionado(s).".format(len(pedidos))
+        ))
+
+        fila_cliente = QHBoxLayout()
+        fila_cliente.addWidget(QLabel("Cliente:"))
+        cbo_cliente = QComboBox()
+        cbo_cliente.setMinimumWidth(340)
+        fila_cliente.addWidget(cbo_cliente, 1)
+        layout.addLayout(fila_cliente)
+
+        fila_lugar = QHBoxLayout()
+        fila_lugar.addWidget(QLabel("Lugar de entrega:"))
+        cbo_lugar = QComboBox()
+        cbo_lugar.setMinimumWidth(340)
+        fila_lugar.addWidget(cbo_lugar, 1)
+        layout.addLayout(fila_lugar)
+
+        btn_gestionar = QPushButton("Crear / editar clientes y lugares")
+        layout.addWidget(btn_gestionar)
+
+        clientes = list(
+            Cliente.select()
+            .where(Cliente.activo == True)
+            .order_by(Cliente.razon_social)
+        )
+        cbo_cliente.addItem("Seleccione un cliente", 0)
+        for cliente in clientes:
+            cbo_cliente.addItem(cliente.razon_social, cliente.id)
+
+        def cargar_lugares():
+            cbo_lugar.clear()
+            cliente_id = int(cbo_cliente.currentData() or 0)
+            if not cliente_id:
+                cbo_lugar.addItem("Seleccione primero un cliente", 0)
+                return
+            lugares = list(LugarEntrega.activos_cliente(cliente_id))
+            if not lugares:
+                cbo_lugar.addItem("Este cliente no tiene lugares activos", 0)
+                return
+            cbo_lugar.addItem("Seleccione un lugar de entrega", 0)
+            for lugar in lugares:
+                texto = lugar.nombre
+                if lugar.direccion:
+                    texto += " — {}".format(lugar.direccion)
+                cbo_lugar.addItem(texto, lugar.id)
+            if len(lugares) == 1:
+                cbo_lugar.setCurrentIndex(1)
+            else:
+                principal = next((x for x in lugares if x.principal), None)
+                if principal is not None:
+                    idx = cbo_lugar.findData(principal.id)
+                    if idx >= 0:
+                        cbo_lugar.setCurrentIndex(idx)
+
+        cbo_cliente.currentIndexChanged.connect(cargar_lugares)
+        cargar_lugares()
+
+        if len({p.cliente_id for p in pedidos if p.cliente_id}) == 1:
+            cliente_id = next(iter({p.cliente_id for p in pedidos if p.cliente_id}))
+            idx = cbo_cliente.findData(cliente_id)
+            if idx >= 0:
+                cbo_cliente.setCurrentIndex(idx)
+                lugares_actuales = {p.lugar_entrega_id for p in pedidos if p.lugar_entrega_id}
+                if len(lugares_actuales) == 1:
+                    lugar_id = next(iter(lugares_actuales))
+                    idx_lugar = cbo_lugar.findData(lugar_id)
+                    if idx_lugar >= 0:
+                        cbo_lugar.setCurrentIndex(idx_lugar)
+
+        def gestionar_clientes():
+            from controladores.ABMClientes import ABMClientesController
+            self.gestor_clientes = ABMClientesController()
+            self.gestor_clientes.run()
+            showAlert(
+                "Sistema",
+                "Cuando termine de crear o editar el cliente/lugar, cierre esta ventana y vuelva a abrir 'Asignar cliente / lugar' para refrescar la lista.",
+            )
+
+        btn_gestionar.clicked.connect(gestionar_clientes)
+
+        botones = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        botones.accepted.connect(dialogo.accept)
+        botones.rejected.connect(dialogo.reject)
+        layout.addWidget(botones)
+
+        if dialogo.exec_() != QDialog.Accepted:
+            return
+
+        cliente_id = int(cbo_cliente.currentData() or 0)
+        lugar_id = int(cbo_lugar.currentData() or 0)
+        if not cliente_id or not lugar_id:
+            showAlert("Sistema", "Debe seleccionar un cliente y un lugar de entrega")
+            return
+
+        lugar = LugarEntrega.get_or_none(
+            (LugarEntrega.id == lugar_id) &
+            (LugarEntrega.cliente == cliente_id) &
+            (LugarEntrega.activo == True)
+        )
+        if lugar is None:
+            showAlert("Sistema", "El lugar de entrega seleccionado ya no está disponible")
+            return
+
+        cliente = Cliente.get_by_id(cliente_id)
+        ruta_id = lugar.ruta_reparto_id or cliente.ruta_reparto_id
+        ids = [p.id for p in pedidos]
+        actualizados = (
+            HojaDeRuta.update(
+                cliente=cliente_id,
+                lugar_entrega=lugar_id,
+                ruta=ruta_id,
+                nombre_cliente=cliente.razon_social,
+            )
+            .where(HojaDeRuta.id.in_(ids))
+            .execute()
+        )
+        if actualizados != len(ids):
+            showAlert("Sistema", "No se pudieron actualizar todos los pedidos seleccionados")
+            return
+
+        showAlert("Sistema", "Cliente y lugar de entrega asignados correctamente")
+        self.cargar_pedidos()
 
     @reconnect_if_needed
     @inicializar_y_capturar_excepciones
