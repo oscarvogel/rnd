@@ -45,7 +45,7 @@ class VerHojaRutaView(VistaBase):
         
         self.grilla_datos = Grilla()
         cabeceras = [
-            "Selecciona", "Cliente", "Comprobante", "Producto", "Cantidad", "KG", "Bultos", "Observaciones", "id", "codigo_cliente"
+            "Selecciona", "Cliente", "Comprobante", "Factura", "Remito", "Producto", "Cantidad", "KG", "Bultos", "Observaciones", "id", "codigo_cliente"
         ]
         self.grilla_datos.ArmaCabeceras(cabeceras=cabeceras)
         self.grilla_datos.columnasHabilitadas = [0,]
@@ -94,6 +94,15 @@ class ModificaHojaDeRutaView(VistaBase):
         self.text_comprobante = EntradaTexto()
         layout_datos.addRow(lbl_comprobante, self.text_comprobante)
         
+        lbl_factura = Etiqueta(texto="Factura importada:")
+        self.text_factura = EntradaTexto()
+        self.text_factura.setEnabled(False)
+        layout_datos.addRow(lbl_factura, self.text_factura)
+
+        lbl_remito = Etiqueta(texto="Remito:")
+        self.text_remito = EntradaTexto()
+        layout_datos.addRow(lbl_remito, self.text_remito)
+
         lbl_producto = Etiqueta(texto="Producto:")
         self.text_producto = EntradaTexto()
         layout_datos.addRow(lbl_producto, self.text_producto)
