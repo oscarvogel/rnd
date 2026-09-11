@@ -61,6 +61,17 @@ def prepare_demo_database() -> None:
     ]
     db.create_tables(tables, safe=True)
 
+    # El demo puede venir de una corrida anterior con la tabla ya creada.
+    # create_tables(safe=True) no agrega columnas nuevas: actualizamos el
+    # schema SQLite en sitio para que no sea obligatorio borrar sistema.db.
+    columnas_proveedor = {
+        fila[1] for fila in db.execute_sql("PRAGMA table_info(proveedor)").fetchall()
+    }
+    if "importador" not in columnas_proveedor:
+        db.execute_sql(
+            "ALTER TABLE proveedor ADD COLUMN importador VARCHAR(30) NOT NULL DEFAULT 'AUTO'"
+        )
+
     admin, _ = Usuario.get_or_create(
         usu_id=1,
         defaults={
@@ -153,8 +164,12 @@ def prepare_demo_database() -> None:
             "contacto": "Administracion",
             "activo": True,
             "observaciones": "Proveedor de demostracion",
+            "importador": "TREMBLAY",
         },
     )
+    if proveedor.importador != "TREMBLAY":
+        proveedor.importador = "TREMBLAY"
+        proveedor.save()
     for idx, cliente in enumerate(clientes, start=1):
         CodigoClienteProveedor.get_or_create(
             codigo=f"CLI-{idx:03d}",
@@ -381,6 +396,7 @@ def _seed_menu(Formula, MenuLateral) -> None:
         (f_oper, cab_oper.id, "Validar hoja de ruta", "ValidacionHojaRuta.ValidacionHojaRutaController", "VALIDAR_HOJA", 40, "search.png"),
         (f_maestros, cab_mae.id, "Clientes", "ABMClientes.ABMClientesController", "ABM_CLIENTES", 50, "clientes.png"),
         (f_maestros, cab_mae.id, "Equipos", "ABMEquipos.ABMEquiposController", "ABM_EQUIPOS", 60, "maquinas.png"),
+        (f_maestros, cab_mae.id, "Proveedores", "ABMProveedores.ABMProveedoresController", "ABM_PROVEEDORES", 70, "clientes.png"),
         (f_demo, cab_demo.id, "Restablecer datos demo", "ResetDemo.ResetDemoController", "RESET_DEMO", 900, "edit.png"),
     )
     for padre, menu_parent, nombre, archivo, valid, orden, imag in opciones:
