@@ -20,7 +20,10 @@ def _decimal(valor):
 class PedidoBandeja:
     id: int
     cliente: str
-    comprobante: str
+    cliente_id: int = 0
+    lugar_entrega: str = ""
+    lugar_entrega_id: int = 0
+    comprobante: str = ""
     producto: str
     cantidad: object = 0
     kg: object = 0
@@ -32,7 +35,7 @@ class PedidoBandeja:
     equipo_id: int = 0
 
     def estado(self, empleado_generico, camion_generico):
-        incompleto = not self.ruta_id or not self.cliente or not self.producto
+        incompleto = (not self.ruta_id or not self.cliente_id or not self.cliente or not self.lugar_entrega_id or not self.producto)
         if incompleto or (self.observaciones or "").strip():
             return ESTADO_OBSERVADO
         if str(self.responsable_id) == str(empleado_generico) or str(self.equipo_id) == str(camion_generico):
