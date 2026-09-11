@@ -21,6 +21,7 @@ dist/
 !.env.example
 *.secrets.*
 sistema.local.ini
+sistema.db
 
 # Runtime logs
 *.log
