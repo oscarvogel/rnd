@@ -58,7 +58,7 @@ class ImportacionPedidosController(ControladorBase):
 
     def _actualizar_ayuda_proveedor(self):
         self.view.mostrar_ayuda_proveedor(
-            ayuda_proveedor(self.view.empresa_proveedora.valor())
+            ayuda_proveedor(self._metodo_importacion_proveedor())
         )
 
     def _actualizar_avance_preprocesamiento(self, porcentaje):
