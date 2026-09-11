@@ -2,7 +2,7 @@ import pandas as pd
 import peewee
 
 from PyQt5.QtWidgets import QApplication, QMessageBox
-from modelos.Clientes import BuscadorCliente, CodigoClienteProveedor
+from modelos.Clientes import Cliente, CodigoClienteProveedor, LugarEntrega
 from modelos.HojaRuta import HojaDeRuta
 import modelos.ModeloBase as modelo_base
 from modelos.ModeloBase import reconnect_if_needed
@@ -98,6 +98,46 @@ class ImportacionPedidosController(ControladorBase):
             "lectura de configuración del importador",
         )
         return {str(fila.codigo): fila.columna for fila in filas}
+
+    def _resolver_cliente_lugar(self, proveedor, codigo, nombre_cliente):
+        """Resuelve cliente y lugar de entrega sin interrumpir la importación."""
+        codigo_cliente = self._leer_db_con_reintento(
+            lambda: CodigoClienteProveedor.get_or_none(
+                (CodigoClienteProveedor.codigo == codigo) &
+                (CodigoClienteProveedor.proveedor == proveedor)
+            ),
+            "búsqueda de cliente por código de proveedor",
+        )
+        cliente_obj = None
+        if codigo_cliente is not None and codigo_cliente.cliente_id not in (None, 1):
+            cliente_obj = codigo_cliente.cliente
+        else:
+            nombre = str(nombre_cliente or "").strip()
+            if nombre and nombre.lower() != "nan":
+                cliente_obj = self._leer_db_con_reintento(
+                    lambda: Cliente.get_or_none(
+                        peewee.fn.LOWER(Cliente.razon_social) == nombre.lower()
+                    ),
+                    "búsqueda exacta de cliente por razón social",
+                )
+
+        if cliente_obj is None:
+            return None, None
+
+        principal = self._leer_db_con_reintento(
+            lambda: LugarEntrega.principal_cliente(cliente_obj.id),
+            "búsqueda de lugar de entrega principal",
+        )
+        if principal is not None:
+            return cliente_obj, principal
+
+        lugares = self._leer_db_con_reintento(
+            lambda: list(LugarEntrega.activos_cliente(cliente_obj.id)),
+            "búsqueda de lugares de entrega",
+        )
+        if len(lugares) == 1:
+            return cliente_obj, lugares[0]
+        return cliente_obj, None
 
     def _marcar_interrupcion_conexion(self, procesados, total, exc):
         """Deja la pantalla en un estado claro cuando una escritura queda incierta."""
@@ -313,40 +353,9 @@ class ImportacionPedidosController(ControladorBase):
             nombre_cliente = self.view.grid_datos.ObtenerItem(fila=row, col=columna_nombre)
 
             try:
-                try:
-                    codigo_cliente = self._leer_db_con_reintento(
-                        lambda cliente=cliente: CodigoClienteProveedor.get(
-                            CodigoClienteProveedor.codigo == cliente,
-                            CodigoClienteProveedor.proveedor == proveedor,
-                        ),
-                        "búsqueda de cliente",
-                    )
-                    busqueda = codigo_cliente.cliente_id == 1
-                except peewee.DoesNotExist:
-                    codigo_cliente = None
-                    busqueda = True
-
-                if busqueda:
-                    buscador_cliente = BuscadorCliente()
-                    buscador_cliente.valor_busqueda = nombre_cliente
-                    # Puede crear un Cliente (#45): no envolver en retry automático.
-                    buscador_cliente.buscar(self.view)
-                    if buscador_cliente.lRetval:
-                        # get_or_create/save pueden escribir: no se reintentan automáticamente.
-                        codigo_cliente, _ = CodigoClienteProveedor.get_or_create(
-                            codigo=cliente,
-                            proveedor=proveedor,
-                            defaults={"cliente": buscador_cliente.valorRetorno},
-                        )
-                        codigo_cliente.cliente = buscador_cliente.valorRetorno
-                        codigo_cliente.save()
-                    else:
-                        codigo_cliente = None
-
-                if not codigo_cliente or codigo_cliente.cliente_id == 1:
-                    pendientes += 1
-                    procesados += 1
-                    continue
+                cliente_obj, lugar_entrega = self._resolver_cliente_lugar(
+                    proveedor, cliente, nombre_cliente
+                )
 
                 columna_producto = columnas.get("Producto")
                 if not columna_producto:
@@ -355,19 +364,33 @@ class ImportacionPedidosController(ControladorBase):
                     fila=row,
                     col=columna_producto,
                 )
-                try:
-                    hoja_ruta = self._leer_db_con_reintento(
-                        lambda: HojaDeRuta.get(
-                            HojaDeRuta.cliente == codigo_cliente.cliente_id,
-                            HojaDeRuta.fecha == self.view.fecha_reparto.valor(),
-                            HojaDeRuta.producto == producto,
-                        ),
-                        "búsqueda de hoja de ruta existente",
-                    )
-                except peewee.DoesNotExist:
+
+                hoja_ruta = None
+                if cliente_obj is not None:
+                    try:
+                        hoja_ruta = self._leer_db_con_reintento(
+                            lambda: HojaDeRuta.get(
+                                HojaDeRuta.cliente == cliente_obj.id,
+                                HojaDeRuta.fecha == self.view.fecha_reparto.valor(),
+                                HojaDeRuta.producto == producto,
+                            ),
+                            "búsqueda de hoja de ruta existente",
+                        )
+                    except peewee.DoesNotExist:
+                        hoja_ruta = None
+
+                if hoja_ruta is None:
                     hoja_ruta = HojaDeRuta()
-                    hoja_ruta.cliente = codigo_cliente.cliente
                     hoja_ruta.fecha = self.view.fecha_reparto.valor()
+
+                hoja_ruta.cliente = cliente_obj
+                hoja_ruta.lugar_entrega = lugar_entrega
+                if lugar_entrega is not None:
+                    hoja_ruta.ruta = lugar_entrega.ruta_reparto_id or (
+                        cliente_obj.ruta_reparto_id if cliente_obj is not None else None
+                    )
+                else:
+                    hoja_ruta.ruta = None
 
                 observaciones = columnas.get("Observaciones")
                 if observaciones:
@@ -377,9 +400,10 @@ class ImportacionPedidosController(ControladorBase):
                     hoja_ruta.observaciones = (
                         "" if pd.isna(valor_observaciones) else valor_observaciones
                     )
+                else:
+                    hoja_ruta.observaciones = ""
 
-                hoja_ruta.ruta = codigo_cliente.cliente.ruta_reparto_id
-                hoja_ruta.nombre_cliente = nombre_cliente
+                hoja_ruta.nombre_cliente = "" if pd.isna(nombre_cliente) else str(nombre_cliente)
                 hoja_ruta.responsable = responsable_generico
                 hoja_ruta.equipo_asignado = camion_generico
 
@@ -405,6 +429,9 @@ class ImportacionPedidosController(ControladorBase):
                 hoja_ruta.cantidad_bultos = self.view.grid_datos.ObtenerItem(
                     fila=row, col=columnas.get("Bultos")
                 )
+
+                if cliente_obj is None or lugar_entrega is None:
+                    pendientes += 1
 
                 # save() es escritura. Si la conexión se pierde aquí no se repite:
                 # el servidor podría haberla ejecutado aunque no haya llegado respuesta.
