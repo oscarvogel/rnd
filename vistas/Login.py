@@ -166,6 +166,10 @@ class LoginView(VistaBase):
         self.btnCerrar.raise_()
 
     def paintEvent(self, event):
+        # Primero deja que QWidget pinte su base; luego dibujamos el mockup
+        # para evitar que el paintEvent heredado tape la imagen con blanco.
+        super().paintEvent(event)
+
         painter = QPainter(self)
         if self._mockup_ok:
             scaled = self._mockup.scaled(
@@ -176,9 +180,7 @@ class LoginView(VistaBase):
             painter.drawPixmap(0, 0, scaled)
         else:
             painter.fillRect(self.rect(), Qt.white)
-
         painter.end()
-        super().paintEvent(event)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
