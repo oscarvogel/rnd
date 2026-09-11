@@ -369,8 +369,10 @@ def _seed_menu(Formula, MenuLateral) -> None:
 
     f_oper = formula("Operaciones", 1)
     f_maestros = formula("Maestros", 2)
+    f_demo = formula("Demo", 90)
     cab_oper, _ = MenuLateral.get_or_create(nombre="OPERACIONES", for_id=f_oper, for_pare=0)
     cab_mae, _ = MenuLateral.get_or_create(nombre="MAESTROS", for_id=f_maestros, for_pare=0)
+    cab_demo, _ = MenuLateral.get_or_create(nombre="DEMO", for_id=f_demo, for_pare=0)
 
     opciones = (
         (f_oper, cab_oper.id, "Importar pedidos", "ImportacionPedidos.ImportacionPedidosController", "IMPORTAR_PEDIDOS", 10, "iconfinder_icon-81-document-add_314445.png"),
@@ -379,7 +381,78 @@ def _seed_menu(Formula, MenuLateral) -> None:
         (f_oper, cab_oper.id, "Validar hoja de ruta", "ValidacionHojaRuta.ValidacionHojaRutaController", "VALIDAR_HOJA", 40, "search.png"),
         (f_maestros, cab_mae.id, "Clientes", "ABMClientes.ABMClientesController", "ABM_CLIENTES", 50, "clientes.png"),
         (f_maestros, cab_mae.id, "Equipos", "ABMEquipos.ABMEquiposController", "ABM_EQUIPOS", 60, "maquinas.png"),
+        (f_demo, cab_demo.id, "Restablecer datos demo", "ResetDemo.ResetDemoController", "RESET_DEMO", 900, "edit.png"),
     )
     for padre, menu_parent, nombre, archivo, valid, orden, imag in opciones:
         f = formula(nombre, orden, archivo, valid, pare=padre.for_id, imag=imag)
         MenuLateral.get_or_create(nombre=nombre, for_id=f, for_pare=menu_parent)
+
+
+def reset_demo_database() -> None:
+    """Borra por completo la base DEMO y vuelve a cargar el seed inicial.
+
+    Esta operación está deliberadamente bloqueada fuera de RND_DEMO_MODE y
+    fuera de SQLite para que nunca pueda tocar una base productiva.
+    """
+    import os
+    from peewee import SqliteDatabase
+
+    if os.getenv("RND_DEMO_MODE") != "1":
+        raise RuntimeError("El restablecimiento sólo está disponible en RND DEMO.")
+
+    from modelos.ModeloBase import Auditoria, db
+    if not isinstance(db, SqliteDatabase):
+        raise RuntimeError("El restablecimiento DEMO sólo puede ejecutarse sobre SQLite.")
+
+    from modelos.Usuarios import Usuario
+    from modelos.Formula import Formula, MenuLateral
+    from modelos.Accesos import Acceso
+    from modelos.ParametrosSistema import ParamSist
+    from modelos.Proveedores import Proveedor, ProcesoLista
+    from modelos.Clientes import (
+        Cliente, CodigoClienteProveedor, Localidades, LugarEntrega, RutaReparto,
+    )
+    from modelos.Tablas import TipoDeMovil, UnidadNegocio, Monedas
+    from modelos.Empleados import ConceptoLiquidacion, Empleado
+    from modelos.Equipos import ChoferEquipo, Equipos, Vencimientos
+    from modelos.HojaRuta import HojaDeRuta
+    from modelos.EstadoHojaRuta import EstadoHojaRuta
+
+    tables = [
+        Auditoria,
+        Usuario,
+        Formula,
+        MenuLateral,
+        Acceso,
+        ParamSist,
+        Proveedor,
+        ProcesoLista,
+        RutaReparto,
+        Localidades,
+        Cliente,
+        LugarEntrega,
+        CodigoClienteProveedor,
+        TipoDeMovil,
+        UnidadNegocio,
+        Monedas,
+        ConceptoLiquidacion,
+        Empleado,
+        Equipos,
+        ChoferEquipo,
+        Vencimientos,
+        HojaDeRuta,
+        EstadoHojaRuta,
+    ]
+
+    if db.is_closed():
+        db.connect(reuse_if_open=True)
+
+    # SQLite no permite deshabilitar FK dentro de una transacción activa.
+    db.execute_sql("PRAGMA foreign_keys = OFF")
+    try:
+        for model in reversed(tables):
+            model.drop_table(safe=True)
+    finally:
+        db.execute_sql("PRAGMA foreign_keys = ON")
+
+    prepare_demo_database()
