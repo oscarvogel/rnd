@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
 
 
 class BandejaPedidosView(QWidget):
-    COLUMNAS = ["Sel.", "Estado", "Cliente", "Ruta", "Comprobante", "Producto", "Cantidad", "KG", "Bultos", "Observaciones"]
+    COLUMNAS = ["Sel.", "Estado", "Cliente", "Lugar de entrega", "Ruta", "Comprobante", "Producto", "Cantidad", "KG", "Bultos", "Observaciones"]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -33,6 +33,9 @@ class BandejaPedidosView(QWidget):
         filtros.addWidget(self.solo_pendientes)
         self.btn_actualizar = QPushButton("Actualizar")
         filtros.addWidget(self.btn_actualizar)
+        self.btn_cliente_lugar = QPushButton("Asignar cliente / lugar")
+        self.btn_cliente_lugar.setToolTip("Crear, seleccionar o cambiar el cliente y lugar de entrega de los pedidos seleccionados")
+        filtros.addWidget(self.btn_cliente_lugar)
         self.btn_seleccionar_todo = QPushButton("Seleccionar todo")
         self.btn_seleccionar_todo.setToolTip("Seleccionar o deseleccionar todos los pedidos visibles")
         self.btn_seleccionar_todo.clicked.connect(self.alternar_seleccion_todos)
@@ -82,7 +85,8 @@ class BandejaPedidosView(QWidget):
             self.tabla.setItem(row, 0, chk)
             valores = [
                 pedido.estado(empleado_generico, camion_generico), pedido.cliente,
-                pedido.ruta, pedido.comprobante, pedido.producto, str(pedido.cantidad),
+                pedido.lugar_entrega or "⚠ Sin asignar", pedido.ruta,
+                pedido.comprobante, pedido.producto, str(pedido.cantidad),
                 str(pedido.kg), str(pedido.bultos), pedido.observaciones or "",
             ]
             for col, valor in enumerate(valores, start=1):
