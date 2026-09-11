@@ -12,7 +12,7 @@ from modelos.ParametrosSistema import ParamSist
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.pyqt5libs.Ventanas import showAlert
 from pyqt5libs.pyqt5libs.utiles import inicializar_y_capturar_excepciones
-from utiles.bandeja_pedidos import PedidoBandeja, totales_seleccion, validar_reasignacion
+from utiles.bandeja_pedidos import (PedidoBandeja, expandir_seleccion_por_factura, totales_seleccion, validar_reasignacion)
 from vistas.BandejaPedidos import BandejaPedidosView
 
 
@@ -112,17 +112,22 @@ class BandejaPedidosController(ControladorBase):
     @reconnect_if_needed
     @inicializar_y_capturar_excepciones
     def asignar_cliente_lugar(self, *args, **kwargs):
-        pedidos = self.pedidos_seleccionados()
-        if not pedidos:
+        seleccionados = self.pedidos_seleccionados()
+        if not seleccionados:
             showAlert("Sistema", "Seleccione al menos un pedido para asignar cliente y lugar de entrega")
             return
+        pedidos = expandir_seleccion_por_factura(self._pedidos, seleccionados)
 
         dialogo = QDialog(self.view)
         dialogo.setWindowTitle("Asignar cliente y lugar de entrega")
         dialogo.setMinimumWidth(520)
         layout = QVBoxLayout(dialogo)
+        facturas = sorted({str(p.comprobante or "").strip() for p in pedidos if str(p.comprobante or "").strip()})
         layout.addWidget(QLabel(
-            "La asignación se aplicará a {} pedido(s) seleccionado(s).".format(len(pedidos))
+            "La asignación se aplicará a {} línea(s) de {} factura(s). "
+            "Con seleccionar una línea alcanza: RND incluye automáticamente todos los productos de esa factura.".format(
+                len(pedidos), len(facturas) or 1
+            )
         ))
 
         fila_cliente = QHBoxLayout()
@@ -242,7 +247,12 @@ class BandejaPedidosController(ControladorBase):
             showAlert("Sistema", "No se pudieron actualizar todos los pedidos seleccionados")
             return
 
-        showAlert("Sistema", "Cliente y lugar de entrega asignados correctamente")
+        showAlert(
+            "Sistema",
+            "Cliente y lugar de entrega asignados a {} línea(s) de {} factura(s).".format(
+                len(ids), len(facturas) or 1
+            ),
+        )
         self.cargar_pedidos()
 
     @reconnect_if_needed
