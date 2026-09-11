@@ -115,6 +115,11 @@ def test_tremblay_real_tambien_sale_con_contrato_normalizado():
     assert len(df) == 293
     assert df.iloc[0]["codigo_cliente"] == 201504
     assert "VALLE DISTRIBUCIONES SRL" in df.iloc[0]["detalle_cliente"]
+    assert "CREMA DE LECHE TREMBLAY" in df.iloc[0]["producto"]
+    assert str(df.iloc[0]["producto"]) != "1035"
+    assert "Código producto Tremblay: 1035" in df.iloc[0]["observaciones"]
+    assert pd.notna(df.iloc[0]["destino"])
+    assert str(df.iloc[0]["destino"]).strip().lower() != "nan"
 
 
 def test_dispatcher_detecta_ambos_formatos(tmp_path):

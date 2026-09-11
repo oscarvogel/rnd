@@ -205,23 +205,30 @@ def procesar_detalle_ventas(archivo_entrada, progreso=None):
 def _normalizar_salida_tremblay(ruta_procesada, progreso=None):
     """Convierte la salida histórica de Tremblay al contrato común."""
     df = pd.read_excel(ruta_procesada)
-    requeridas = {"Cliente", "Nombre_Cliente", "Producto", "Cantidad", "KG", "Bultos"}
+    requeridas = {"Cliente", "Nombre_Cliente", "Producto", "Detalle", "Cantidad", "KG", "Bultos"}
     if not requeridas.issubset(set(df.columns)):
         raise ValueError("La salida de Tremblay no contiene las columnas esperadas")
 
     filas = []
     total = max(len(df), 1)
     for indice, row in df.iterrows():
+        codigo_producto = _texto(row.get("Producto"))
+        observaciones = _texto(row.get("Observaciones"))
+        if codigo_producto:
+            detalle_codigo = "Código producto Tremblay: {}".format(codigo_producto)
+            observaciones = " | ".join(
+                parte for parte in (observaciones, detalle_codigo) if parte
+            )
         filas.append({
             "codigo_cliente": row.get("Cliente", ""),
             "detalle_cliente": _texto(row.get("Nombre_Cliente")),
             "destino": _texto(row.get("Lugar_Entrega")),
             "comprobante": _texto(row.get("Comprobante")),
             "cantidad": "" if pd.isna(row.get("Cantidad")) else row.get("Cantidad"),
-            "producto": _texto(row.get("Producto")),
+            "producto": _texto(row.get("Detalle")),
             "bultos": "" if pd.isna(row.get("Bultos")) else row.get("Bultos"),
             "kilos": "" if pd.isna(row.get("KG")) else row.get("KG"),
-            "observaciones": _texto(row.get("Observaciones")),
+            "observaciones": observaciones,
         })
         if indice % 25 == 0:
             _notificar(progreso, 25 + int((indice + 1) / total * 65))
