@@ -8,6 +8,9 @@ historicos ficticios, para probar Simular + Consolidar sin riesgo.
 
 from datetime import date, timedelta
 from decimal import Decimal
+from pathlib import Path
+
+import pandas as pd
 
 
 def prepare_demo_database() -> None:
@@ -146,41 +149,82 @@ def prepare_demo_database() -> None:
         },
     )
 
-    proveedor, _ = Proveedor.get_or_create(
-        razon_social="Proveedor Demo",
-        defaults={
-            "cuit": "30-79999999-9",
-            "direccion": "Parque Industrial",
-            "telefono": "03743-499999",
-            "contacto": "Administracion",
-            "activo": True,
-            "observaciones": "Proveedor de demostracion",
-            "metodo_importacion": "TREMBLAY",
-        },
-    )
-    if proveedor.metodo_importacion != "TREMBLAY":
-        proveedor.metodo_importacion = "TREMBLAY"
-        proveedor.save()
-
-    for idx, cliente in enumerate(clientes, start=1):
-        CodigoClienteProveedor.get_or_create(
-            codigo=f"CLI-{idx:03d}",
-            cliente=cliente,
-            proveedor=proveedor,
+    proveedores_demo = {}
+    for razon_social, metodo, cuit in (
+        ("Proveedor Demo - Tremblay", "TREMBLAY", "30-79999991-1"),
+        ("Proveedor Demo - Tio Pujio", "TIO_PUJIO", "30-79999992-2"),
+        ("Proveedor Demo - Detalle Ventas", "DETALLE_VENTAS", "30-79999993-3"),
+        ("Proveedor Demo - Columnas", "COLUMNAS", "30-79999994-4"),
+    ):
+        proveedor, _ = Proveedor.get_or_create(
+            razon_social=razon_social,
+            defaults={
+                "cuit": cuit,
+                "direccion": "Parque Industrial",
+                "telefono": "03743-499999",
+                "contacto": "Administracion",
+                "activo": True,
+                "observaciones": "Proveedor generado automaticamente por RND DEMO",
+                "metodo_importacion": metodo,
+            },
         )
-    # El duplicado de Cinco Hermanos reutiliza el mismo codigo del proveedor:
-    # la consolidacion lo deduplicara. El de Ceferino tiene codigo propio que
-    # sera movido al cliente destino.
-    CodigoClienteProveedor.get_or_create(
-        codigo="CLI-001",
-        cliente=dup_cinco,
-        proveedor=proveedor,
-    )
-    CodigoClienteProveedor.get_or_create(
-        codigo="CLI-006",
-        cliente=dup_ceferino,
-        proveedor=proveedor,
-    )
+        if proveedor.metodo_importacion != metodo or not proveedor.activo:
+            proveedor.metodo_importacion = metodo
+            proveedor.activo = True
+            proveedor.save()
+        proveedores_demo[metodo] = proveedor
+
+    # Compatibilidad con demos anteriores: el viejo "Proveedor Demo" queda como
+    # Tremblay, pero ya no es el proveedor recomendado para las pruebas nuevas.
+    proveedor_legacy = Proveedor.get_or_none(razon_social="Proveedor Demo")
+    if proveedor_legacy is not None and proveedor_legacy.metodo_importacion != "TREMBLAY":
+        proveedor_legacy.metodo_importacion = "TREMBLAY"
+        proveedor_legacy.save()
+
+    # Códigos externos específicos por proveedor para poder grabar los archivos
+    # de ejemplo sin que el operador tenga que vincular clientes manualmente.
+    codigos_demo = {
+        "TREMBLAY": (("201504", clientes[0]), ("200633", clientes[1])),
+        "TIO_PUJIO": (("10333", clientes[0]), ("10334", clientes[1])),
+        "DETALLE_VENTAS": (
+            ("NOMBRE:CINCO HERMANOS", clientes[0]),
+            ("NOMBRE:CEFERINO", clientes[1]),
+        ),
+        "COLUMNAS": (("CLI-001", clientes[0]), ("CLI-002", clientes[1])),
+    }
+    for metodo, relaciones in codigos_demo.items():
+        proveedor = proveedores_demo[metodo]
+        for codigo, cliente in relaciones:
+            relacion, _ = CodigoClienteProveedor.get_or_create(
+                codigo=codigo,
+                proveedor=proveedor,
+                defaults={"cliente": cliente},
+            )
+            if relacion.cliente_id != cliente.id:
+                relacion.cliente = cliente
+                relacion.save()
+
+    proveedor_columnas = proveedores_demo["COLUMNAS"]
+    for codigo, columna in (
+        ("Cliente", "Cliente"),
+        ("Nombre_Cliente", "Nombre_Cliente"),
+        ("Comprobante", "Comprobante"),
+        ("Producto", "Producto"),
+        ("Cantidad", "Cantidad"),
+        ("KG", "KG"),
+        ("Bultos", "Bultos"),
+        ("Observaciones", "Observaciones"),
+    ):
+        proceso, _ = ProcesoLista.get_or_create(
+            proveedor=proveedor_columnas,
+            codigo=codigo,
+            defaults={"columna": columna},
+        )
+        if proceso.columna != columna:
+            proceso.columna = columna
+            proceso.save()
+
+    _generar_archivos_importacion_demo()
 
     def lugar(cliente, nombre, direccion, localidad, ruta, principal=False):
         obj, _ = LugarEntrega.get_or_create(
@@ -403,3 +447,76 @@ def _asegurar_columna_metodo_importacion(db) -> None:
         "ALTER TABLE proveedor ADD COLUMN metodo_importacion "
         "VARCHAR(30) NOT NULL DEFAULT 'COLUMNAS'"
     )
+
+
+def _generar_archivos_importacion_demo() -> None:
+    """Genera cuatro archivos listos para probar cada método del importador."""
+    destino = Path(__file__).resolve().parent / "demo_importaciones"
+    destino.mkdir(exist_ok=True)
+
+    # Tremblay: layout irregular cliente/productos, igual al importador real.
+    tremblay = [
+        ["", "BONDA JOSE", "", "", "", "", "", "", "", "", ""],
+        ["201504", "Cinco Hermanos", "PUERTO RICO", "11/09/2026", "0001001", "3", "", "", "", "", ""],
+        ["CODIGO", "DETALLE", "", "", "", "ORIGINAL", "DESP.", "DIF.", "KG", "TOTAL", "COMPROB."],
+        ["1035", "CREMA DE LECHE TREMBLAY X 200 CM3 X 12 U", "", "", "", 2, 2, 0, 7.2, 45000, "000800153513"],
+        ["11106", "QUESO CREMA TREMBLAY CLASICO 12x290gr", "", "", "", 1, 1, 0, 3.5, 28000, "000800153513"],
+        ["200633", "Ceferino", "OBERA", "11/09/2026", "0001002", "2", "", "", "", "", ""],
+        ["CODIGO", "DETALLE", "", "", "", "ORIGINAL", "DESP.", "DIF.", "KG", "TOTAL", "COMPROB."],
+        ["1021", "MANTECA TREMBLAY X 100 GR X 60 U", "", "", "", 2, 2, 0, 12.0, 62000, "000800153514"],
+    ]
+    pd.DataFrame(tremblay).to_excel(destino / "01_tremblay_demo.xlsx", index=False, header=False)
+
+    # Tío Pujio.
+    filas = [[""] * 17 for _ in range(10)]
+    filas.append(["", "Fecha", "", "Tipo", "Comprobante", "", "", "", "Hormas", "", "Kilos", "", "", "", "", "", ""])
+    for codigo, nombre, comprobante, producto_codigo, producto, bultos, kilos in (
+        (10333, "Cinco Hermanos", "N0001-00115811", 2, "QUESO TYBO", 8, 31.82),
+        (10334, "Ceferino", "N0001-00115812", 22, "RICOTTA", 6, 21.40),
+    ):
+        cliente = [""] * 17
+        cliente[0], cliente[2], cliente[4] = "Cliente :", codigo, nombre
+        filas.append(cliente)
+        pedido = [""] * 17
+        pedido[1], pedido[3], pedido[5] = "11/09/2026", "PED", comprobante
+        filas.append(pedido)
+        item = [""] * 17
+        item[1], item[2], item[7], item[10] = producto_codigo, producto, bultos, kilos
+        filas.append(item)
+    pd.DataFrame(filas).to_excel(destino / "02_tio_pujio_demo.xlsx", index=False, header=False)
+
+    # Detalle de ventas.
+    detalle = [
+        ["Ventas Provincia Misiones desde fecha 10/09/2026 hasta fecha 11/09/2026", "", "", "", "", "", "", "", ""],
+        ["", "", "", "", "", "", "", "", ""],
+        ["", "", "", "", "", "", "", "", ""],
+        ["Tipo Operacion", "ciudad", "Cliente", "Codigo", "DescripcionProducto", "", "Unidades", "Kilos", "Total"],
+        ["Chacinados", "PUERTO RICO", "Cinco Hermanos", 12311, "FIAMBRE COCIDO", "", 12, 52.25, 264468.60],
+        ["Lacteos", "OBERA", "Ceferino", 15718, "QUESO CREMOSO", "", 10, 13.09, 146372.38],
+    ]
+    pd.DataFrame(detalle).to_excel(destino / "03_detalle_ventas_demo.xlsx", index=False, header=False)
+
+    # Columnas configurables.
+    columnas = pd.DataFrame([
+        {
+            "Cliente": "CLI-001",
+            "Nombre_Cliente": "Cinco Hermanos",
+            "Comprobante": "DEMO-COL-001",
+            "Producto": "Bebidas",
+            "Cantidad": 10,
+            "KG": 120,
+            "Bultos": 10,
+            "Observaciones": "Importación demo por columnas",
+        },
+        {
+            "Cliente": "CLI-002",
+            "Nombre_Cliente": "Ceferino",
+            "Comprobante": "DEMO-COL-002",
+            "Producto": "Alimentos",
+            "Cantidad": 8,
+            "KG": 95,
+            "Bultos": 8,
+            "Observaciones": "Importación demo por columnas",
+        },
+    ])
+    columnas.to_excel(destino / "04_columnas_demo.xlsx", index=False)
