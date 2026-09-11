@@ -17,6 +17,7 @@ class ResumenImportacion:
     leidos: int = 0
     importados: int = 0
     omitidos: int = 0
+    reimportados: int = 0
     pendientes: int = 0
     errores: int = 0
 
@@ -24,24 +25,24 @@ class ResumenImportacion:
         # Mantiene disponible en memoria el último estado operativo del día.
         # Esto permite que el dashboard (#4/#24) lo consulte sin duplicar
         # lógica ni tocar los importadores existentes.
-        if any((self.leidos, self.importados, self.omitidos, self.pendientes, self.errores)):
+        if any((self.leidos, self.importados, self.omitidos, self.reimportados, self.pendientes, self.errores)):
             _ULTIMA_IMPORTACION_POR_FECHA[date.today()] = self
 
     @property
     def parcial(self):
-        return self.importados > 0 and (self.omitidos > 0 or self.pendientes > 0 or self.errores > 0)
+        return (self.importados + self.reimportados) > 0 and (self.omitidos > 0 or self.pendientes > 0 or self.errores > 0)
 
     @property
     def exitosa(self):
-        return self.importados > 0 and not (self.omitidos or self.pendientes or self.errores)
+        return (self.importados + self.reimportados) > 0 and not (self.omitidos or self.pendientes or self.errores)
 
     @property
     def fallida(self):
-        return self.importados == 0 and self.errores > 0
+        return (self.importados + self.reimportados) == 0 and self.errores > 0
 
     @property
     def siguiente_accion(self):
-        if self.errores and self.importados == 0:
+        if self.errores and (self.importados + self.reimportados) == 0:
             return ACCION_CORREGIR
         if self.pendientes or self.omitidos or self.errores:
             return ACCION_REVISAR
@@ -61,8 +62,11 @@ class ResumenImportacion:
     def detalle(self):
         return (
             "Registros leídos: {0} · Pedidos importados: {1} · "
-            "Omitidos: {2} · Pendientes: {3} · Errores: {4}"
-        ).format(self.leidos, self.importados, self.omitidos, self.pendientes, self.errores)
+            "Ya existentes: {2} · Omitidos: {3} · Pendientes: {4} · Errores: {5}"
+        ).format(
+            self.leidos, self.importados, self.reimportados,
+            self.omitidos, self.pendientes, self.errores
+        )
 
 
 def registrar_resultado_dia(resumen, fecha=None):

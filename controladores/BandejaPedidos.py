@@ -5,6 +5,7 @@ from PyQt5.QtCore import QDate
 
 from modelos.Clientes import RutaReparto
 from modelos.HojaRuta import HojaDeRuta
+from modelos.Documentos import referencias_por_hojas
 from modelos.ModeloBase import reconnect_if_needed
 from modelos.ParametrosSistema import ParamSist
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
@@ -54,7 +55,9 @@ class BandejaPedidosController(ControladorBase):
             .where(HojaDeRuta.fecha == self.fecha_actual())
             .order_by(HojaDeRuta.ruta, HojaDeRuta.nombre_cliente, HojaDeRuta.id)
         )
-        pedidos = [self._convertir(h) for h in query]
+        hojas = list(query)
+        referencias = referencias_por_hojas([h.id for h in hojas])
+        pedidos = [self._convertir(h, referencias.get(h.id, {})) for h in hojas]
         if self.view.solo_pendientes.isChecked():
             pedidos = [
                 p for p in pedidos
@@ -64,12 +67,15 @@ class BandejaPedidosController(ControladorBase):
         self.view.cargar_pedidos(pedidos, self.empleado_generico, self.camion_generico)
         self.actualizar_totales()
 
-    def _convertir(self, h):
+    def _convertir(self, h, referencia=None):
+        referencia = referencia or {}
         return PedidoBandeja(
             id=h.id,
             cliente=h.nombre_cliente or "",
             comprobante=h.comprobante or "",
             producto=h.producto or "",
+            factura=referencia.get("factura") or h.comprobante or "",
+            remito=referencia.get("remito") or "",
             cantidad=h.cantidad or 0,
             kg=h.kg or 0,
             bultos=h.cantidad_bultos or 0,

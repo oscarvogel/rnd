@@ -32,6 +32,12 @@ class ResumenImportacionTests(unittest.TestCase):
         self.assertEqual(resumen.siguiente_accion, ACCION_REVISAR)
         self.assertIn("Pendientes: 2", resumen.detalle)
 
+    def test_reimportacion_identica_se_informa_sin_error(self):
+        resumen = ResumenImportacion(leidos=2, reimportados=2)
+        self.assertTrue(resumen.exitosa)
+        self.assertEqual(resumen.siguiente_accion, ACCION_CONTINUAR)
+        self.assertIn("Ya existentes: 2", resumen.detalle)
+
     def test_importacion_fallida_pide_corregir(self):
         resumen = ResumenImportacion(leidos=5, errores=1)
         self.assertTrue(resumen.fallida)
@@ -44,7 +50,7 @@ class ResumenImportacionTests(unittest.TestCase):
         self.assertIs(obtener_resultado_dia(fecha), resumen)
 
     def test_tremblay_tiene_ayuda_especifica(self):
-        self.assertIn("Tremblay", ayuda_proveedor("15"))
+        self.assertIn("Tremblay", ayuda_proveedor("TREMBLAY"))
 
 
 if __name__ == "__main__":

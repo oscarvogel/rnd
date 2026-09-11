@@ -3,6 +3,17 @@ import peewee
 
 from PyQt5.QtWidgets import QApplication, QMessageBox
 from modelos.Clientes import BuscadorCliente, CodigoClienteProveedor
+from modelos.Documentos import (
+    asegurar_esquema_documentos,
+    buscar_hoja_legacy_sin_vincular,
+    huella_linea_importada,
+    identidad_linea_importada,
+    normalizar_numero_documento,
+    obtener_o_crear_detalle,
+    obtener_o_crear_documento,
+    vincular_hoja_ruta,
+    vinculo_existente_de_detalle,
+)
 from modelos.HojaRuta import HojaDeRuta
 import modelos.ModeloBase as modelo_base
 from modelos.ModeloBase import reconnect_if_needed
@@ -313,15 +324,18 @@ class ImportacionPedidosController(ControladorBase):
                 lambda: ParamSist.ObtenerParametro("CAMION_GENERICO", "1"),
                 "lectura de camión genérico",
             )
+            asegurar_esquema_documentos()
         except ERRORES_CONEXION_DB as exc:
             self._marcar_interrupcion_conexion(0, total, exc)
             return
 
         importados = 0
         omitidos = 0
+        reimportados = 0
         pendientes = 0
         errores = 0
         procesados = 0
+        ocurrencias_linea = {}
 
         for row in range(total):
             self.view.avance.actualizar(
@@ -380,60 +394,111 @@ class ImportacionPedidosController(ControladorBase):
                     fila=row,
                     col=columna_producto,
                 )
-                try:
-                    hoja_ruta = self._leer_db_con_reintento(
-                        lambda: HojaDeRuta.get(
-                            HojaDeRuta.cliente == codigo_cliente.cliente_id,
-                            HojaDeRuta.fecha == self.view.fecha_reparto.valor(),
-                            HojaDeRuta.producto == producto,
-                        ),
-                        "búsqueda de hoja de ruta existente",
-                    )
-                except peewee.DoesNotExist:
-                    hoja_ruta = HojaDeRuta()
-                    hoja_ruta.cliente = codigo_cliente.cliente
-                    hoja_ruta.fecha = self.view.fecha_reparto.valor()
-
-                observaciones = columnas.get("Observaciones")
-                if observaciones:
-                    valor_observaciones = self.view.grid_datos.ObtenerItem(
-                        fila=row, col=observaciones
-                    )
-                    hoja_ruta.observaciones = (
-                        "" if pd.isna(valor_observaciones) else valor_observaciones
-                    )
-
-                hoja_ruta.ruta = codigo_cliente.cliente.ruta_reparto_id
-                hoja_ruta.nombre_cliente = nombre_cliente
-                hoja_ruta.responsable = responsable_generico
-                hoja_ruta.equipo_asignado = camion_generico
 
                 columna_comprobante = columnas.get("Comprobante")
+                comprobante = ""
                 if columna_comprobante:
                     comprobante = self.view.grid_datos.ObtenerItem(
                         fila=row,
                         col=columna_comprobante,
                     )
-                    if pd.isna(comprobante):
-                        comprobante = ""
-                    hoja_ruta.comprobante = str(comprobante or "").replace(".", "")
-                else:
-                    hoja_ruta.comprobante = ""
+                comprobante = normalizar_numero_documento(comprobante)
 
-                hoja_ruta.producto = producto
-                hoja_ruta.cantidad = self.view.grid_datos.ObtenerItem(
+                observaciones = columnas.get("Observaciones")
+                valor_observaciones = ""
+                if observaciones:
+                    valor_observaciones = self.view.grid_datos.ObtenerItem(
+                        fila=row, col=observaciones
+                    )
+                    if pd.isna(valor_observaciones):
+                        valor_observaciones = ""
+
+                cantidad = self.view.grid_datos.ObtenerItem(
                     fila=row, col=columnas.get("Cantidad")
                 )
-                hoja_ruta.kg = self.view.grid_datos.ObtenerItem(
+                kilos = self.view.grid_datos.ObtenerItem(
                     fila=row, col=columnas.get("KG")
                 )
-                hoja_ruta.cantidad_bultos = self.view.grid_datos.ObtenerItem(
+                bultos = self.view.grid_datos.ObtenerItem(
                     fila=row, col=columnas.get("Bultos")
                 )
+
+                documento, _ = obtener_o_crear_documento(
+                    proveedor=proveedor,
+                    cliente=codigo_cliente.cliente,
+                    fecha_documento=self.view.fecha_reparto.valor(),
+                    numero_factura=comprobante,
+                    comprobante_origen=comprobante,
+                    origen="importacion-pedidos",
+                )
+
+                huella = huella_linea_importada(
+                    producto, cantidad, kilos, bultos, valor_observaciones
+                )
+                clave_ocurrencia = (documento.id, huella)
+                ocurrencias_linea[clave_ocurrencia] = (
+                    ocurrencias_linea.get(clave_ocurrencia, 0) + 1
+                )
+                linea_origen = identidad_linea_importada(
+                    producto,
+                    cantidad,
+                    kilos,
+                    bultos,
+                    valor_observaciones,
+                    ocurrencias_linea[clave_ocurrencia],
+                )
+                detalle, _ = obtener_o_crear_detalle(
+                    documento=documento,
+                    linea_origen=linea_origen,
+                    producto=producto,
+                    cantidad=cantidad,
+                    kg=kilos,
+                    bultos=bultos,
+                    observaciones=valor_observaciones,
+                )
+
+                vinculo_existente = vinculo_existente_de_detalle(
+                    detalle, self.view.fecha_reparto.valor()
+                )
+                if vinculo_existente:
+                    reimportados += 1
+                    procesados += 1
+                    print(
+                        "[ImportacionPedidos] Documento {} línea {} ya importada; "
+                        "se conserva la hoja de ruta #{}.".format(
+                            comprobante or "(sin factura)",
+                            linea_origen,
+                            vinculo_existente.hoja_ruta_id,
+                        )
+                    )
+                    continue
+
+                hoja_ruta = buscar_hoja_legacy_sin_vincular(
+                    codigo_cliente.cliente_id,
+                    self.view.fecha_reparto.valor(),
+                    producto,
+                    comprobante,
+                )
+                if hoja_ruta is None:
+                    hoja_ruta = HojaDeRuta()
+                    hoja_ruta.cliente = codigo_cliente.cliente
+                    hoja_ruta.fecha = self.view.fecha_reparto.valor()
+
+                hoja_ruta.observaciones = valor_observaciones
+                hoja_ruta.ruta = codigo_cliente.cliente.ruta_reparto_id
+                hoja_ruta.nombre_cliente = nombre_cliente
+                hoja_ruta.responsable = responsable_generico
+                hoja_ruta.equipo_asignado = camion_generico
+                hoja_ruta.comprobante = comprobante
+                hoja_ruta.producto = producto
+                hoja_ruta.cantidad = cantidad
+                hoja_ruta.kg = kilos
+                hoja_ruta.cantidad_bultos = bultos
 
                 # save() es escritura. Si la conexión se pierde aquí no se repite:
                 # el servidor podría haberla ejecutado aunque no haya llegado respuesta.
                 hoja_ruta.save()
+                vincular_hoja_ruta(detalle, hoja_ruta)
                 importados += 1
                 procesados += 1
             except ERRORES_CONEXION_DB as exc:
@@ -448,6 +513,7 @@ class ImportacionPedidosController(ControladorBase):
             leidos=total,
             importados=importados,
             omitidos=omitidos,
+            reimportados=reimportados,
             pendientes=pendientes,
             errores=errores,
         )
