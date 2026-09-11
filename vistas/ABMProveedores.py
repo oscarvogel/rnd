@@ -16,6 +16,9 @@ class ComboImportador(Combo):
         super().__init__(*args, **kwargs)
         self.CargaDatosValores(IMPORTADORES_PROVEEDOR)
 
+    def setText(self, valor):
+        self.setIndex(str(valor or "AUTO"))
+
 
 class ABMProveedoresView(ABM):
     model = Proveedor
