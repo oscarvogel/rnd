@@ -75,6 +75,23 @@ class MigracionBaseDatos:
         ]
         self.migraciones = migraciones_lugares
         self.RealizaMigraciones()
+
+        # #89: la importación puede dejar pedidos pendientes de resolver sin
+        # interrumpir al operador. Cliente y ruta deben aceptar NULL hasta la
+        # revisión previa al cierre de la hoja de ruta.
+        self.migraciones = [
+            migrator.alter_column_type(
+                'hoja_de_ruta',
+                'cliente_id',
+                IntegerField(null=True),
+            ),
+            migrator.alter_column_type(
+                'hoja_de_ruta',
+                'ruta_id',
+                IntegerField(null=True),
+            ),
+        ]
+        self.RealizaMigraciones()
         self._crear_lugares_iniciales()
 
     def _crear_lugares_iniciales(self):
