@@ -10,8 +10,13 @@ from utiles.bandeja_pedidos import PedidoBandeja
 from vistas.BandejaPedidos import BandejaPedidosView
 
 
+_APP = None
+
 def _app():
-    return QApplication.instance() or QApplication([])
+    global _APP
+    if _APP is None:
+        _APP = QApplication.instance() or QApplication([])
+    return _APP
 
 
 def _pedido(id_, comprobante):
