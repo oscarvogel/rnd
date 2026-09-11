@@ -7,11 +7,14 @@ from modelos.HojaRuta import HojaDeRuta
 import modelos.ModeloBase as modelo_base
 from modelos.ModeloBase import reconnect_if_needed
 from modelos.ParametrosSistema import ParamSist
-from modelos.Proveedores import ProcesoLista
+from modelos.Proveedores import ProcesoLista, Proveedor
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.pyqt5libs.Ventanas import showAlert
 from pyqt5libs.pyqt5libs.utiles import inicializar_y_capturar_excepciones, openFileNameDialog
-from utiles.importacion_proveedores_excel import normalizar_archivo_pedidos
+from utiles.importacion_proveedores_excel import (
+    METODO_COLUMNAS,
+    normalizar_archivo_pedidos,
+)
 from utiles.importacion_tremblay_excel import procesar_archivo_tremblay_excel
 from utiles.importacion_tremblay_pdf import procesar_pdf_despacho
 from utiles.importacion_informe_tremblay import procesar_informe_tremblay
@@ -60,6 +63,20 @@ class ImportacionPedidosController(ControladorBase):
 
     def _actualizar_avance_preprocesamiento(self, porcentaje):
         self.view.avance.actualizar(porcentaje, "Normalizando archivo del proveedor")
+
+    def _metodo_importacion_proveedor(self):
+        proveedor_id = self.view.empresa_proveedora.valor()
+        if not proveedor_id:
+            return None
+        try:
+            proveedor = self._leer_db_con_reintento(
+                lambda: Proveedor.get_by_id(proveedor_id),
+                "lectura del método de importación del proveedor",
+            )
+        except peewee.DoesNotExist:
+            return None
+        return str(proveedor.metodo_importacion or METODO_COLUMNAS).strip().upper()
+
 
     def _reconectar_db_para_lectura(self):
         """Descarta un socket muerto y abre uno nuevo para repetir un SELECT seguro."""
@@ -136,21 +153,23 @@ class ImportacionPedidosController(ControladorBase):
         self.view.avance.iniciar("Analizando archivo")
         self.view.txt_archivo.setText(cArchivo)
 
-        archivo_normalizado = normalizar_archivo_pedidos(
-            cArchivo,
-            progreso=self._actualizar_avance_preprocesamiento,
-        )
+        metodo = self._metodo_importacion_proveedor()
+        try:
+            archivo_normalizado = normalizar_archivo_pedidos(
+                cArchivo,
+                progreso=self._actualizar_avance_preprocesamiento,
+                metodo=metodo,
+            )
+        except ValueError as exc:
+            self.view.avance.marcar_error("Formato de archivo incorrecto")
+            showAlert("Sistema", str(exc))
+            return
+
         if archivo_normalizado:
             self.archivo_normalizado = True
             cArchivo = archivo_normalizado
             self.view.txt_archivo.setText(cArchivo)
             self.view.avance.finalizar("Archivo normalizado")
-        elif self.view.empresa_proveedora.valor() == "15":
-            self.importa_tremblay()
-            cArchivo = self.view.txt_archivo.text()
-            if not cArchivo:
-                return
-            self.view.avance.finalizar("Archivo Tremblay procesado")
         else:
             self.view.avance.finalizar("Archivo seleccionado")
 
