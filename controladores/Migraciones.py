@@ -12,7 +12,7 @@ from modelos.ModeloBase import Auditoria, db
 from playhouse.migrate import MySQLMigrator, CharField, migrate, DecimalField, IntegerField, BooleanField, FloatField, TextField, TimeField
 
 from modelos.Clientes import Localidades
-from modelos.Proveedores import ProcesoLista
+from modelos.Proveedores import ProcesoLista, Proveedor
 from pyqt5libs.pyqt5libs.utiles import LeerIni
 
 class MigracionBaseDatos:
@@ -89,6 +89,16 @@ class MigracionBaseDatos:
                 'hoja_de_ruta',
                 'ruta_id',
                 IntegerField(null=True),
+            ),
+        ]
+        self.RealizaMigraciones()
+
+        # #92: cada proveedor define explícitamente cómo se importa su archivo.
+        self.migraciones = [
+            migrator.add_column(
+                'proveedor',
+                'importador',
+                CharField(max_length=30, default='AUTO'),
             ),
         ]
         self.RealizaMigraciones()
