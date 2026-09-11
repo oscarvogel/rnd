@@ -64,6 +64,7 @@ class ImportacionPedidosView(VistaBase):
     def initUi(self):
         self.setWindowTitle("Preparar pedidos para reparto")
         self.resize(1180, 720)
+        self.showMaximized()
         layoutPpal = QVBoxLayout(self)
         layoutPpal.setSpacing(12)
 
