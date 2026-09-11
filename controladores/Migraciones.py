@@ -12,7 +12,7 @@ from modelos.ModeloBase import Auditoria, db
 from playhouse.migrate import MySQLMigrator, CharField, migrate, DecimalField, IntegerField, BooleanField, FloatField, TextField, TimeField
 
 from modelos.Clientes import Localidades
-from modelos.Proveedores import ProcesoLista
+from modelos.Proveedores import ProcesoLista, Proveedor
 from pyqt5libs.pyqt5libs.utiles import LeerIni
 
 class MigracionBaseDatos:
@@ -75,6 +75,20 @@ class MigracionBaseDatos:
         ]
         self.migraciones = migraciones_lugares
         self.RealizaMigraciones()
+
+        self.migraciones = [
+            migrator.add_column(
+                "proveedor",
+                "metodo_importacion",
+                CharField(max_length=30, default="COLUMNAS"),
+            ),
+        ]
+        self.RealizaMigraciones()
+        try:
+            Proveedor.update(metodo_importacion="TREMBLAY").where(Proveedor.id == 15).execute()
+        except Exception:
+            logging.exception("No se pudo inicializar método Tremblay para proveedor 15")
+
         self._crear_lugares_iniciales()
 
     def _crear_lugares_iniciales(self):
