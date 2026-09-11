@@ -61,6 +61,8 @@ def prepare_demo_database() -> None:
     ]
     db.create_tables(tables, safe=True)
 
+    _asegurar_columna_metodo_importacion(db)
+
     admin, _ = Usuario.get_or_create(
         usu_id=1,
         defaults={
@@ -388,3 +390,16 @@ def _seed_menu(Formula, MenuLateral) -> None:
     for padre, menu_parent, nombre, archivo, valid, orden, imag in opciones:
         f = formula(nombre, orden, archivo, valid, pare=padre.for_id, imag=imag)
         MenuLateral.get_or_create(nombre=nombre, for_id=f, for_pare=menu_parent)
+
+def _asegurar_columna_metodo_importacion(db) -> None:
+    """Agrega la columna nueva también sobre demos SQLite ya existentes."""
+    try:
+        columnas = {col.name for col in db.get_columns("proveedor")}
+    except Exception:
+        return
+    if "metodo_importacion" in columnas:
+        return
+    db.execute_sql(
+        "ALTER TABLE proveedor ADD COLUMN metodo_importacion "
+        "VARCHAR(30) NOT NULL DEFAULT 'COLUMNAS'"
+    )
