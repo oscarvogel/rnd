@@ -11,6 +11,8 @@ if str(ROOT) not in sys.path:
 
 from utiles.importacion_proveedores_excel import (  # noqa: E402
     COLUMNAS_NORMALIZADAS,
+    IMPORTADOR_COLUMNAS,
+    IMPORTADOR_TIO_PUJIO,
     normalizar_archivo_pedidos,
     procesar_detalle_ventas,
     procesar_tio_pujio,
@@ -145,3 +147,17 @@ def test_detalle_sin_encabezado_falla(tmp_path):
     )
     with pytest.raises(ValueError, match="encabezado"):
         procesar_detalle_ventas(str(entrada))
+
+
+def test_dispatcher_respeta_metodo_configurado(tmp_path):
+    tio = tmp_path / "tio_configurado.xlsx"
+    _crear_tio_pujio(tio)
+    salida = normalizar_archivo_pedidos(str(tio), metodo=IMPORTADOR_TIO_PUJIO)
+    assert salida is not None
+    assert len(pd.read_excel(salida)) == 2
+
+
+def test_columnas_configuradas_no_intenta_autodetectar(tmp_path):
+    entrada = tmp_path / "columnas.xlsx"
+    _crear_tio_pujio(entrada)
+    assert normalizar_archivo_pedidos(str(entrada), metodo=IMPORTADOR_COLUMNAS) is None
