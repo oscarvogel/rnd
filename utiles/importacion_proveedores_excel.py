@@ -246,11 +246,15 @@ def _normalizar_salida_tremblay(ruta_procesada, progreso=None):
 
 
 def procesar_tremblay_normalizado(archivo_entrada, progreso=None):
-    """Procesa un informe .xls Tremblay y devuelve columnas normalizadas."""
+    """Procesa Tremblay (.xls o Excel moderno) y devuelve columnas normalizadas."""
     from utiles.importacion_informe_tremblay import procesar_informe_tremblay
+    from utiles.importacion_tremblay_excel import procesar_archivo_tremblay_excel
 
     _notificar(progreso, 15)
-    ruta_historica = procesar_informe_tremblay(archivo_entrada)
+    if str(archivo_entrada).lower().endswith(".xls"):
+        ruta_historica = procesar_informe_tremblay(archivo_entrada)
+    else:
+        ruta_historica = procesar_archivo_tremblay_excel(archivo_entrada)
     return _normalizar_salida_tremblay(ruta_historica, progreso=progreso)
 
 
