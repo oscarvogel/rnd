@@ -82,17 +82,25 @@ def limpiar_resultados_dia():
     _ULTIMA_IMPORTACION_POR_FECHA.clear()
 
 
-def ayuda_proveedor(proveedor_id):
-    """Texto breve y operativo según el importador seleccionado."""
-    proveedor = str(proveedor_id or "").strip()
-    if proveedor == "15":
+def ayuda_proveedor(importador):
+    """Texto breve y operativo según el método configurado en el proveedor."""
+    metodo = str(importador or "").strip().upper()
+    if metodo == "TREMBLAY":
         return (
-            "Tremblay: seleccione el Excel de pedidos o informe de despacho. "
+            "Método Tremblay: seleccione el Excel o informe de despacho. "
             "RND lo normaliza automáticamente antes de mostrar la vista previa."
         )
-    if proveedor:
+    if metodo == "TIO_PUJIO":
+        return "Método Tío Pujio: seleccione el CONTROL DE PEDIDOS recibido del proveedor."
+    if metodo == "DETALLE_VENTAS":
+        return "Método Detalle de ventas: seleccione el informe por provincia/cliente/producto."
+    if metodo == "COLUMNAS":
         return (
-            "Seleccione el archivo Excel entregado por este proveedor. "
-            "RND usará el mapeo de columnas configurado para ese origen."
+            "Método Columnas configuradas: RND usará el mapeo definido para este proveedor."
         )
-    return "Primero seleccione el proveedor/origen para saber qué archivo corresponde importar."
+    if metodo == "AUTO":
+        return (
+            "Método Automático: RND intentará reconocer el formato del archivo. "
+            "Puede fijar un método específico desde Maestros > Proveedores."
+        )
+    return "Seleccione primero el proveedor/origen para saber qué archivo corresponde importar."
