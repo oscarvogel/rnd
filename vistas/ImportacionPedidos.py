@@ -1,3 +1,4 @@
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QApplication,
     QVBoxLayout,
@@ -60,6 +61,7 @@ class ImportacionPedidosView(VistaBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.initUi()
+        self.setWindowState(self.windowState() | Qt.WindowMaximized)
 
     def initUi(self):
         self.setWindowTitle("Preparar pedidos para reparto")
