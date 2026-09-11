@@ -21,6 +21,7 @@ class BandejaPedidosController(ControladorBase):
         super().__init__()
         self.view = BandejaPedidosView()
         self._pedidos = []
+        self._ultima_ruta_organizada = 0
         self.empleado_generico = ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23")
         self.camion_generico = ParamSist.ObtenerParametro("CAMION_GENERICO", "1")
         inicial = fecha_inicial or date.today()
@@ -265,6 +266,12 @@ class BandejaPedidosController(ControladorBase):
             showAlert("Sistema", mensaje)
             return
 
+        try:
+            ruta = RutaReparto.get_by_id(ruta_id)
+            ruta_nombre = ruta.descripcion
+        except Exception:
+            ruta_nombre = "ruta #{}".format(ruta_id)
+
         ids = [p.id for p in pedidos]
         actualizados = (
             HojaDeRuta.update(ruta=ruta_id)
@@ -275,14 +282,44 @@ class BandejaPedidosController(ControladorBase):
             showAlert("Sistema", "No se pudieron actualizar todos los pedidos seleccionados")
             return
 
+        verificados = (
+            HojaDeRuta.select()
+            .where(
+                (HojaDeRuta.id.in_(ids)) &
+                (HojaDeRuta.fecha == self.fecha_actual()) &
+                (HojaDeRuta.ruta == ruta_id)
+            )
+            .count()
+        )
+        if verificados != len(ids):
+            showAlert(
+                "Sistema",
+                "La ruta no quedó grabada correctamente en todos los pedidos. "
+                "No se continuará a asignar chofer y camión.",
+            )
+            self.view.btn_siguiente.setEnabled(False)
+            return
+
+        self._ultima_ruta_organizada = int(ruta_id)
         self.view.btn_siguiente.setEnabled(True)
-        showAlert("Sistema", "Pedidos organizados correctamente. El siguiente paso es asignar chofer y camión.")
+        showAlert(
+            "Sistema",
+            "{} pedidos organizados en {}. El siguiente paso es asignar chofer y camión.".format(
+                len(ids), ruta_nombre
+            ),
+        )
         self.cargar_pedidos()
 
     def ir_asignacion(self):
         from controladores.AsignacionRecursos import AsignacionRecursosController
+
+        ruta_id = int(self._ultima_ruta_organizada or self.view.ruta_destino() or 0)
+        if not ruta_id:
+            showAlert("Sistema", "Seleccione y organice pedidos en una ruta antes de continuar.")
+            return
+
         self.ventana_siguiente = AsignacionRecursosController(
             fecha_inicial=self.fecha_actual(),
-            ruta_inicial=self.view.ruta_destino(),
+            ruta_inicial=ruta_id,
         )
         self.ventana_siguiente.run()

@@ -2,18 +2,20 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDateEdit, QHBoxLayout, QLabel,
-    QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 
 class BandejaPedidosView(QWidget):
     COLUMNAS = ["Sel.", "Estado", "Cliente", "Lugar de entrega", "Ruta", "Comprobante", "Producto", "Cantidad", "KG", "Bultos", "Observaciones"]
+    COLUMNA_COMPROBANTE = 5
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Pedidos para organizar")
         self.resize(1180, 680)
         self._build_ui()
+        self.setWindowState(self.windowState() | Qt.WindowMaximized)
 
     def _build_ui(self):
         raiz = QVBoxLayout(self)
@@ -33,6 +35,23 @@ class BandejaPedidosView(QWidget):
         filtros.addWidget(self.solo_pendientes)
         self.btn_actualizar = QPushButton("Actualizar")
         filtros.addWidget(self.btn_actualizar)
+
+        filtros.addWidget(QLabel("Factura:"))
+        self.txt_comprobante = QLineEdit()
+        self.txt_comprobante.setPlaceholderText("Buscar por comprobante / factura")
+        self.txt_comprobante.setClearButtonEnabled(True)
+        self.txt_comprobante.setMinimumWidth(230)
+        self.txt_comprobante.textChanged.connect(self.aplicar_filtro_comprobante)
+        filtros.addWidget(self.txt_comprobante)
+
+        self.btn_seleccionar_factura = QPushButton("Seleccionar factura")
+        self.btn_seleccionar_factura.setToolTip(
+            "Selecciona todos los renglones de la factura mostrada por el filtro"
+        )
+        self.btn_seleccionar_factura.setEnabled(False)
+        self.btn_seleccionar_factura.clicked.connect(self.seleccionar_factura_visible)
+        filtros.addWidget(self.btn_seleccionar_factura)
+
         self.btn_cliente_lugar = QPushButton("Asignar cliente / lugar")
         self.btn_cliente_lugar.setToolTip("Crear, seleccionar o cambiar el cliente y lugar de entrega de los pedidos seleccionados")
         filtros.addWidget(self.btn_cliente_lugar)
@@ -93,20 +112,66 @@ class BandejaPedidosView(QWidget):
                 self.tabla.setItem(row, col, QTableWidgetItem(str(valor)))
         self.tabla.blockSignals(False)
         self.tabla.resizeColumnsToContents()
+        self.aplicar_filtro_comprobante()
+        self._actualizar_texto_seleccionar_todo()
+        self._emitir_totales()
+
+    def _filas_visibles(self):
+        return [
+            row for row in range(self.tabla.rowCount())
+            if not self.tabla.isRowHidden(row)
+        ]
+
+    def aplicar_filtro_comprobante(self, *args):
+        texto = self.txt_comprobante.text().strip().casefold()
+        coincidencias = 0
+
+        for row in range(self.tabla.rowCount()):
+            item = self.tabla.item(row, self.COLUMNA_COMPROBANTE)
+            comprobante = item.text().strip().casefold() if item else ""
+            visible = not texto or texto in comprobante
+            self.tabla.setRowHidden(row, not visible)
+            if visible:
+                coincidencias += 1
+
+        self.btn_seleccionar_factura.setEnabled(bool(texto) and coincidencias > 0)
+        self._actualizar_texto_seleccionar_todo()
+
+    def seleccionar_factura_visible(self):
+        if not self.txt_comprobante.text().strip():
+            return
+
+        filas = self._filas_visibles()
+        if not filas:
+            return
+
+        self.tabla.blockSignals(True)
+        try:
+            for row in filas:
+                item = self.tabla.item(row, 0)
+                if item:
+                    item.setCheckState(Qt.Checked)
+        finally:
+            self.tabla.blockSignals(False)
+
         self._actualizar_texto_seleccionar_todo()
         self._emitir_totales()
 
     def alternar_seleccion_todos(self):
-        total_filas = self.tabla.rowCount()
-        if total_filas <= 0:
+        filas = self._filas_visibles()
+        if not filas:
             return
 
-        seleccionados = len(self.ids_seleccionados())
-        nuevo_estado = Qt.Unchecked if seleccionados == total_filas else Qt.Checked
+        seleccionados_visibles = sum(
+            1 for row in filas
+            if self.tabla.item(row, 0)
+            and self.tabla.item(row, 0).checkState() == Qt.Checked
+        )
+        nuevo_estado = Qt.Unchecked if seleccionados_visibles == len(filas) else Qt.Checked
 
         self.tabla.blockSignals(True)
         try:
-            for row in range(total_filas):
+            for row in filas:
                 item = self.tabla.item(row, 0)
                 if item:
                     item.setCheckState(nuevo_estado)
@@ -132,9 +197,13 @@ class BandejaPedidosView(QWidget):
         self._actualizar_texto_seleccionar_todo()
 
     def _actualizar_texto_seleccionar_todo(self):
-        total = self.tabla.rowCount()
-        seleccionados = len(self.ids_seleccionados())
-        if total > 0 and seleccionados == total:
+        filas = self._filas_visibles()
+        seleccionados = sum(
+            1 for row in filas
+            if self.tabla.item(row, 0)
+            and self.tabla.item(row, 0).checkState() == Qt.Checked
+        )
+        if filas and seleccionados == len(filas):
             self.btn_seleccionar_todo.setText("Deseleccionar todo")
         else:
             self.btn_seleccionar_todo.setText("Seleccionar todo")
