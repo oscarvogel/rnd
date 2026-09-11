@@ -1,3 +1,11 @@
+IMPORTADORES_PROVEEDOR = {
+    "AUTO": "Automático",
+    "TREMBLAY": "Tremblay",
+    "TIO_PUJIO": "Tío Pujio",
+    "DETALLE_VENTAS": "Detalle de ventas",
+    "COLUMNAS": "Columnas configuradas",
+}
+
 import peewee
 from modelos.ModeloBase import ModeloBase
 from modelos.ParametrosSistema import ParamSist
@@ -30,6 +38,7 @@ class Proveedor(ModeloBase):
     contacto = peewee.CharField(max_length=100, null=True, verbose_name='Contacto')
     activo = peewee.BooleanField(default=True, verbose_name='Activo')
     observaciones = peewee.TextField(null=True, verbose_name='Observaciones')
+    importador = peewee.CharField(max_length=30, default='AUTO', verbose_name='Método de importación')
     
     def __str__(self):
         return self.razon_social
