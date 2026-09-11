@@ -20,8 +20,11 @@ def _decimal(valor):
 class PedidoBandeja:
     id: int
     cliente: str
-    comprobante: str
-    producto: str
+    cliente_id: int = 0
+    lugar_entrega: str = ""
+    lugar_entrega_id: int = 0
+    comprobante: str = ""
+    producto: str = ""
     factura: str = ""
     remito: str = ""
     cantidad: object = 0
@@ -34,7 +37,7 @@ class PedidoBandeja:
     equipo_id: int = 0
 
     def estado(self, empleado_generico, camion_generico):
-        incompleto = not self.ruta_id or not self.cliente or not self.producto
+        incompleto = (not self.ruta_id or not self.cliente_id or not self.cliente or not self.lugar_entrega_id or not self.producto)
         if incompleto or (self.observaciones or "").strip():
             return ESTADO_OBSERVADO
         if str(self.responsable_id) == str(empleado_generico) or str(self.equipo_id) == str(camion_generico):
@@ -60,3 +63,19 @@ def validar_reasignacion(pedidos, ruta_id):
     if len(ids) != len(set(ids)):
         return False, "La selección contiene pedidos duplicados"
     return True, ""
+
+
+def clave_factura(pedido):
+    comprobante = str(getattr(pedido, "factura", "") or getattr(pedido, "comprobante", "") or "").strip()
+    if not comprobante:
+        return None
+    return comprobante
+
+
+def expandir_seleccion_por_factura(pedidos, seleccionados):
+    pedidos = list(pedidos or [])
+    seleccionados = list(seleccionados or [])
+    ids_explicitos = {p.id for p in seleccionados}
+    claves = {clave_factura(p) for p in seleccionados}
+    claves.discard(None)
+    return [p for p in pedidos if p.id in ids_explicitos or clave_factura(p) in claves]

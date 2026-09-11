@@ -56,6 +56,7 @@ class DocumentoPedido(ModeloBase):
     cliente = peewee.ForeignKeyField(
         Cliente,
         backref="documentos_pedido",
+        null=True,
         on_update="CASCADE",
         on_delete="RESTRICT",
     )

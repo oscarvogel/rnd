@@ -8,7 +8,7 @@ from modelos.ModeloBase import ModeloBase
 class HojaDeRuta(ModeloBase):
     id = peewee.AutoField(primary_key=True)
     fecha = peewee.DateField()
-    cliente = peewee.ForeignKeyField(Cliente, backref="hoja_ruta", on_update='CASCADE', on_delete='RESTRICT')
+    cliente = peewee.ForeignKeyField(Cliente, backref="hoja_ruta", null=True, on_update='CASCADE', on_delete='RESTRICT')
     nombre_cliente = peewee.CharField(max_length=100, default='')
     lugar_entrega = peewee.ForeignKeyField(
         LugarEntrega,
@@ -18,7 +18,7 @@ class HojaDeRuta(ModeloBase):
         on_delete='RESTRICT',
         verbose_name='Lugar de Entrega',
     )
-    ruta = peewee.ForeignKeyField(RutaReparto, backref="hoja_ruta", on_update='CASCADE', on_delete='RESTRICT')
+    ruta = peewee.ForeignKeyField(RutaReparto, backref="hoja_ruta", null=True, on_update='CASCADE', on_delete='RESTRICT')
     comprobante = peewee.CharField(max_length=20)
     producto = peewee.CharField(max_length=100)
     cantidad = peewee.DecimalField(max_digits=16, decimal_places=2)
