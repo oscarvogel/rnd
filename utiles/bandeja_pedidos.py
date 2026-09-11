@@ -22,6 +22,8 @@ class PedidoBandeja:
     cliente: str
     comprobante: str
     producto: str
+    factura: str = ""
+    remito: str = ""
     cantidad: object = 0
     kg: object = 0
     bultos: object = 0
