@@ -3,6 +3,7 @@ import peewee
 from PyQt5.QtWidgets import QApplication
 
 from modelos.HojaRuta import HojaDeRuta
+from modelos.Documentos import actualizar_remito_de_hoja, referencias_por_hojas
 from modelos.ModeloBase import reconnect_if_needed
 from modelos.ParametrosSistema import ParamSist
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
@@ -46,6 +47,7 @@ class VerHojaRutaController(ControladorBase):
             )
 
         total = len(hoja_ruta)
+        referencias = referencias_por_hojas([h.id for h in hoja_ruta]) if total else {}
         avance = 0
         self.view.equipo.lineEditCodigo.setText(hoja_ruta[0].equipo_asignado.id if total > 0 and hoja_ruta[0].equipo_asignado else 0)
         self.view.empleado.lineEditCodigo.setText(hoja_ruta[0].responsable.id if total > 0 and hoja_ruta[0].responsable else 0)
@@ -64,8 +66,13 @@ class VerHojaRutaController(ControladorBase):
             if self.view.equipo.lineEditCodigo.valor() == ParamSist.ObtenerParametro("CAMION_GENERICO", "1") or h.responsable.id == ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23"):
                 seleccionado = False
             
+            referencia = referencias.get(h.id, {})
             item = [
-                seleccionado, h.nombre_cliente, h.comprobante, h.producto, h.cantidad, h.kg, h.cantidad_bultos, h.observaciones, h.id, h.cliente.id
+                seleccionado, h.nombre_cliente, h.comprobante,
+                referencia.get("factura") or h.comprobante or "",
+                referencia.get("remito") or "",
+                h.producto, h.cantidad, h.kg, h.cantidad_bultos,
+                h.observaciones, h.id, h.cliente.id
             ]
             self.view.grilla_datos.AgregaItem(item)
         self.view.grilla_datos.setSortingEnabled(True)
@@ -223,6 +230,8 @@ class MdoficaHojaRutaController(ControladorBase):
         hoja_ruta.ruta = self.ruta_id
         hoja_ruta.nombre_cliente = self.view.cliente.labelNombre.text()
         hoja_ruta.save()
+        if hoja_ruta.id:
+            actualizar_remito_de_hoja(hoja_ruta.id, self.view.text_remito.valor())
 
         self.view.Cerrar()
         
@@ -235,6 +244,9 @@ class MdoficaHojaRutaController(ControladorBase):
         self.view.cliente.lineEditCodigo.setText(hoja_ruta.cliente.id if hoja_ruta.cliente else 0)
         self.view.cliente.lineEditCodigo.valida()
         self.view.text_comprobante.setText(hoja_ruta.comprobante)
+        referencia = referencias_por_hojas([hoja_ruta.id]).get(hoja_ruta.id, {})
+        self.view.text_factura.setText(referencia.get("factura") or hoja_ruta.comprobante or "")
+        self.view.text_remito.setText(referencia.get("remito") or "")
         self.view.text_producto.setText(hoja_ruta.producto)
         self.view.text_cantidad.setValue(hoja_ruta.cantidad)
         self.view.text_kg.setValue(hoja_ruta.kg)
