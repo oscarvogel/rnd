@@ -258,7 +258,7 @@ class ImportacionPedidosController(ControladorBase):
             )
             row = df_datos.iloc[i]
             item = [True]
-            item.extend(row.tolist())
+            item.extend("" if pd.isna(valor) else valor for valor in row.tolist())
             self.view.grid_datos.AgregaItem(item)
 
         self.view.avance.finalizar("Vista previa lista")
