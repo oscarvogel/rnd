@@ -7,7 +7,7 @@ from modelos.HojaRuta import HojaDeRuta
 import modelos.ModeloBase as modelo_base
 from modelos.ModeloBase import reconnect_if_needed
 from modelos.ParametrosSistema import ParamSist
-from modelos.Proveedores import ProcesoLista
+from modelos.Proveedores import ProcesoLista, Proveedor
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.pyqt5libs.Ventanas import showAlert
 from pyqt5libs.pyqt5libs.utiles import inicializar_y_capturar_excepciones, openFileNameDialog
@@ -53,9 +53,19 @@ class ImportacionPedidosController(ControladorBase):
         self.view.btn_grabar.clicked.connect(self.on_click_btn_grabar)
         self.view.btn_siguiente.clicked.connect(self.ir_siguiente_paso)
 
+    def _obtener_proveedor_actual(self):
+        proveedor_id = self.view.empresa_proveedora.valor()
+        if not proveedor_id:
+            return None
+        return self._leer_db_con_reintento(
+            lambda: Proveedor.get_or_none(Proveedor.id == proveedor_id),
+            "lectura del proveedor seleccionado",
+        )
+
     def _actualizar_ayuda_proveedor(self):
+        proveedor = self._obtener_proveedor_actual()
         self.view.mostrar_ayuda_proveedor(
-            ayuda_proveedor(self.view.empresa_proveedora.valor())
+            ayuda_proveedor(proveedor.importador if proveedor else None)
         )
 
     def _actualizar_avance_preprocesamiento(self, porcentaje):
@@ -176,22 +186,29 @@ class ImportacionPedidosController(ControladorBase):
         self.view.avance.iniciar("Analizando archivo")
         self.view.txt_archivo.setText(cArchivo)
 
+        proveedor_obj = self._obtener_proveedor_actual()
+        metodo = proveedor_obj.importador if proveedor_obj else "AUTO"
         archivo_normalizado = normalizar_archivo_pedidos(
             cArchivo,
             progreso=self._actualizar_avance_preprocesamiento,
+            metodo=metodo,
         )
         if archivo_normalizado:
             self.archivo_normalizado = True
             cArchivo = archivo_normalizado
             self.view.txt_archivo.setText(cArchivo)
-            self.view.avance.finalizar("Archivo normalizado")
-        elif self.view.empresa_proveedora.valor() == "15":
-            self.importa_tremblay()
-            cArchivo = self.view.txt_archivo.text()
-            if not cArchivo:
-                return
-            self.view.avance.finalizar("Archivo Tremblay procesado")
+            self.view.avance.finalizar("Archivo normalizado ({})".format(metodo))
         else:
+            if str(metodo or "AUTO").upper() not in ("AUTO", "COLUMNAS"):
+                self.view.avance.marcar_error("Formato no reconocido para {}".format(metodo))
+                showAlert(
+                    "Sistema",
+                    "El archivo no coincide con el método de importación '{}' configurado para {}.".format(
+                        metodo,
+                        proveedor_obj.razon_social if proveedor_obj else "el proveedor",
+                    ),
+                )
+                return
             self.view.avance.finalizar("Archivo seleccionado")
 
         xls = pd.ExcelFile(cArchivo)
