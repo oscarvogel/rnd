@@ -262,26 +262,47 @@ class BandejaPedidosController(ControladorBase):
                 if idx >= 0:
                     cbo_lugar.setCurrentIndex(idx)
 
+        def on_cliente_completado(texto):
+            texto = str(texto or "").strip().lower()
+            for cliente in clientes:
+                if str(cliente.razon_social or "").strip().lower() == texto:
+                    idx = cbo_cliente.findData(cliente.id)
+                    if idx >= 0:
+                        cbo_cliente.setCurrentIndex(idx)
+                    break
+            cargar_lugares()
+
         cbo_cliente.currentIndexChanged.connect(cargar_lugares)
         cbo_cliente.lineEdit().editingFinished.connect(cargar_lugares)
-        completer.activated.connect(cargar_lugares)
+        completer.activated[str].connect(on_cliente_completado)
 
-        # Precarga la asignación actual cuando toda la factura coincide.
+        # Precarga el cliente actual de la factura. Aunque alguna línea no esté
+        # visible, la selección inicial debe reflejar el cliente ya importado.
         cliente_ids = {p.cliente_id for p in pedidos if p.cliente_id}
+        cliente_id_actual = 0
         if len(cliente_ids) == 1:
             cliente_id_actual = next(iter(cliente_ids))
+        elif seleccionados:
+            cliente_id_actual = int(getattr(seleccionados[0], "cliente_id", 0) or 0)
+
+        if cliente_id_actual:
             idx = cbo_cliente.findData(cliente_id_actual)
             if idx >= 0:
                 cbo_cliente.setCurrentIndex(idx)
-                lugares_actuales = {
-                    p.lugar_entrega_id for p in pedidos if p.lugar_entrega_id
-                }
-                if len(lugares_actuales) == 1:
-                    idx_lugar = cbo_lugar.findData(next(iter(lugares_actuales)))
-                    if idx_lugar >= 0:
-                        cbo_lugar.setCurrentIndex(idx_lugar)
+            else:
+                cargar_lugares()
         else:
             cargar_lugares()
+
+        # Si toda la factura ya tiene un lugar común, también lo dejamos
+        # seleccionado después de cargar los lugares del cliente.
+        lugares_actuales = {
+            p.lugar_entrega_id for p in pedidos if p.lugar_entrega_id
+        }
+        if len(lugares_actuales) == 1:
+            idx_lugar = cbo_lugar.findData(next(iter(lugares_actuales)))
+            if idx_lugar >= 0:
+                cbo_lugar.setCurrentIndex(idx_lugar)
 
         def gestionar_clientes():
             from controladores.ABMClientes import ABMClientesController
