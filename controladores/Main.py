@@ -14,7 +14,8 @@ from utiles.dashboard_flujo import (
 from vistas.Main import MainView
 from vistas.dashboard.dashboard_view import (
     NAV_ALERTAS, NAV_HOJAS_RUTA_DIA, NAV_IMPORTAR_PEDIDOS,
-    NAV_ORGANIZAR_PEDIDOS, NAV_PENDIENTES, NAV_VENCIMIENTOS, DashboardView,
+    NAV_ORGANIZAR_PEDIDOS, NAV_PENDIENTES, NAV_PENDIENTES_ENTREGA,
+    NAV_VENCIMIENTOS, DashboardView,
 )
 
 
@@ -83,6 +84,9 @@ class MainController(ControladorBase):
         elif accion in (NAV_ORGANIZAR_PEDIDOS, NAV_PENDIENTES, ACCION_ORGANIZAR):
             from controladores.BandejaPedidos import BandejaPedidosController
             self.view.ventana_menu_lateral = BandejaPedidosController(fecha_inicial=date.today())
+        elif accion == NAV_PENDIENTES_ENTREGA:
+            from controladores.PendientesEntrega import PendientesEntregaController
+            self.view.ventana_menu_lateral = PendientesEntregaController()
         elif accion == ACCION_ASIGNAR:
             from controladores.AsignacionRecursos import AsignacionRecursosController
             self.view.ventana_menu_lateral = AsignacionRecursosController(fecha_inicial=date.today(), ruta_inicial=ruta_id)
