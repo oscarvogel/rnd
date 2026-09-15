@@ -37,6 +37,7 @@ class PedidoBandeja:
     responsable_id: int = 0
     equipo_id: int = 0
     documento_id: int = 0
+    cantidad_original: object = 0
 
     def estado(self, empleado_generico, camion_generico):
         incompleto = (not self.ruta_id or not self.cliente_id or not self.cliente or not self.lugar_entrega_id or not self.producto)
@@ -100,6 +101,7 @@ class FacturaBandeja:
     kg: object
     bultos: object
     observaciones: str
+    pendiente_cantidad: object
     hoja_ids: tuple
     responsable_ids: tuple
     equipo_ids: tuple
@@ -112,7 +114,7 @@ class FacturaBandeja:
             or not self.ruta_id
             or self.productos <= 0
         )
-        if incompleta or (self.observaciones or "").strip():
+        if incompleta or (self.observaciones or "").strip() or _decimal(self.pendiente_cantidad) > 0:
             return ESTADO_OBSERVADO
         recursos_genericos = any(
             str(x) == str(empleado_generico) for x in self.responsable_ids
@@ -165,6 +167,13 @@ def agrupar_pedidos_por_factura(pedidos):
                         for x in lineas
                         if str(x.observaciones or "").strip()
                     })
+                ),
+                pendiente_cantidad=sum(
+                    (
+                        max(Decimal("0"), _decimal(x.cantidad_original) - _decimal(x.cantidad))
+                        for x in lineas
+                    ),
+                    Decimal("0"),
                 ),
                 hoja_ids=tuple(x.id for x in lineas),
                 responsable_ids=tuple(x.responsable_id for x in lineas),
