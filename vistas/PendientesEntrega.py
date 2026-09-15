@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
 
 class PendientesEntregaView(QWidget):
     COLUMNAS = [
-        "Factura", "Cliente", "Lugar", "Producto",
+        "Sel.", "Factura", "Cliente", "Lugar", "Producto",
         "Cantidad factura", "Entregado acumulado", "Pendiente",
     ]
 
@@ -34,6 +34,9 @@ class PendientesEntregaView(QWidget):
         self.lbl_resumen = QLabel("Calculando pendientes…")
         barra.addWidget(self.lbl_resumen)
         barra.addStretch(1)
+        self.btn_agregar_reparto = QPushButton("Agregar al reparto de hoy")
+        self.btn_agregar_reparto.setProperty("role", "primary")
+        barra.addWidget(self.btn_agregar_reparto)
         self.btn_actualizar = QPushButton("Actualizar")
         barra.addWidget(self.btn_actualizar)
         raiz.addLayout(barra)
@@ -51,6 +54,13 @@ class PendientesEntregaView(QWidget):
         for fila in filas:
             row = self.tabla.rowCount()
             self.tabla.insertRow(row)
+
+            chk = QTableWidgetItem()
+            chk.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+            chk.setCheckState(Qt.Unchecked)
+            chk.setData(Qt.UserRole, int(fila["detalle_id"]))
+            self.tabla.setItem(row, 0, chk)
+
             valores = [
                 fila["factura"],
                 fila["cliente"],
@@ -60,7 +70,7 @@ class PendientesEntregaView(QWidget):
                 fila["entregado"],
                 fila["pendiente"],
             ]
-            for col, valor in enumerate(valores):
+            for col, valor in enumerate(valores, start=1):
                 self.tabla.setItem(row, col, QTableWidgetItem(str(valor)))
             total_pendiente += float(fila["pendiente"] or 0)
             facturas.add(fila["factura"])
@@ -71,3 +81,11 @@ class PendientesEntregaView(QWidget):
                 len(facturas), len(filas), round(total_pendiente, 2)
             )
         )
+
+    def detalles_seleccionados(self):
+        ids = []
+        for row in range(self.tabla.rowCount()):
+            item = self.tabla.item(row, 0)
+            if item and item.checkState() == Qt.Checked:
+                ids.append(int(item.data(Qt.UserRole)))
+        return ids
