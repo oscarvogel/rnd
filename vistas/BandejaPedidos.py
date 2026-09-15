@@ -68,6 +68,9 @@ class BandejaPedidosView(QWidget):
         self.tabla.setHorizontalHeaderLabels(self.COLUMNAS)
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.tabla.setAlternatingRowColors(True)
+        self.tabla.verticalHeader().setDefaultSectionSize(36)
+        self.tabla.horizontalHeader().setStretchLastSection(True)
         self.tabla.itemChanged.connect(self._emitir_totales)
         raiz.addWidget(self.tabla)
 
