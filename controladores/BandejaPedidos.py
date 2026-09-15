@@ -285,6 +285,37 @@ class BandejaPedidosController(ControladorBase):
         elif seleccionados:
             cliente_id_actual = int(getattr(seleccionados[0], "cliente_id", 0) or 0)
 
+        # En importaciones pendientes el FK cliente puede seguir NULL aunque
+        # nombre_cliente ya venga informado y se vea en la grilla. En ese caso
+        # resolvemos una coincidencia exacta por razón social para que el
+        # operador solo tenga que elegir el lugar de entrega.
+        if not cliente_id_actual:
+            nombres_factura = {
+                str(getattr(p, "cliente", "") or "").strip()
+                for p in pedidos
+                if str(getattr(p, "cliente", "") or "").strip()
+            }
+            if len(nombres_factura) == 1:
+                nombre_actual = next(iter(nombres_factura))
+            elif seleccionados:
+                nombre_actual = str(
+                    getattr(seleccionados[0], "cliente", "") or ""
+                ).strip()
+            else:
+                nombre_actual = ""
+
+            if nombre_actual:
+                cliente_nombre = next(
+                    (
+                        cli for cli in clientes
+                        if str(cli.razon_social or "").strip().lower()
+                        == nombre_actual.lower()
+                    ),
+                    None,
+                )
+                if cliente_nombre is not None:
+                    cliente_id_actual = int(cliente_nombre.id)
+
         if cliente_id_actual:
             idx = cbo_cliente.findData(cliente_id_actual)
             if idx >= 0:
