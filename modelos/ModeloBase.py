@@ -48,13 +48,15 @@ __version__ = "0.1"
 
 # database_proxy = Proxy()  # Create a proxy for our db.
 from pyqt5libs.pyqt5libs.utiles import LeerConf, LeerIni
-from rnd_credentials import CredentialError, resolve_mysql_password
 
 db = None
 
 dbsqlite = SqliteDatabase(':memory:', pragmas={'journal_mode': 'wal'})
 
 def _mysql_password():
+    # Importación diferida: RND DEMO usa SQLite y no debe depender de
+    # win32crypt/DPAPI ni de ninguna credencial MySQL.
+    from rnd_credentials import CredentialError, resolve_mysql_password
     try:
         return resolve_mysql_password()
     except CredentialError:
