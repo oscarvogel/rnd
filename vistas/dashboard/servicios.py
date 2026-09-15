@@ -22,6 +22,7 @@ from typing import Optional
 from modelos.Accesos import Acceso
 from modelos.Equipos import Vencimientos, get_vencimientos_proximos
 from modelos.HojaRuta import HojaDeRuta
+from modelos.Documentos import DocumentoPedidoDetalle, DocumentoPedidoHojaRuta
 from modelos.ParametrosSistema import ParamSist
 
 
@@ -165,6 +166,31 @@ def alertas_vencidas(usu_id, fecha=None):
             .where(Vencimientos.fecha_vencimiento < fecha)
             .count()
         )
+    except Exception as exc:
+        return _to_resultado("error", detalle=str(exc), fecha=fecha)
+    if cantidad == 0:
+        return _to_resultado("vacio", fecha=fecha)
+    return _to_resultado("ok", cantidad=cantidad, fecha=fecha)
+
+
+def pendientes_entrega(usu_id, fecha=None):
+    """Cantidad de facturas con al menos una línea parcialmente entregada."""
+    fecha = fecha or date.today()
+    if not _validar_permiso(usu_id, PERMISO_HOJA_RUTA):
+        return _to_resultado("sin_permiso", fecha=fecha)
+    try:
+        facturas = set()
+        for detalle in DocumentoPedidoDetalle.select():
+            original = float(detalle.cantidad_original or 0)
+            entregado = sum(
+                float(v.cantidad_asignada or 0)
+                for v in DocumentoPedidoHojaRuta.select().where(
+                    DocumentoPedidoHojaRuta.detalle == detalle.id
+                )
+            )
+            if original - entregado > 0.000001:
+                facturas.add(detalle.documento_id)
+        cantidad = len(facturas)
     except Exception as exc:
         return _to_resultado("error", detalle=str(exc), fecha=fecha)
     if cantidad == 0:
