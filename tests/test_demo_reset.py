@@ -53,4 +53,6 @@ class DemoResetSafetyTests(unittest.TestCase):
         self.assertEqual(tablas, set())
         db.close()
 
+
+if __name__ == "__main__":
     unittest.main()
