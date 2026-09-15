@@ -56,6 +56,7 @@ class PendientesEntregaView(QWidget):
         raiz.addWidget(self.tabla)
 
     def cargar(self, filas):
+        self.tabla.setSortingEnabled(False)
         self.tabla.setRowCount(0)
         total_pendiente = 0
         facturas = set()
@@ -82,6 +83,7 @@ class PendientesEntregaView(QWidget):
                 self.tabla.setItem(row, col, QTableWidgetItem(str(valor)))
             total_pendiente += float(fila["pendiente"] or 0)
             facturas.add(fila["factura"])
+        self.tabla.setSortingEnabled(True)
         self.tabla.resizeColumnsToContents()
         self.tabla.horizontalHeader().setStretchLastSection(True)
         self.lbl_resumen.setText(
