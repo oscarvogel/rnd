@@ -58,6 +58,10 @@ class BandejaPedidosView(QWidget):
         self.btn_cliente_lugar.setToolTip("Asignar o cambiar cliente y lugar de entrega; aplica a toda la factura")
         filtros.addWidget(self.btn_cliente_lugar)
 
+        self.btn_editar_pedido = QPushButton("Editar pedido")
+        self.btn_editar_pedido.setToolTip("Editar los datos operativos de la línea seleccionada")
+        filtros.addWidget(self.btn_editar_pedido)
+
         self.btn_seleccionar_todo = QPushButton("Seleccionar todo")
         self.btn_seleccionar_todo.setToolTip("Seleccionar o deseleccionar todos los pedidos visibles")
         self.btn_seleccionar_todo.clicked.connect(self.alternar_seleccion_todos)
@@ -191,6 +195,13 @@ class BandejaPedidosView(QWidget):
             if item and item.checkState() == Qt.Checked:
                 ids.append(int(item.data(Qt.UserRole)))
         return ids
+
+    def id_fila_actual(self):
+        row = self.tabla.currentRow()
+        if row < 0:
+            return 0
+        item = self.tabla.item(row, 0)
+        return int(item.data(Qt.UserRole) or 0) if item else 0
 
     def ruta_destino(self):
         return int(self.cbo_ruta.currentData() or 0)
