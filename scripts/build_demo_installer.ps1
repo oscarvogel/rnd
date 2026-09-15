@@ -34,16 +34,25 @@ function Get-DemoBuildVersion {
 }
 
 if (-not (Test-Path $Python)) {
-    throw "No existe $Python. Crear .venv-build antes de compilar."
+    Write-Host "Creando entorno de build .venv-build..." -ForegroundColor Cyan
+    & py -3.10 -m venv (Join-Path $RepoRoot ".venv-build")
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $Python)) {
+        throw "No se pudo crear .venv-build con Python 3.10."
+    }
 }
+
 if (-not $Iscc) {
-    throw "No se encontro Inno Setup 6 (ISCC.exe)."
+    throw "No se encontro Inno Setup 6. Instalar Inno Setup 6 y volver a ejecutar este mismo comando."
 }
 
 $BuildVersion = Get-DemoBuildVersion -Path $StateFile
 
 Push-Location $RepoRoot
 try {
+    Write-Host "Actualizando submodulos..." -ForegroundColor Cyan
+    & git submodule update --init --recursive
+    if ($LASTEXITCODE -ne 0) { throw "No se pudieron actualizar los submodulos." }
+
     if (-not $SkipInstallDependencies) {
         & $Python -m pip install -r requirements.txt
         if ($LASTEXITCODE -ne 0) { throw "Fallaron dependencias." }
