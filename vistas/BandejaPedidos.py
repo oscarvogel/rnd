@@ -24,12 +24,15 @@ class BandejaPedidosView(QWidget):
 
     def _build_ui(self):
         raiz = QVBoxLayout(self)
+        raiz.setContentsMargins(18, 16, 18, 16)
+        raiz.setSpacing(10)
         titulo = QLabel("Pedidos para organizar")
         titulo.setObjectName("bandejaPedidosTitulo")
         raiz.addWidget(titulo)
         raiz.addWidget(QLabel("Una fila representa una factura completa. Revise cliente, lugar y ruta; abra la factura para corregir sus productos antes de organizar el reparto."))
 
         filtros = QHBoxLayout()
+        filtros.setSpacing(8)
         filtros.addWidget(QLabel("Fecha:"))
         self.fecha = QDateEdit()
         self.fecha.setCalendarPopup(True)
@@ -43,21 +46,24 @@ class BandejaPedidosView(QWidget):
 
         filtros.addWidget(QLabel("Factura:"))
         self.txt_comprobante = QLineEdit()
-        self.txt_comprobante.setPlaceholderText("Buscar por comprobante / factura")
+        self.txt_comprobante.setPlaceholderText("Buscar factura...")
         self.txt_comprobante.setClearButtonEnabled(True)
         self.txt_comprobante.setMinimumWidth(230)
         self.txt_comprobante.textChanged.connect(self.aplicar_filtro_comprobante)
         filtros.addWidget(self.txt_comprobante)
 
-        self.btn_editar_factura = QPushButton("Editar factura")
+        self.btn_editar_factura = QPushButton("Editar")
+        self.btn_editar_factura.setProperty("role", "secondary")
         self.btn_editar_factura.setToolTip("Editar cliente, lugar, ruta y remito de la factura seleccionada")
         filtros.addWidget(self.btn_editar_factura)
 
-        self.btn_productos = QPushButton("Ver / editar productos")
+        self.btn_productos = QPushButton("Productos")
+        self.btn_productos.setProperty("role", "secondary")
         self.btn_productos.setToolTip("Revisar y corregir las líneas de producto de la factura")
         filtros.addWidget(self.btn_productos)
 
         self.btn_seleccionar_todo = QPushButton("Seleccionar todo")
+        self.btn_seleccionar_todo.setProperty("role", "secondary")
         self.btn_seleccionar_todo.setToolTip("Seleccionar o deseleccionar todos los pedidos visibles")
         self.btn_seleccionar_todo.clicked.connect(self.alternar_seleccion_todos)
         filtros.addWidget(self.btn_seleccionar_todo)
@@ -65,8 +71,11 @@ class BandejaPedidosView(QWidget):
         raiz.addLayout(filtros)
 
         self.tabla = QTableWidget(0, len(self.COLUMNAS))
+        self.tabla.setObjectName("dataGrid")
         self.tabla.setHorizontalHeaderLabels(self.COLUMNAS)
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tabla.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.tabla.setSortingEnabled(True)
         self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.tabla.setAlternatingRowColors(True)
         self.tabla.verticalHeader().setDefaultSectionSize(36)
