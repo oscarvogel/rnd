@@ -7,8 +7,8 @@ from PyQt5.QtWidgets import (
 
 
 class BandejaPedidosView(QWidget):
-    COLUMNAS = ["Sel.", "Estado", "Cliente", "Ruta", "Comprobante", "Factura", "Remito", "Producto", "Cantidad", "KG", "Bultos", "Observaciones"]
-    COLUMNA_COMPROBANTE = 4
+    COLUMNAS = ["Sel.", "Estado", "Cliente", "Lugar de entrega", "Ruta", "Comprobante", "Factura", "Remito", "Producto", "Cantidad", "KG", "Bultos", "Observaciones"]
+    COLUMNA_COMPROBANTE = 5
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -53,6 +53,10 @@ class BandejaPedidosView(QWidget):
         self.btn_seleccionar_factura.setEnabled(False)
         self.btn_seleccionar_factura.clicked.connect(self.seleccionar_factura_visible)
         filtros.addWidget(self.btn_seleccionar_factura)
+
+        self.btn_cliente_lugar = QPushButton("Asignar cliente / lugar")
+        self.btn_cliente_lugar.setToolTip("Asignar o cambiar cliente y lugar de entrega; aplica a toda la factura")
+        filtros.addWidget(self.btn_cliente_lugar)
 
         self.btn_seleccionar_todo = QPushButton("Seleccionar todo")
         self.btn_seleccionar_todo.setToolTip("Seleccionar o deseleccionar todos los pedidos visibles")
@@ -103,7 +107,7 @@ class BandejaPedidosView(QWidget):
             self.tabla.setItem(row, 0, chk)
             valores = [
                 pedido.estado(empleado_generico, camion_generico), pedido.cliente,
-                pedido.ruta, pedido.comprobante, pedido.factura, pedido.remito,
+                pedido.lugar_entrega or "⚠ Sin asignar", pedido.ruta, pedido.comprobante, pedido.factura, pedido.remito,
                 pedido.producto, str(pedido.cantidad), str(pedido.kg),
                 str(pedido.bultos), pedido.observaciones or "",
             ]

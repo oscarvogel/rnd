@@ -54,9 +54,13 @@ def validar_hoja(registros, fecha, ruta_id, empleado_generico, camion_generico):
     datos_ok = True
     detalle_datos = ""
     for r in registros:
-        if not getattr(r, "cliente_id", 0) or not str(getattr(r, "comprobante", "") or "").strip():
+        if not getattr(r, "cliente_id", 0) or not getattr(r, "lugar_entrega_id", 0):
             datos_ok = False
-            detalle_datos = "Hay pedidos sin cliente o comprobante."
+            detalle_datos = "Hay pedidos sin cliente o lugar de entrega."
+            break
+        if not str(getattr(r, "comprobante", "") or "").strip():
+            datos_ok = False
+            detalle_datos = "Hay pedidos sin comprobante."
             break
         if _decimal(getattr(r, "cantidad", 0)) <= 0:
             datos_ok = False

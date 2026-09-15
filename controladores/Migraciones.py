@@ -89,6 +89,25 @@ class MigracionBaseDatos:
         except Exception:
             logging.exception("No se pudo inicializar método Tremblay para proveedor 15")
 
+        self.migraciones = [
+            migrator.alter_column_type(
+                'hoja_de_ruta',
+                'cliente_id',
+                IntegerField(null=True),
+            ),
+            migrator.alter_column_type(
+                'hoja_de_ruta',
+                'ruta_id',
+                IntegerField(null=True),
+            ),
+            migrator.alter_column_type(
+                'documento_pedido',
+                'cliente_id',
+                IntegerField(null=True),
+            ),
+        ]
+        self.RealizaMigraciones()
+
         self._crear_lugares_iniciales()
 
     def _crear_lugares_iniciales(self):
