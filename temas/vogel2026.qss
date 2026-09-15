@@ -548,13 +548,13 @@ QTableWidget,
 QTreeView,
 QTreeWidget {
     background-color: #FFFFFF;
-    alternate-background-color: #F2F8FC;
-    color: #0F172A;
-    border: 1px solid #E2E8F0;
-    border-radius: 4px;
-    gridline-color: #E2E8F0;
-    selection-background-color: #DDF3FC;
-    selection-color: #0F172A;
+    alternate-background-color: #F4FAFD;
+    color: #14324F;
+    border: 1px solid #B8DBEC;
+    border-radius: 8px;
+    gridline-color: #D7EAF3;
+    selection-background-color: #0A84D8;
+    selection-color: #FFFFFF;
     outline: 0;
 }
 
@@ -562,8 +562,15 @@ QTableView::item,
 QTableWidget::item,
 QTreeView::item,
 QTreeWidget::item {
-    padding: 6px 8px;
+    padding: 7px 9px;
     border: none;
+    border-bottom: 1px solid #E6F1F7;
+}
+
+QTableView::item:hover,
+QTableWidget::item:hover {
+    background-color: #E9F7FD;
+    color: #0A3D67;
 }
 
 QTableView::item:selected,
@@ -575,24 +582,28 @@ QTreeWidget::item:selected {
 }
 
 QHeaderView::section {
-    background-color: #F1F5F9;
-    color: #0F172A;
-    padding: 8px 10px;
+    background: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 #0A5F9E,
+        stop:1 #0A84D8
+    );
+    color: #FFFFFF;
+    padding: 9px 10px;
     border: none;
-    border-right: 1px solid #E2E8F0;
-    border-bottom: 1px solid #E2E8F0;
-    font-weight: 600;
+    border-right: 1px solid #50B8E2;
+    border-bottom: 1px solid #0871B9;
+    font-weight: 700;
 }
 
 QHeaderView::section:hover {
-    background-color: #E2E8F0;
+    background-color: #13A9E0;
 }
 
 QTableCornerButton::section {
-    background-color: #F1F5F9;
+    background-color: #0A5F9E;
     border: none;
-    border-right: 1px solid #E2E8F0;
-    border-bottom: 1px solid #E2E8F0;
+    border-right: 1px solid #50B8E2;
+    border-bottom: 1px solid #0871B9;
 }
 
 
