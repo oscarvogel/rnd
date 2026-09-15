@@ -33,11 +33,37 @@ function Get-DemoBuildVersion {
     return ("{0}.{1:D2}" -f $today, $counter)
 }
 
-if (-not (Test-Path $Python)) {
-    Write-Host "Creando entorno de build .venv-build..." -ForegroundColor Cyan
-    & py -3.10 -m venv (Join-Path $RepoRoot ".venv-build")
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $Python)) {
-        throw "No se pudo crear .venv-build con Python 3.10."
+$VenvBuild = Join-Path $RepoRoot ".venv-build"
+
+function Test-BuildVenv {
+    param([string]$PythonExe)
+    if (-not (Test-Path $PythonExe)) {
+        return $false
+    }
+    try {
+        & $PythonExe -c "import sys; print(sys.executable)" *> $null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    }
+}
+
+if (-not (Test-BuildVenv -PythonExe $Python)) {
+    if (Test-Path $VenvBuild) {
+        Write-Host "Entorno .venv-build invalido; recreando..." -ForegroundColor Yellow
+        Remove-Item -Recurse -Force $VenvBuild
+    } else {
+        Write-Host "Creando entorno de build .venv-build..." -ForegroundColor Cyan
+    }
+
+    $PyLauncher = Get-Command py -ErrorAction SilentlyContinue
+    if (-not $PyLauncher) {
+        throw "No se encontro el launcher 'py' de Python."
+    }
+
+    & py -3.10 -m venv $VenvBuild
+    if ($LASTEXITCODE -ne 0 -or -not (Test-BuildVenv -PythonExe $Python)) {
+        throw "No se pudo crear un .venv-build valido con Python 3.10."
     }
 }
 
