@@ -379,19 +379,34 @@ class BandejaPedidosController(ControladorBase):
 
             item_producto = QTableWidgetItem(str(hoja.producto or ""))
             item_original = QTableWidgetItem(str(cantidad_original))
-            item_original.setFlags(item_original.flags() & ~Qt.ItemIsEditable)
             item_entregar = QTableWidgetItem(str(hoja.cantidad or 0))
             item_pendiente = QTableWidgetItem(str(pendiente))
-            item_pendiente.setFlags(item_pendiente.flags() & ~Qt.ItemIsEditable)
+            item_kg = QTableWidgetItem(str(hoja.kg or 0))
+            item_bultos = QTableWidgetItem(str(hoja.cantidad_bultos or 0))
+            item_observaciones = QTableWidgetItem(str(hoja.observaciones or ""))
+            item_id = QTableWidgetItem(str(hoja.id))
+
+            # En este flujo solo se modifica cuánto se entrega. El resto son
+            # datos originales/importados y se muestran únicamente como referencia.
+            for item in (
+                item_producto,
+                item_original,
+                item_pendiente,
+                item_kg,
+                item_bultos,
+                item_observaciones,
+                item_id,
+            ):
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
 
             tabla.setItem(row, 0, item_producto)
             tabla.setItem(row, 1, item_original)
             tabla.setItem(row, 2, item_entregar)
             tabla.setItem(row, 3, item_pendiente)
-            tabla.setItem(row, 4, QTableWidgetItem(str(hoja.kg or 0)))
-            tabla.setItem(row, 5, QTableWidgetItem(str(hoja.cantidad_bultos or 0)))
-            tabla.setItem(row, 6, QTableWidgetItem(str(hoja.observaciones or "")))
-            tabla.setItem(row, 7, QTableWidgetItem(str(hoja.id)))
+            tabla.setItem(row, 4, item_kg)
+            tabla.setItem(row, 5, item_bultos)
+            tabla.setItem(row, 6, item_observaciones)
+            tabla.setItem(row, 7, item_id)
 
         def recalcular_pendiente(item):
             if item.column() != 2:
@@ -428,34 +443,23 @@ class BandejaPedidosController(ControladorBase):
         try:
             for row in range(tabla.rowCount()):
                 hoja_id = int(tabla.item(row, 7).text())
-                producto = tabla.item(row, 0).text().strip()
                 cantidad_original = numero(tabla.item(row, 1).text(), "Cantidad factura")
                 cantidad = numero(tabla.item(row, 2).text(), "Cantidad a entregar")
-                kg = numero(tabla.item(row, 4).text(), "KG")
-                bultos = numero(tabla.item(row, 5).text(), "Bultos")
-                observaciones = tabla.item(row, 6).text().strip()
-                if not producto:
-                    raise ValueError("Producto no puede quedar vacío")
                 if cantidad < 0:
                     raise ValueError("Cantidad a entregar no puede ser negativa")
                 if cantidad > cantidad_original:
                     raise ValueError(
                         "Cantidad a entregar no puede superar la cantidad de la factura"
                     )
+
                 HojaDeRuta.update(
-                    producto=producto,
                     cantidad=cantidad,
-                    kg=kg,
-                    cantidad_bultos=bultos,
-                    observaciones=observaciones,
                 ).where(HojaDeRuta.id == hoja_id).execute()
 
-                # Mantener el vínculo operativo consistente con lo que se
-                # entrega en este reparto; el detalle original no se modifica.
+                # Solo cambia la cantidad asignada a este reparto. KG, bultos,
+                # producto y observaciones conservan los valores importados.
                 DocumentoPedidoHojaRuta.update(
                     cantidad_asignada=cantidad,
-                    kg_asignados=kg,
-                    bultos_asignados=bultos,
                 ).where(
                     DocumentoPedidoHojaRuta.hoja_ruta == hoja_id
                 ).execute()
