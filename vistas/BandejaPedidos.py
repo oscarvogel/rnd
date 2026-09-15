@@ -106,6 +106,7 @@ class BandejaPedidosView(QWidget):
             self.cbo_ruta.addItem(descripcion, ruta_id)
 
     def cargar_facturas(self, facturas, empleado_generico, camion_generico):
+        self.tabla.setSortingEnabled(False)
         self.tabla.blockSignals(True)
         self.tabla.setRowCount(0)
         for factura in facturas:
@@ -135,6 +136,7 @@ class BandejaPedidosView(QWidget):
                 self.tabla.setItem(row, col, QTableWidgetItem(str(valor)))
 
         self.tabla.blockSignals(False)
+        self.tabla.setSortingEnabled(True)
         self.tabla.resizeColumnsToContents()
         self.aplicar_filtro_comprobante()
         self._actualizar_texto_seleccionar_todo()
