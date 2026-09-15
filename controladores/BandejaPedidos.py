@@ -1,8 +1,8 @@
 # coding=utf-8
 from datetime import date
 
-from PyQt5.QtCore import QDate
-from PyQt5.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from PyQt5.QtCore import QDate, Qt
+from PyQt5.QtWidgets import QComboBox, QCompleter, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 from peewee import JOIN
 
 from modelos.Clientes import Cliente, LugarEntrega, RutaReparto
@@ -112,6 +112,49 @@ class BandejaPedidosController(ControladorBase):
         totales = totales_seleccion(self.pedidos_seleccionados())
         self.view.set_totales(totales["pedidos"], totales["kg"], totales["bultos"])
 
+    def _ids_factura_completa(self, pedidos):
+        """Devuelve todas las hojas asociadas a las facturas seleccionadas.
+
+        Prioriza el documento importado real, de modo que una selección parcial
+        actualice toda la factura aunque algunas líneas no estén visibles en la
+        bandeja por filtros. Para registros legacy sin DocumentoPedido conserva
+        el fallback por número de factura/comprobante.
+        """
+        ids_seleccionados = [int(p.id) for p in pedidos if getattr(p, "id", 0)]
+        if not ids_seleccionados:
+            return [], []
+
+        vinculos = list(
+            DocumentoPedidoHojaRuta.select(
+                DocumentoPedidoHojaRuta,
+                DocumentoPedidoDetalle,
+            )
+            .join(DocumentoPedidoDetalle)
+            .where(DocumentoPedidoHojaRuta.hoja_ruta.in_(ids_seleccionados))
+        )
+        documento_ids = sorted({
+            int(v.detalle.documento_id)
+            for v in vinculos
+            if getattr(v.detalle, "documento_id", None)
+        })
+
+        if documento_ids:
+            todos = (
+                DocumentoPedidoHojaRuta.select(
+                    DocumentoPedidoHojaRuta,
+                    DocumentoPedidoDetalle,
+                )
+                .join(DocumentoPedidoDetalle)
+                .where(DocumentoPedidoDetalle.documento.in_(documento_ids))
+            )
+            ids = sorted({int(v.hoja_ruta_id) for v in todos})
+            if ids:
+                return ids, documento_ids
+
+        # Fallback legacy: expande con los datos ya cargados de la fecha actual.
+        expandidos = expandir_seleccion_por_factura(self._pedidos, pedidos)
+        return sorted({int(p.id) for p in expandidos}), []
+
     @reconnect_if_needed
     @inicializar_y_capturar_excepciones
     def asignar_cliente_lugar(self, *args, **kwargs):
@@ -119,57 +162,99 @@ class BandejaPedidosController(ControladorBase):
         if not seleccionados:
             showAlert("Sistema", "Seleccione al menos un pedido para asignar cliente y lugar de entrega")
             return
-        pedidos = expandir_seleccion_por_factura(self._pedidos, seleccionados)
+
+        ids, documento_ids = self._ids_factura_completa(seleccionados)
+        if not ids:
+            showAlert("Sistema", "No se pudieron identificar las líneas de la factura seleccionada")
+            return
+
+        pedidos = [p for p in self._pedidos if p.id in set(ids)]
+        facturas = sorted({
+            str(p.factura or p.comprobante or "").strip()
+            for p in expandir_seleccion_por_factura(self._pedidos, seleccionados)
+            if str(p.factura or p.comprobante or "").strip()
+        })
 
         dialogo = QDialog(self.view)
         dialogo.setWindowTitle("Asignar cliente y lugar de entrega")
-        dialogo.setMinimumWidth(520)
+        dialogo.setMinimumWidth(560)
         layout = QVBoxLayout(dialogo)
-        facturas = sorted({str(p.factura or p.comprobante or "").strip() for p in pedidos if str(p.factura or p.comprobante or "").strip()})
         layout.addWidget(QLabel(
             "La asignación se aplicará a {} línea(s) de {} factura(s).".format(
-                len(pedidos), len(facturas) or 1
+                len(ids), len(facturas) or 1
             )
         ))
 
         fila_cliente = QHBoxLayout()
         fila_cliente.addWidget(QLabel("Cliente:"))
         cbo_cliente = QComboBox()
-        cbo_cliente.setMinimumWidth(340)
+        cbo_cliente.setEditable(True)
+        cbo_cliente.setInsertPolicy(QComboBox.NoInsert)
+        cbo_cliente.setMinimumWidth(380)
+        cbo_cliente.lineEdit().setPlaceholderText("Escriba parte del nombre del cliente")
         fila_cliente.addWidget(cbo_cliente, 1)
         layout.addLayout(fila_cliente)
 
         fila_lugar = QHBoxLayout()
         fila_lugar.addWidget(QLabel("Lugar de entrega:"))
         cbo_lugar = QComboBox()
-        cbo_lugar.setMinimumWidth(340)
+        cbo_lugar.setMinimumWidth(380)
         fila_lugar.addWidget(cbo_lugar, 1)
         layout.addLayout(fila_lugar)
 
         btn_gestionar = QPushButton("Crear / editar clientes y lugares")
         layout.addWidget(btn_gestionar)
 
-        clientes = list(Cliente.select().where(Cliente.activo == True).order_by(Cliente.razon_social))
-        cbo_cliente.addItem("Seleccione un cliente", 0)
+        clientes = list(
+            Cliente.select()
+            .where(Cliente.activo == True)
+            .order_by(Cliente.razon_social)
+        )
+        cbo_cliente.addItem("", 0)
         for cliente in clientes:
             cbo_cliente.addItem(cliente.razon_social, cliente.id)
 
-        def cargar_lugares():
+        completer = QCompleter(cbo_cliente.model(), cbo_cliente)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCompletionMode(QCompleter.PopupCompletion)
+        cbo_cliente.setCompleter(completer)
+
+        def resolver_cliente_id():
+            data = int(cbo_cliente.currentData() or 0)
+            texto = str(cbo_cliente.currentText() or "").strip()
+            if data and texto:
+                return data
+            if not texto:
+                return 0
+            texto_lower = texto.lower()
+            for cliente in clientes:
+                if str(cliente.razon_social or "").strip().lower() == texto_lower:
+                    idx = cbo_cliente.findData(cliente.id)
+                    if idx >= 0:
+                        cbo_cliente.setCurrentIndex(idx)
+                    return int(cliente.id)
+            return 0
+
+        def cargar_lugares(*_):
             cbo_lugar.clear()
-            cliente_id = int(cbo_cliente.currentData() or 0)
+            cliente_id = resolver_cliente_id()
             if not cliente_id:
-                cbo_lugar.addItem("Seleccione primero un cliente", 0)
+                cbo_lugar.addItem("Seleccione un cliente", 0)
                 return
+
             lugares = list(LugarEntrega.activos_cliente(cliente_id))
             if not lugares:
-                cbo_lugar.addItem("Este cliente no tiene lugares activos", 0)
+                cbo_lugar.addItem("Sin lugar de entrega — puede asignarlo después", 0)
                 return
-            cbo_lugar.addItem("Seleccione un lugar de entrega", 0)
+
+            cbo_lugar.addItem("Dejar lugar pendiente", 0)
             for lugar in lugares:
                 texto = lugar.nombre
                 if lugar.direccion:
                     texto += " — {}".format(lugar.direccion)
                 cbo_lugar.addItem(texto, lugar.id)
+
             principal = next((x for x in lugares if x.principal), None)
             elegido = principal or (lugares[0] if len(lugares) == 1 else None)
             if elegido is not None:
@@ -178,19 +263,25 @@ class BandejaPedidosController(ControladorBase):
                     cbo_lugar.setCurrentIndex(idx)
 
         cbo_cliente.currentIndexChanged.connect(cargar_lugares)
-        cargar_lugares()
+        cbo_cliente.lineEdit().editingFinished.connect(cargar_lugares)
+        completer.activated.connect(cargar_lugares)
 
+        # Precarga la asignación actual cuando toda la factura coincide.
         cliente_ids = {p.cliente_id for p in pedidos if p.cliente_id}
         if len(cliente_ids) == 1:
-            cliente_id = next(iter(cliente_ids))
-            idx = cbo_cliente.findData(cliente_id)
+            cliente_id_actual = next(iter(cliente_ids))
+            idx = cbo_cliente.findData(cliente_id_actual)
             if idx >= 0:
                 cbo_cliente.setCurrentIndex(idx)
-                lugares_actuales = {p.lugar_entrega_id for p in pedidos if p.lugar_entrega_id}
+                lugares_actuales = {
+                    p.lugar_entrega_id for p in pedidos if p.lugar_entrega_id
+                }
                 if len(lugares_actuales) == 1:
                     idx_lugar = cbo_lugar.findData(next(iter(lugares_actuales)))
                     if idx_lugar >= 0:
                         cbo_lugar.setCurrentIndex(idx_lugar)
+        else:
+            cargar_lugares()
 
         def gestionar_clientes():
             from controladores.ABMClientes import ABMClientesController
@@ -202,56 +293,86 @@ class BandejaPedidosController(ControladorBase):
         botones.accepted.connect(dialogo.accept)
         botones.rejected.connect(dialogo.reject)
         layout.addWidget(botones)
+
         if dialogo.exec_() != QDialog.Accepted:
             return
 
-        cliente_id = int(cbo_cliente.currentData() or 0)
+        cliente_id = resolver_cliente_id()
+        if not cliente_id:
+            showAlert(
+                "Sistema",
+                "Seleccione un cliente válido de la lista. Puede escribir parte del nombre para buscarlo.",
+            )
+            return
+
         lugar_id = int(cbo_lugar.currentData() or 0)
-        if not cliente_id or not lugar_id:
-            showAlert("Sistema", "Debe seleccionar un cliente y un lugar de entrega")
-            return
-
-        lugar = LugarEntrega.get_or_none(
-            (LugarEntrega.id == lugar_id) &
-            (LugarEntrega.cliente == cliente_id) &
-            (LugarEntrega.activo == True)
-        )
-        if lugar is None:
-            showAlert("Sistema", "El lugar de entrega seleccionado ya no está disponible")
-            return
-
         cliente = Cliente.get_by_id(cliente_id)
-        ruta_id = lugar.ruta_reparto_id or cliente.ruta_reparto_id
-        ids = [p.id for p in pedidos]
+        lugar = None
+
+        if lugar_id:
+            lugar = LugarEntrega.get_or_none(
+                (LugarEntrega.id == lugar_id) &
+                (LugarEntrega.cliente == cliente_id) &
+                (LugarEntrega.activo == True)
+            )
+            if lugar is None:
+                showAlert("Sistema", "El lugar de entrega seleccionado ya no está disponible")
+                return
+
+        ruta_id = (
+            (lugar.ruta_reparto_id if lugar is not None else None)
+            or cliente.ruta_reparto_id
+            or None
+        )
+
+        # Cliente obligatorio; lugar puede quedar pendiente. La validación de
+        # cierre/despacho seguirá bloqueando mientras falte el lugar.
         actualizados = (
             HojaDeRuta.update(
                 cliente=cliente_id,
-                lugar_entrega=lugar_id,
+                lugar_entrega=(lugar.id if lugar is not None else None),
                 ruta=ruta_id,
                 nombre_cliente=cliente.razon_social,
             )
             .where(HojaDeRuta.id.in_(ids))
             .execute()
         )
-        if actualizados != len(ids):
-            showAlert("Sistema", "No se pudieron actualizar todos los pedidos seleccionados")
+
+        # Verificación real contra DB. No dependemos del rowcount de SQLite/MySQL,
+        # porque puede variar cuando algunos valores ya coincidían.
+        verificados = (
+            HojaDeRuta.select()
+            .where(
+                (HojaDeRuta.id.in_(ids)) &
+                (HojaDeRuta.cliente == cliente_id)
+            )
+            .count()
+        )
+        if verificados != len(ids):
+            showAlert(
+                "Sistema",
+                "El cliente no quedó grabado correctamente en todas las líneas de la factura.",
+            )
             return
 
-        documentos = (
-            DocumentoPedido.select()
-            .join(DocumentoPedidoDetalle)
-            .join(DocumentoPedidoHojaRuta)
-            .where(DocumentoPedidoHojaRuta.hoja_ruta.in_(ids))
-        )
-        DocumentoPedido.update(cliente=cliente_id).where(
-            DocumentoPedido.id.in_([doc.id for doc in documentos])
-        ).execute()
+        if documento_ids:
+            DocumentoPedido.update(cliente=cliente_id).where(
+                DocumentoPedido.id.in_(documento_ids)
+            ).execute()
 
-        showAlert(
-            "Sistema",
-            "Cliente y lugar de entrega asignados a {} línea(s).".format(len(ids)),
-        )
+        if lugar is None:
+            mensaje = (
+                "Cliente asignado a {} línea(s) de la factura. "
+                "El lugar de entrega queda pendiente."
+            ).format(len(ids))
+        else:
+            mensaje = (
+                "Cliente y lugar de entrega asignados a {} línea(s) de la factura."
+            ).format(len(ids))
+
+        showAlert("Sistema", mensaje)
         self.cargar_pedidos()
+
 
     @reconnect_if_needed
     @inicializar_y_capturar_excepciones
