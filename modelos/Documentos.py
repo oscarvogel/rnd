@@ -292,11 +292,16 @@ def referencias_por_hojas(hoja_ids):
     resultado = {}
     for vinculo in consulta:
         documento = vinculo.detalle.documento
+        detalle = vinculo.detalle
         resultado[vinculo.hoja_ruta_id] = {
             "factura": documento.numero_factura or "",
             "remito": documento.numero_remito or "",
             "comprobante_origen": documento.comprobante_origen or "",
             "documento_id": documento.id,
+            "detalle_id": detalle.id,
+            "cantidad_original": detalle.cantidad_original or 0,
+            "kg_original": detalle.kg_original or 0,
+            "bultos_original": detalle.bultos_original or 0,
         }
     return resultado
 
