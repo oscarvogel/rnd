@@ -20,6 +20,7 @@ NAV_IMPORTAR_PEDIDOS = "importar_pedidos"
 NAV_ORGANIZAR_PEDIDOS = "organizar_pedidos"
 NAV_HOJAS_RUTA_DIA = "hojas_ruta_dia"
 NAV_PENDIENTES = "hojas_ruta_pendientes"
+NAV_PENDIENTES_ENTREGA = "pendientes_entrega"
 NAV_VENCIMIENTOS = "vencimientos"
 NAV_ALERTAS = "alertas_vencidas"
 
@@ -122,12 +123,23 @@ class DashboardView(QWidget):
         self.tarjeta_alertas.clicked.connect(lambda: self.navegar.emit(NAV_ALERTAS))
         self.tarjeta_alertas.conectar_reintentar(self._cargar_alertas)
         grid.addWidget(self.tarjeta_alertas, 1, 2)
+
+        self.tarjeta_pendientes_entrega = TarjetaDashboard("Pendientes de entrega")
+        self.tarjeta_pendientes_entrega.clicked.connect(
+            lambda: self.navegar.emit(NAV_PENDIENTES_ENTREGA)
+        )
+        self.tarjeta_pendientes_entrega.conectar_reintentar(
+            self._cargar_pendientes_entrega
+        )
+        grid.addWidget(self.tarjeta_pendientes_entrega, 2, 0)
+
         scroll.setWidget(contenido)
 
     def cargar(self):
         self._cargar_flujo()
         self._cargar_hero()
         self._cargar_pendientes()
+        self._cargar_pendientes_entrega()
         self._cargar_vencimientos()
         self._cargar_alertas()
 
@@ -202,6 +214,16 @@ class DashboardView(QWidget):
             lambda: servicios.hojas_ruta_pendientes(self._usu_id),
             lambda resultado: self._aplicar_resultado(self.tarjeta_pendientes, resultado, False),
             lambda exc: self.tarjeta_pendientes.mostrar_error(str(exc)),
+        )
+
+    def _cargar_pendientes_entrega(self):
+        self.tarjeta_pendientes_entrega.mostrar_cargando()
+        self._ejecutor.ejecutar(
+            lambda: servicios.pendientes_entrega(self._usu_id),
+            lambda resultado: self._aplicar_resultado(
+                self.tarjeta_pendientes_entrega, resultado, False
+            ),
+            lambda exc: self.tarjeta_pendientes_entrega.mostrar_error(str(exc)),
         )
 
     def _cargar_alertas(self):
