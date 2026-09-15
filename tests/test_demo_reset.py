@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from peewee import MySQLDatabase, SqliteDatabase
 
-from utiles.demo_reset import DemoResetError, validar_reset_demo
+from utiles.demo_reset import DemoResetError, _vaciar_esquema_sqlite, validar_reset_demo
 
 
 class DemoResetSafetyTests(unittest.TestCase):
@@ -35,5 +35,22 @@ class DemoResetSafetyTests(unittest.TestCase):
         self.assertEqual(ruta.name.lower(), "sistema.db")
 
 
-if __name__ == "__main__":
+    def test_vaciar_esquema_elimina_todas_las_tablas_no_sistema(self):
+        db = SqliteDatabase(":memory:")
+        db.connect()
+        db.execute_sql("CREATE TABLE pedidos_demo (id INTEGER PRIMARY KEY, valor TEXT)")
+        db.execute_sql("INSERT INTO pedidos_demo(valor) VALUES ('viejo')")
+        db.execute_sql("CREATE TABLE otra_tabla (id INTEGER PRIMARY KEY)")
+        _vaciar_esquema_sqlite(db)
+        db.connect(reuse_if_open=True)
+        tablas = {
+            fila[0]
+            for fila in db.execute_sql(
+                "SELECT name FROM sqlite_master "
+                "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+        }
+        self.assertEqual(tablas, set())
+        db.close()
+
     unittest.main()
