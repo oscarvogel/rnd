@@ -15,6 +15,8 @@ class ValidacionHojaRutaView(QWidget):
 
     def _build_ui(self):
         raiz = QVBoxLayout(self)
+        raiz.setContentsMargins(18, 16, 18, 16)
+        raiz.setSpacing(10)
         titulo = QLabel("Validar hoja de ruta")
         titulo.setObjectName("validacionHojaTitulo")
         raiz.addWidget(titulo)
@@ -47,6 +49,10 @@ class ValidacionHojaRutaView(QWidget):
         raiz.addLayout(resumen)
 
         self.tabla = QTableWidget(0, 3)
+        self.tabla.setObjectName("dataGrid")
+        self.tabla.setAlternatingRowColors(True)
+        self.tabla.verticalHeader().setDefaultSectionSize(36)
+        self.tabla.horizontalHeader().setStretchLastSection(True)
         self.tabla.setHorizontalHeaderLabels(["Estado", "Requisito", "Detalle"])
         self.tabla.setEditTriggers(QTableWidget.NoEditTriggers)
         raiz.addWidget(self.tabla)
@@ -56,15 +62,18 @@ class ValidacionHojaRutaView(QWidget):
         raiz.addWidget(self.lbl_mensaje)
 
         acciones = QHBoxLayout()
-        self.btn_asignar = QPushButton("Resolver chofer / camión")
+        self.btn_asignar = QPushButton("Resolver recursos")
+        self.btn_asignar.setProperty("role", "secondary")
         acciones.addWidget(self.btn_asignar)
         acciones.addStretch(1)
         self.btn_lista = QPushButton("Marcar LISTA")
         self.btn_lista.setProperty("role", "primary")
         acciones.addWidget(self.btn_lista)
-        self.btn_despachar = QPushButton("Marcar DESPACHADA")
+        self.btn_despachar = QPushButton("Despachar")
+        self.btn_despachar.setProperty("role", "secondary")
         acciones.addWidget(self.btn_despachar)
         self.btn_cerrar = QPushButton("Cerrar")
+        self.btn_cerrar.setProperty("role", "secondary")
         acciones.addWidget(self.btn_cerrar)
         raiz.addLayout(acciones)
 
