@@ -110,6 +110,7 @@ class BandejaPedidosController(ControladorBase):
             responsable_id=h.responsable_id or 0,
             equipo_id=h.equipo_asignado_id or 0,
             documento_id=int(referencia.get("documento_id") or 0),
+            cantidad_original=referencia.get("cantidad_original", h.cantidad or 0),
         )
 
     def facturas_seleccionadas(self):
@@ -356,25 +357,59 @@ class BandejaPedidosController(ControladorBase):
             )
         ))
 
-        tabla = QTableWidget(len(hojas), 6)
+        referencias = referencias_por_hojas([h.id for h in hojas])
+
+        tabla = QTableWidget(len(hojas), 8)
         tabla.setHorizontalHeaderLabels(
-            ["Producto", "Cantidad", "KG", "Bultos", "Observaciones", "ID"]
+            [
+                "Producto", "Cantidad factura", "Cantidad a entregar", "Pendiente",
+                "KG", "Bultos", "Observaciones", "ID",
+            ]
         )
         tabla.setSelectionBehavior(QAbstractItemView.SelectRows)
-        tabla.setColumnHidden(5, True)
+        tabla.setColumnHidden(7, True)
 
         for row, hoja in enumerate(hojas):
-            tabla.setItem(row, 0, QTableWidgetItem(str(hoja.producto or "")))
-            tabla.setItem(row, 1, QTableWidgetItem(str(hoja.cantidad or 0)))
-            tabla.setItem(row, 2, QTableWidgetItem(str(hoja.kg or 0)))
-            tabla.setItem(row, 3, QTableWidgetItem(str(hoja.cantidad_bultos or 0)))
-            tabla.setItem(row, 4, QTableWidgetItem(str(hoja.observaciones or "")))
-            tabla.setItem(row, 5, QTableWidgetItem(str(hoja.id)))
+            referencia = referencias.get(hoja.id, {})
+            cantidad_original = referencia.get("cantidad_original", hoja.cantidad or 0)
+            try:
+                pendiente = max(0.0, float(cantidad_original or 0) - float(hoja.cantidad or 0))
+            except (TypeError, ValueError):
+                pendiente = 0.0
+
+            item_producto = QTableWidgetItem(str(hoja.producto or ""))
+            item_original = QTableWidgetItem(str(cantidad_original))
+            item_original.setFlags(item_original.flags() & ~Qt.ItemIsEditable)
+            item_entregar = QTableWidgetItem(str(hoja.cantidad or 0))
+            item_pendiente = QTableWidgetItem(str(pendiente))
+            item_pendiente.setFlags(item_pendiente.flags() & ~Qt.ItemIsEditable)
+
+            tabla.setItem(row, 0, item_producto)
+            tabla.setItem(row, 1, item_original)
+            tabla.setItem(row, 2, item_entregar)
+            tabla.setItem(row, 3, item_pendiente)
+            tabla.setItem(row, 4, QTableWidgetItem(str(hoja.kg or 0)))
+            tabla.setItem(row, 5, QTableWidgetItem(str(hoja.cantidad_bultos or 0)))
+            tabla.setItem(row, 6, QTableWidgetItem(str(hoja.observaciones or "")))
+            tabla.setItem(row, 7, QTableWidgetItem(str(hoja.id)))
+
+        def recalcular_pendiente(item):
+            if item.column() != 2:
+                return
+            row = item.row()
+            try:
+                original = float(str(tabla.item(row, 1).text() or "0").replace(",", "."))
+                entregar = float(str(item.text() or "0").replace(",", "."))
+            except ValueError:
+                return
+            tabla.item(row, 3).setText(str(max(0.0, original - entregar)))
+
+        tabla.itemChanged.connect(recalcular_pendiente)
 
         tabla.resizeColumnsToContents()
         tabla.horizontalHeader().setStretchLastSection(True)
         tabla.setColumnWidth(0, max(tabla.columnWidth(0), 420))
-        tabla.setColumnWidth(4, max(tabla.columnWidth(4), 520))
+        tabla.setColumnWidth(6, max(tabla.columnWidth(6), 520))
         layout.addWidget(tabla)
 
         botones = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
@@ -392,14 +427,21 @@ class BandejaPedidosController(ControladorBase):
 
         try:
             for row in range(tabla.rowCount()):
-                hoja_id = int(tabla.item(row, 5).text())
+                hoja_id = int(tabla.item(row, 7).text())
                 producto = tabla.item(row, 0).text().strip()
-                cantidad = numero(tabla.item(row, 1).text(), "Cantidad")
-                kg = numero(tabla.item(row, 2).text(), "KG")
-                bultos = numero(tabla.item(row, 3).text(), "Bultos")
-                observaciones = tabla.item(row, 4).text().strip()
+                cantidad_original = numero(tabla.item(row, 1).text(), "Cantidad factura")
+                cantidad = numero(tabla.item(row, 2).text(), "Cantidad a entregar")
+                kg = numero(tabla.item(row, 4).text(), "KG")
+                bultos = numero(tabla.item(row, 5).text(), "Bultos")
+                observaciones = tabla.item(row, 6).text().strip()
                 if not producto:
                     raise ValueError("Producto no puede quedar vacío")
+                if cantidad < 0:
+                    raise ValueError("Cantidad a entregar no puede ser negativa")
+                if cantidad > cantidad_original:
+                    raise ValueError(
+                        "Cantidad a entregar no puede superar la cantidad de la factura"
+                    )
                 HojaDeRuta.update(
                     producto=producto,
                     cantidad=cantidad,
@@ -407,6 +449,16 @@ class BandejaPedidosController(ControladorBase):
                     cantidad_bultos=bultos,
                     observaciones=observaciones,
                 ).where(HojaDeRuta.id == hoja_id).execute()
+
+                # Mantener el vínculo operativo consistente con lo que se
+                # entrega en este reparto; el detalle original no se modifica.
+                DocumentoPedidoHojaRuta.update(
+                    cantidad_asignada=cantidad,
+                    kg_asignados=kg,
+                    bultos_asignados=bultos,
+                ).where(
+                    DocumentoPedidoHojaRuta.hoja_ruta == hoja_id
+                ).execute()
         except ValueError as exc:
             showAlert("Sistema", str(exc))
             return
