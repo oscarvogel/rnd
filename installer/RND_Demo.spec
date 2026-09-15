@@ -9,6 +9,8 @@ controller_hiddenimports = collect_submodules("controladores")
 runtime_datas = [
     ("../imagenes", "imagenes"),
     ("../temas", "temas"),
+    ("../assets/login", "assets/login"),
+    ("../demo_importaciones", "demo_importaciones"),
     ("../sistema.demo.ini", "."),
     ("../rnd.ini", "."),
 ]
