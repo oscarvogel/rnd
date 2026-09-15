@@ -4,12 +4,12 @@ import re
 import unicodedata
 
 from PyQt5.QtCore import QDate, Qt
-from PyQt5.QtWidgets import QComboBox, QCompleter, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from PyQt5.QtWidgets import QComboBox, QCompleter, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout
 from peewee import JOIN
 
 from modelos.Clientes import Cliente, LugarEntrega, RutaReparto
 from modelos.HojaRuta import HojaDeRuta
-from modelos.Documentos import DocumentoPedido, DocumentoPedidoDetalle, DocumentoPedidoHojaRuta, referencias_por_hojas
+from modelos.Documentos import DocumentoPedido, DocumentoPedidoDetalle, DocumentoPedidoHojaRuta, actualizar_remito_de_hoja, referencias_por_hojas
 from modelos.ModeloBase import reconnect_if_needed
 from modelos.ParametrosSistema import ParamSist
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
@@ -39,6 +39,8 @@ class BandejaPedidosController(ControladorBase):
         self.view.solo_pendientes.toggled.connect(self.cargar_pedidos)
         self.view.btn_organizar.clicked.connect(self.organizar_seleccion)
         self.view.btn_cliente_lugar.clicked.connect(self.asignar_cliente_lugar)
+        self.view.btn_editar_pedido.clicked.connect(self.editar_pedido_actual)
+        self.view.tabla.doubleClicked.connect(self.editar_pedido_actual)
         self.view.btn_siguiente.clicked.connect(self.ir_asignacion)
 
     def fecha_actual(self):
@@ -113,6 +115,198 @@ class BandejaPedidosController(ControladorBase):
     def actualizar_totales(self):
         totales = totales_seleccion(self.pedidos_seleccionados())
         self.view.set_totales(totales["pedidos"], totales["kg"], totales["bultos"])
+
+    @reconnect_if_needed
+    @inicializar_y_capturar_excepciones
+    def editar_pedido_actual(self, *args, **kwargs):
+        hoja_id = int(self.view.id_fila_actual() or 0)
+        if not hoja_id:
+            showAlert("Sistema", "Seleccione una fila para editar")
+            return
+
+        hoja = HojaDeRuta.get_by_id(hoja_id)
+        referencias = referencias_por_hojas([hoja_id]).get(hoja_id, {})
+
+        dialogo = QDialog(self.view)
+        dialogo.setWindowTitle("Editar pedido")
+        dialogo.setMinimumWidth(620)
+        layout = QVBoxLayout(dialogo)
+        form = QFormLayout()
+        layout.addLayout(form)
+
+        clientes = list(
+            Cliente.select()
+            .where(Cliente.activo == True)
+            .order_by(Cliente.razon_social)
+        )
+
+        cbo_cliente = QComboBox()
+        cbo_cliente.setEditable(True)
+        cbo_cliente.setInsertPolicy(QComboBox.NoInsert)
+        cbo_cliente.lineEdit().setPlaceholderText("Buscar cliente...")
+        cbo_cliente.addItem("", 0)
+        for cliente in clientes:
+            cbo_cliente.addItem(cliente.razon_social, cliente.id)
+
+        completer = QCompleter(cbo_cliente.model(), cbo_cliente)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCompletionMode(QCompleter.PopupCompletion)
+        cbo_cliente.setCompleter(completer)
+
+        cbo_lugar = QComboBox()
+        cbo_ruta = QComboBox()
+        cbo_ruta.addItem("Sin ruta", 0)
+        for ruta in RutaReparto.select().where(RutaReparto.activo == True).order_by(RutaReparto.descripcion):
+            cbo_ruta.addItem(ruta.descripcion, ruta.id)
+
+        txt_producto = QLineEdit(hoja.producto or "")
+        sp_cantidad = QDoubleSpinBox()
+        sp_cantidad.setDecimals(2)
+        sp_cantidad.setMaximum(999999999)
+        sp_cantidad.setValue(float(hoja.cantidad or 0))
+
+        sp_kg = QDoubleSpinBox()
+        sp_kg.setDecimals(3)
+        sp_kg.setMaximum(999999999)
+        sp_kg.setValue(float(hoja.kg or 0))
+
+        sp_bultos = QDoubleSpinBox()
+        sp_bultos.setDecimals(2)
+        sp_bultos.setMaximum(999999999)
+        sp_bultos.setValue(float(hoja.cantidad_bultos or 0))
+
+        txt_remito = QLineEdit(str(referencias.get("remito") or ""))
+        txt_observaciones = QLineEdit(hoja.observaciones or "")
+
+        def normalizar(valor):
+            texto = str(valor or "").strip().upper()
+            texto = "".join(
+                ch for ch in unicodedata.normalize("NFD", texto)
+                if unicodedata.category(ch) != "Mn"
+            )
+            texto = re.sub(r"[^A-Z0-9]+", " ", texto)
+            return " ".join(texto.split())
+
+        def resolver_cliente_id():
+            data = int(cbo_cliente.currentData() or 0)
+            texto = str(cbo_cliente.currentText() or "").strip()
+            if data and texto:
+                return data
+            clave = normalizar(texto)
+            for cliente in clientes:
+                if normalizar(cliente.razon_social) == clave:
+                    idx = cbo_cliente.findData(cliente.id)
+                    if idx >= 0:
+                        cbo_cliente.setCurrentIndex(idx)
+                    return int(cliente.id)
+            return 0
+
+        def cargar_lugares(*_):
+            cbo_lugar.clear()
+            cliente_id = resolver_cliente_id()
+            if not cliente_id:
+                cbo_lugar.addItem("Sin asignar", 0)
+                return
+            lugares = list(LugarEntrega.activos_cliente(cliente_id))
+            cbo_lugar.addItem("Sin asignar", 0)
+            for lugar in lugares:
+                texto = lugar.nombre
+                if lugar.direccion:
+                    texto += " — {}".format(lugar.direccion)
+                cbo_lugar.addItem(texto, lugar.id)
+
+        def cliente_completado(texto):
+            clave = normalizar(texto)
+            for cliente in clientes:
+                if normalizar(cliente.razon_social) == clave:
+                    idx = cbo_cliente.findData(cliente.id)
+                    if idx >= 0:
+                        cbo_cliente.setCurrentIndex(idx)
+                    break
+            cargar_lugares()
+
+        cbo_cliente.currentIndexChanged.connect(cargar_lugares)
+        completer.activated[str].connect(cliente_completado)
+
+        # Precarga cliente actual o, si está pendiente, el nombre importado.
+        if hoja.cliente_id:
+            idx = cbo_cliente.findData(hoja.cliente_id)
+            if idx >= 0:
+                cbo_cliente.setCurrentIndex(idx)
+        elif hoja.nombre_cliente:
+            cbo_cliente.setEditText(hoja.nombre_cliente)
+            cliente_completado(hoja.nombre_cliente)
+        else:
+            cargar_lugares()
+
+        if hoja.lugar_entrega_id:
+            idx = cbo_lugar.findData(hoja.lugar_entrega_id)
+            if idx >= 0:
+                cbo_lugar.setCurrentIndex(idx)
+
+        if hoja.ruta_id:
+            idx = cbo_ruta.findData(hoja.ruta_id)
+            if idx >= 0:
+                cbo_ruta.setCurrentIndex(idx)
+
+        form.addRow("Cliente:", cbo_cliente)
+        form.addRow("Lugar de entrega:", cbo_lugar)
+        form.addRow("Ruta:", cbo_ruta)
+        form.addRow("Producto:", txt_producto)
+        form.addRow("Cantidad:", sp_cantidad)
+        form.addRow("KG:", sp_kg)
+        form.addRow("Bultos:", sp_bultos)
+        form.addRow("Remito:", txt_remito)
+        form.addRow("Observaciones:", txt_observaciones)
+
+        botones = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        botones.accepted.connect(dialogo.accept)
+        botones.rejected.connect(dialogo.reject)
+        layout.addWidget(botones)
+
+        if dialogo.exec_() != QDialog.Accepted:
+            return
+
+        cliente_id = resolver_cliente_id()
+        lugar_id = int(cbo_lugar.currentData() or 0)
+        ruta_id = int(cbo_ruta.currentData() or 0) or None
+
+        cliente = Cliente.get_by_id(cliente_id) if cliente_id else None
+        if lugar_id:
+            lugar = LugarEntrega.get_or_none(
+                (LugarEntrega.id == lugar_id) &
+                (LugarEntrega.activo == True)
+            )
+            if lugar is None:
+                showAlert("Sistema", "El lugar de entrega seleccionado ya no está disponible")
+                return
+            if cliente_id and lugar.cliente_id != cliente_id:
+                showAlert("Sistema", "El lugar de entrega no corresponde al cliente seleccionado")
+                return
+            if ruta_id is None:
+                ruta_id = lugar.ruta_reparto_id or (
+                    cliente.ruta_reparto_id if cliente is not None else None
+                )
+        elif cliente is not None and ruta_id is None:
+            ruta_id = cliente.ruta_reparto_id or None
+
+        HojaDeRuta.update(
+            cliente=cliente_id or None,
+            nombre_cliente=(cliente.razon_social if cliente is not None else cbo_cliente.currentText().strip()),
+            lugar_entrega=lugar_id or None,
+            ruta=ruta_id,
+            producto=txt_producto.text().strip(),
+            cantidad=sp_cantidad.value(),
+            kg=sp_kg.value(),
+            cantidad_bultos=sp_bultos.value(),
+            observaciones=txt_observaciones.text().strip(),
+        ).where(HojaDeRuta.id == hoja_id).execute()
+
+        actualizar_remito_de_hoja(hoja_id, txt_remito.text().strip())
+
+        showAlert("Sistema", "Pedido actualizado correctamente")
+        self.cargar_pedidos()
 
     def _ids_factura_completa(self, pedidos):
         """Devuelve todas las hojas asociadas a las facturas seleccionadas.
