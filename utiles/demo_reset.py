@@ -1,12 +1,12 @@
 # coding=utf-8
 """Reset seguro de la base local de RND DEMO.
 
-Esta utilidad solo puede operar cuando:
+Solo opera cuando:
 - RND_DEMO_MODE=1
 - la base activa es SQLite
 - el archivo activo es sistema.db
 
-Nunca debe borrar ni tocar una base MySQL de producción.
+Nunca toca MySQL ni otra base local.
 """
 
 import os
@@ -38,35 +38,42 @@ def validar_reset_demo(db) -> Path:
     return ruta.resolve()
 
 
+def _vaciar_esquema_sqlite(db) -> None:
+    """Elimina todas las tablas de la SQLite DEMO para volver a cero real."""
+    try:
+        db.connect(reuse_if_open=True)
+        db.execute_sql("PRAGMA foreign_keys = OFF")
+        filas = db.execute_sql(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        ).fetchall()
+
+        with db.atomic():
+            for (nombre,) in filas:
+                seguro = str(nombre).replace('"', '""')
+                db.execute_sql('DROP TABLE IF EXISTS "{}"'.format(seguro))
+
+        db.execute_sql("PRAGMA foreign_keys = ON")
+    except Exception as exc:
+        raise DemoResetError(
+            "No se pudo limpiar completamente la base DEMO."
+        ) from exc
+    finally:
+        try:
+            if not db.is_closed():
+                db.close()
+        except Exception:
+            pass
+
+
 def resetear_datos_demo() -> Path:
-    """Borra la SQLite demo, regenera el seed y devuelve la ruta recreada."""
+    """Vacía toda la SQLite DEMO, recrea schema+seed y devuelve su ruta."""
     from modelos.ModeloBase import db
     from demo_seed import prepare_demo_database
 
     ruta = validar_reset_demo(db)
+    _vaciar_esquema_sqlite(db)
 
-    try:
-        if not db.is_closed():
-            db.close()
-    except Exception as exc:
-        raise DemoResetError(
-            "No se pudo cerrar la base DEMO antes de restablecerla."
-        ) from exc
-
-    for archivo in (
-        ruta,
-        Path(str(ruta) + "-wal"),
-        Path(str(ruta) + "-shm"),
-    ):
-        try:
-            if archivo.exists():
-                archivo.unlink()
-        except OSError as exc:
-            raise DemoResetError(
-                "No se pudo borrar {}. Cierre otras ventanas de RND DEMO e intente nuevamente.".format(
-                    archivo.name
-                )
-            ) from exc
-
+    # El seed es la única fuente de datos posterior al reset.
     prepare_demo_database()
     return ruta
