@@ -18,6 +18,8 @@ class PendientesEntregaView(QWidget):
         self.resize(1180, 680)
         self.setWindowState(self.windowState() | Qt.WindowMaximized)
         raiz = QVBoxLayout(self)
+        raiz.setContentsMargins(18, 16, 18, 16)
+        raiz.setSpacing(10)
 
         titulo = QLabel("Pendientes de entrega")
         titulo.setObjectName("pendientesEntregaTitulo")
@@ -31,6 +33,7 @@ class PendientesEntregaView(QWidget):
         raiz.addWidget(ayuda)
 
         barra = QHBoxLayout()
+        barra.setSpacing(8)
         self.lbl_resumen = QLabel("Calculando pendientes…")
         barra.addWidget(self.lbl_resumen)
         barra.addStretch(1)
@@ -38,12 +41,17 @@ class PendientesEntregaView(QWidget):
         self.btn_agregar_reparto.setProperty("role", "primary")
         barra.addWidget(self.btn_agregar_reparto)
         self.btn_actualizar = QPushButton("Actualizar")
+        self.btn_actualizar.setProperty("role", "secondary")
         barra.addWidget(self.btn_actualizar)
         raiz.addLayout(barra)
 
         self.tabla = QTableWidget(0, len(self.COLUMNAS))
+        self.tabla.setObjectName("dataGrid")
         self.tabla.setHorizontalHeaderLabels(self.COLUMNAS)
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tabla.setSortingEnabled(True)
+        self.tabla.setAlternatingRowColors(True)
+        self.tabla.verticalHeader().setDefaultSectionSize(36)
         self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
         raiz.addWidget(self.tabla)
 
