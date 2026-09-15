@@ -224,8 +224,25 @@ class BandejaPedidosController(ControladorBase):
                     break
             cargar_lugares()
 
+        def actualizar_ruta_por_lugar(*_):
+            lugar_id = int(cbo_lugar.currentData() or 0)
+            if not lugar_id:
+                return
+            lugar = LugarEntrega.get_or_none(
+                (LugarEntrega.id == lugar_id) &
+                (LugarEntrega.activo == True)
+            )
+            if lugar is None:
+                return
+            ruta_id = int(lugar.ruta_reparto_id or 0)
+            if ruta_id:
+                idx_ruta = cbo_ruta.findData(ruta_id)
+                if idx_ruta >= 0:
+                    cbo_ruta.setCurrentIndex(idx_ruta)
+
         cbo_cliente.currentIndexChanged.connect(cargar_lugares)
         completer.activated[str].connect(cliente_completado)
+        cbo_lugar.currentIndexChanged.connect(actualizar_ruta_por_lugar)
 
         if factura.cliente_id:
             idx = cbo_cliente.findData(factura.cliente_id)
@@ -328,7 +345,8 @@ class BandejaPedidosController(ControladorBase):
 
         dialogo = QDialog(self.view)
         dialogo.setWindowTitle("Productos de factura {}".format(factura.factura))
-        dialogo.resize(980, 560)
+        dialogo.resize(1400, 720)
+        dialogo.setWindowState(dialogo.windowState() | Qt.WindowMaximized)
         layout = QVBoxLayout(dialogo)
         layout.addWidget(QLabel(
             "{} — {} — {} línea(s)".format(
@@ -354,6 +372,9 @@ class BandejaPedidosController(ControladorBase):
             tabla.setItem(row, 5, QTableWidgetItem(str(hoja.id)))
 
         tabla.resizeColumnsToContents()
+        tabla.horizontalHeader().setStretchLastSection(True)
+        tabla.setColumnWidth(0, max(tabla.columnWidth(0), 420))
+        tabla.setColumnWidth(4, max(tabla.columnWidth(4), 520))
         layout.addWidget(tabla)
 
         botones = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
