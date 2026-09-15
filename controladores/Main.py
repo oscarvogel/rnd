@@ -1,10 +1,5 @@
 # coding=utf-8
 import os
-import sys
-from pathlib import Path
-
-from PyQt5.QtCore import QProcess
-from PyQt5.QtWidgets import QMessageBox, qApp
 
 from controladores.Login import LoginController
 from controladores.Migraciones import MigracionBaseDatos
@@ -63,72 +58,7 @@ class MainController(ControladorBase):
             self.view.cargar_menu_lateral(usu_id)
             self._inicializar_dashboard(usu_id, ejecutor=ejecutor)
             self.ArmaMenu()
-            if demo_mode:
-                self._configurar_menu_demo()
         return lRetVal
-
-    def _configurar_menu_demo(self):
-        """Agrega herramientas destructivas solo cuando RND corre en modo DEMO."""
-        menu_demo = self.view.menuBar().addMenu("DEMO")
-        accion_reset = menu_demo.addAction("Restablecer datos demo")
-        accion_reset.setToolTip(
-            "Borra los datos de prueba, regenera el seed y reinicia RND DEMO"
-        )
-        accion_reset.triggered.connect(self._restablecer_demo)
-
-    def _reiniciar_demo(self):
-        if getattr(sys, "frozen", False):
-            programa = sys.executable
-            argumentos = []
-            directorio = str(Path(sys.executable).resolve().parent)
-        else:
-            root = Path(__file__).resolve().parent.parent
-            programa = sys.executable
-            argumentos = [str(root / "demo_main.py")]
-            directorio = str(root)
-
-        iniciado = QProcess.startDetached(programa, argumentos, directorio)
-        if not iniciado:
-            raise RuntimeError(
-                "Los datos fueron regenerados, pero no se pudo reiniciar RND DEMO automáticamente."
-            )
-        qApp.quit()
-
-    def _restablecer_demo(self):
-        if os.getenv("RND_DEMO_MODE") != "1":
-            QMessageBox.critical(
-                self.view,
-                "RND DEMO",
-                "Esta opción solo está disponible en RND DEMO.",
-            )
-            return
-
-        respuesta = QMessageBox.warning(
-            self.view,
-            "Restablecer datos demo",
-            "Se eliminarán todos los cambios realizados durante esta demostración y se volverán a cargar los datos iniciales.\n\n¿Desea continuar?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        if respuesta != QMessageBox.Yes:
-            return
-
-        try:
-            from utiles.demo_reset import resetear_datos_demo
-
-            resetear_datos_demo()
-            QMessageBox.information(
-                self.view,
-                "RND DEMO",
-                "Los datos demo fueron restablecidos. RND DEMO se reiniciará ahora.",
-            )
-            self._reiniciar_demo()
-        except Exception as exc:
-            QMessageBox.critical(
-                self.view,
-                "No se pudo restablecer RND DEMO",
-                str(exc),
-            )
 
     def _inicializar_dashboard(self, usu_id, ejecutor=None):
         if self.view.dashboard is None:
