@@ -1,12 +1,9 @@
 name: Validacion
 
+# CI automático desactivado para evitar consumo de créditos.
+# Ejecutar manualmente desde GitHub Actions cuando sea necesario.
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
