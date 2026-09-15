@@ -45,4 +45,4 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          python -m pytest -q --disable-warnings --maxfail=1 --ignore=tests/test_utiles_smtp.py
+          python -m pytest -vv --disable-warnings --maxfail=1 --ignore=tests/test_utiles_smtp.py
