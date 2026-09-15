@@ -291,11 +291,22 @@ class BandejaPedidosController(ControladorBase):
         elif cliente is not None and ruta_id is None:
             ruta_id = cliente.ruta_reparto_id or None
 
+        # Datos de cabecera/documento: Cliente + Lugar + Ruta se aplican a
+        # TODA la factura. Los datos físicos/comerciales de la línea quedan
+        # restringidos al renglón que el operador está editando.
+        pedido_actual = self._convertir(hoja, referencias)
+        ids_factura, documento_ids = self._ids_factura_completa([pedido_actual])
+        if not ids_factura:
+            ids_factura = [hoja_id]
+
         HojaDeRuta.update(
             cliente=cliente_id or None,
             nombre_cliente=(cliente.razon_social if cliente is not None else cbo_cliente.currentText().strip()),
             lugar_entrega=lugar_id or None,
             ruta=ruta_id,
+        ).where(HojaDeRuta.id.in_(ids_factura)).execute()
+
+        HojaDeRuta.update(
             producto=txt_producto.text().strip(),
             cantidad=sp_cantidad.value(),
             kg=sp_kg.value(),
@@ -303,9 +314,21 @@ class BandejaPedidosController(ControladorBase):
             observaciones=txt_observaciones.text().strip(),
         ).where(HojaDeRuta.id == hoja_id).execute()
 
-        actualizar_remito_de_hoja(hoja_id, txt_remito.text().strip())
+        # Remito es dato del documento: actualizar todas las líneas vinculadas
+        # al mismo DocumentoPedido a través del propio documento.
+        if documento_ids:
+            DocumentoPedido.update(
+                numero_remito=txt_remito.text().strip()
+            ).where(DocumentoPedido.id.in_(documento_ids)).execute()
+        else:
+            actualizar_remito_de_hoja(hoja_id, txt_remito.text().strip())
 
-        showAlert("Sistema", "Pedido actualizado correctamente")
+        showAlert(
+            "Sistema",
+            "Pedido actualizado. Cliente, lugar y ruta se aplicaron a toda la factura ({} línea(s)).".format(
+                len(ids_factura)
+            ),
+        )
         self.cargar_pedidos()
 
     def _ids_factura_completa(self, pedidos):
