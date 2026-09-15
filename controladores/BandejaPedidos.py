@@ -1,5 +1,7 @@
 # coding=utf-8
 from datetime import date
+import re
+import unicodedata
 
 from PyQt5.QtCore import QDate, Qt
 from PyQt5.QtWidgets import QComboBox, QCompleter, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
@@ -220,6 +222,15 @@ class BandejaPedidosController(ControladorBase):
         completer.setCompletionMode(QCompleter.PopupCompletion)
         cbo_cliente.setCompleter(completer)
 
+        def normalizar_nombre_cliente(valor):
+            texto = str(valor or "").strip().upper()
+            texto = "".join(
+                ch for ch in unicodedata.normalize("NFD", texto)
+                if unicodedata.category(ch) != "Mn"
+            )
+            texto = re.sub(r"[^A-Z0-9]+", " ", texto)
+            return " ".join(texto.split())
+
         def resolver_cliente_id():
             data = int(cbo_cliente.currentData() or 0)
             texto = str(cbo_cliente.currentText() or "").strip()
@@ -227,9 +238,9 @@ class BandejaPedidosController(ControladorBase):
                 return data
             if not texto:
                 return 0
-            texto_lower = texto.lower()
+            texto_normalizado = normalizar_nombre_cliente(texto)
             for cliente in clientes:
-                if str(cliente.razon_social or "").strip().lower() == texto_lower:
+                if normalizar_nombre_cliente(cliente.razon_social) == texto_normalizado:
                     idx = cbo_cliente.findData(cliente.id)
                     if idx >= 0:
                         cbo_cliente.setCurrentIndex(idx)
@@ -276,8 +287,22 @@ class BandejaPedidosController(ControladorBase):
         cbo_cliente.lineEdit().editingFinished.connect(cargar_lugares)
         completer.activated[str].connect(on_cliente_completado)
 
-        # Precarga el cliente actual de la factura. Aunque alguna línea no esté
-        # visible, la selección inicial debe reflejar el cliente ya importado.
+        # Precarga SIEMPRE el cliente visible de la factura. El nombre importado
+        # es contexto útil aunque todavía no tenga FK resuelto.
+        nombres_factura = {
+            str(getattr(p, "cliente", "") or "").strip()
+            for p in pedidos
+            if str(getattr(p, "cliente", "") or "").strip()
+        }
+        if len(nombres_factura) == 1:
+            nombre_actual = next(iter(nombres_factura))
+        elif seleccionados:
+            nombre_actual = str(
+                getattr(seleccionados[0], "cliente", "") or ""
+            ).strip()
+        else:
+            nombre_actual = ""
+
         cliente_ids = {p.cliente_id for p in pedidos if p.cliente_id}
         cliente_id_actual = 0
         if len(cliente_ids) == 1:
@@ -285,44 +310,31 @@ class BandejaPedidosController(ControladorBase):
         elif seleccionados:
             cliente_id_actual = int(getattr(seleccionados[0], "cliente_id", 0) or 0)
 
-        # En importaciones pendientes el FK cliente puede seguir NULL aunque
-        # nombre_cliente ya venga informado y se vea en la grilla. En ese caso
-        # resolvemos una coincidencia exacta por razón social para que el
-        # operador solo tenga que elegir el lugar de entrega.
-        if not cliente_id_actual:
-            nombres_factura = {
-                str(getattr(p, "cliente", "") or "").strip()
-                for p in pedidos
-                if str(getattr(p, "cliente", "") or "").strip()
-            }
-            if len(nombres_factura) == 1:
-                nombre_actual = next(iter(nombres_factura))
-            elif seleccionados:
-                nombre_actual = str(
-                    getattr(seleccionados[0], "cliente", "") or ""
-                ).strip()
-            else:
-                nombre_actual = ""
-
-            if nombre_actual:
-                cliente_nombre = next(
-                    (
-                        cli for cli in clientes
-                        if str(cli.razon_social or "").strip().lower()
-                        == nombre_actual.lower()
-                    ),
-                    None,
-                )
-                if cliente_nombre is not None:
-                    cliente_id_actual = int(cliente_nombre.id)
+        if not cliente_id_actual and nombre_actual:
+            nombre_normalizado = normalizar_nombre_cliente(nombre_actual)
+            cliente_nombre = next(
+                (
+                    cli for cli in clientes
+                    if normalizar_nombre_cliente(cli.razon_social)
+                    == nombre_normalizado
+                ),
+                None,
+            )
+            if cliente_nombre is not None:
+                cliente_id_actual = int(cliente_nombre.id)
 
         if cliente_id_actual:
             idx = cbo_cliente.findData(cliente_id_actual)
             if idx >= 0:
                 cbo_cliente.setCurrentIndex(idx)
+            elif nombre_actual:
+                cbo_cliente.setEditText(nombre_actual)
+                cargar_lugares()
             else:
                 cargar_lugares()
         else:
+            if nombre_actual:
+                cbo_cliente.setEditText(nombre_actual)
             cargar_lugares()
 
         # Si toda la factura ya tiene un lugar común, también lo dejamos
