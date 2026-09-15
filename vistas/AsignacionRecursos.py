@@ -15,8 +15,8 @@ class AsignacionRecursosView(QWidget):
 
     def _build_ui(self):
         raiz = QVBoxLayout(self)
-        raiz.setContentsMargins(24, 24, 24, 24)
-        raiz.setSpacing(16)
+        raiz.setContentsMargins(18, 16, 18, 16)
+        raiz.setSpacing(10)
 
         titulo = QLabel("Asignar chofer y camión")
         titulo.setObjectName("asignacionRecursosTitulo")
@@ -26,6 +26,7 @@ class AsignacionRecursosView(QWidget):
         raiz.addWidget(detalle)
 
         filtros = QHBoxLayout()
+        filtros.setSpacing(8)
         filtros.addWidget(QLabel("Fecha:"))
         self.fecha = QDateEdit()
         self.fecha.setCalendarPopup(True)
@@ -36,6 +37,7 @@ class AsignacionRecursosView(QWidget):
         self.cbo_ruta.setMinimumWidth(260)
         filtros.addWidget(self.cbo_ruta)
         self.btn_cargar = QPushButton("Cargar hoja")
+        self.btn_cargar.setProperty("role", "secondary")
         filtros.addWidget(self.btn_cargar)
         filtros.addStretch(1)
         raiz.addLayout(filtros)
@@ -72,10 +74,12 @@ class AsignacionRecursosView(QWidget):
         self.btn_guardar.setCursor(Qt.PointingHandCursor)
         self.btn_guardar.setEnabled(False)
         acciones.addWidget(self.btn_guardar)
-        self.btn_siguiente = QPushButton("Validar hoja de ruta")
+        self.btn_siguiente = QPushButton("Validar hoja")
+        self.btn_siguiente.setProperty("role", "secondary")
         self.btn_siguiente.setEnabled(False)
         acciones.addWidget(self.btn_siguiente)
         self.btn_cerrar = QPushButton("Cerrar")
+        self.btn_cerrar.setProperty("role", "secondary")
         acciones.addWidget(self.btn_cerrar)
         raiz.addLayout(acciones)
 
