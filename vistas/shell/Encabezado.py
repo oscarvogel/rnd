@@ -32,7 +32,7 @@ class EncabezadoView(QFrame):
         layout.setContentsMargins(16, 10, 16, 10)
         layout.setSpacing(16)
 
-        self.brand = QLabel("Vogel Consultoría")
+        self.brand = QLabel("RND Logística")
         self.brand.setObjectName("encabezadoBrand")
         layout.addWidget(self.brand)
 
