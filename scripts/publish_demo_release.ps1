@@ -37,8 +37,9 @@ if (-not $Version) {
 
 Write-Host "Publicando RND DEMO $Version en $RepoReleases..." -ForegroundColor Cyan
 
-& gh release view $Tag --repo $RepoReleases *> $null
-$ReleaseExists = ($LASTEXITCODE -eq 0)
+$existingTags = & gh release list --repo $RepoReleases --limit 100 --json tagName --jq '.[].tagName'
+if ($LASTEXITCODE -ne 0) { throw "No se pudo consultar los releases existentes." }
+$ReleaseExists = @($existingTags) -contains $Tag
 
 $Title = "RND DEMO $Version"
 $Notes = @"
