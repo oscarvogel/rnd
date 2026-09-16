@@ -57,4 +57,5 @@ coll = COLLECT(
     upx=True,
     upx_exclude=[],
     name="RND Demo",
+    contents_directory=".",
 )
