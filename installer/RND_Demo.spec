@@ -7,6 +7,7 @@ libs_datas, libs_binaries, libs_hiddenimports = collect_all("libs")
 controller_hiddenimports = collect_submodules("controladores")
 
 runtime_datas = [
+    ("../assets", "assets"),
     ("../imagenes", "imagenes"),
     ("../temas", "temas"),
     ("../sistema.demo.ini", "."),
@@ -46,6 +47,7 @@ exe = EXE(
     strip=False,
     upx=True,
     console=False,
+    contents_directory=".",
     icon="../imagenes/vogel_consultoria_oficial.ico",
 )
 
