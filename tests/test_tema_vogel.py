@@ -197,7 +197,7 @@ class SmokeVisualTests(unittest.TestCase):
         self.app.processEvents()
         try:
             captura = formulario.grab().toImage().convertToFormat(QImage.Format_RGB32)
-            self.assertEqual(captura.pixelColor(5, 5).name().lower(), "#f8fafc")
+            self.assertEqual(captura.pixelColor(5, 5).name().lower(), "#f2f8fc")
         finally:
             formulario.close()
             formulario.deleteLater()
@@ -214,7 +214,7 @@ class SmokeVisualTests(unittest.TestCase):
         self.app.processEvents()
         try:
             captura = widget.grab().toImage().convertToFormat(QImage.Format_RGB32)
-            self.assertEqual(captura.pixelColor(5, 5).name().lower(), "#f8fafc")
+            self.assertEqual(captura.pixelColor(5, 5).name().lower(), "#f2f8fc")
         finally:
             widget.close()
             widget.deleteLater()
