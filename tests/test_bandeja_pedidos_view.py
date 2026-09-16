@@ -10,8 +10,11 @@ from utiles.bandeja_pedidos import FacturaBandeja
 from vistas.BandejaPedidos import BandejaPedidosView
 
 
+_QT_APP = QApplication.instance() or QApplication([])
+
+
 def _app():
-    return QApplication.instance() or QApplication([])
+    return _QT_APP
 
 
 def _factura(clave, numero):
