@@ -91,7 +91,7 @@ class ShellModernoSmokeTests(unittest.TestCase):
 
         view = MainView()
         enc = view.encabezado
-        self.assertEqual(enc.brand.text(), "Vogel Consultoría")
+        self.assertEqual(enc.brand.text(), "RND Logística")
         self.assertEqual(enc.boton_salir.text(), "Salir")
         for clave in ("usuario", "servidor", "estado", "version"):
             self.assertIn(clave, enc._info_labels)
