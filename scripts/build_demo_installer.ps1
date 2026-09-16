@@ -64,6 +64,15 @@ try {
     & $Python -m PyInstaller --noconfirm --clean installer\RND_Demo.spec
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller fallo." }
 
+    $DemoIni = Join-Path $RepoRoot "dist\RND Demo\sistema.demo.ini"
+    $RndIni = Join-Path $RepoRoot "dist\RND Demo\rnd.ini"
+    if (-not (Test-Path $DemoIni)) {
+        throw "Build DEMO invalido: falta dist\RND Demo\sistema.demo.ini"
+    }
+    if (-not (Test-Path $RndIni)) {
+        throw "Build DEMO invalido: falta dist\RND Demo\rnd.ini"
+    }
+
     & $Iscc "/DMyAppVersion=$BuildVersion" installer\RND_Demo.iss
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup fallo." }
 
@@ -71,6 +80,7 @@ try {
     Write-Host "RND DEMO generado correctamente." -ForegroundColor Green
     Write-Host "Version: $BuildVersion" -ForegroundColor Green
     Write-Host "Instalador: dist\installer\setup_rnd_demo.exe" -ForegroundColor Green
+    Write-Host "INI demo: dist\RND Demo\sistema.demo.ini" -ForegroundColor Green
     Write-Host "Login demo: usuario 1 / clave DEMO" -ForegroundColor Yellow
 } finally {
     Pop-Location
