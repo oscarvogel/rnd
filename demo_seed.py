@@ -420,8 +420,11 @@ def _seed_menu(Formula, MenuLateral) -> None:
 
     f_oper = formula("Operaciones", 1)
     f_maestros = formula("Maestros", 2)
+    f_demo = formula("Demo", 3)
+
     cab_oper, _ = MenuLateral.get_or_create(nombre="OPERACIONES", for_id=f_oper, for_pare=0)
     cab_mae, _ = MenuLateral.get_or_create(nombre="MAESTROS", for_id=f_maestros, for_pare=0)
+    cab_demo, _ = MenuLateral.get_or_create(nombre="DEMO", for_id=f_demo, for_pare=0)
 
     opciones = (
         (f_oper, cab_oper.id, "Importar pedidos", "ImportacionPedidos.ImportacionPedidosController", "IMPORTAR_PEDIDOS", 10, "iconfinder_icon-81-document-add_314445.png"),
@@ -430,6 +433,8 @@ def _seed_menu(Formula, MenuLateral) -> None:
         (f_oper, cab_oper.id, "Validar hoja de ruta", "ValidacionHojaRuta.ValidacionHojaRutaController", "VALIDAR_HOJA", 40, "search.png"),
         (f_maestros, cab_mae.id, "Clientes", "ABMClientes.ABMClientesController", "ABM_CLIENTES", 50, "clientes.png"),
         (f_maestros, cab_mae.id, "Equipos", "ABMEquipos.ABMEquiposController", "ABM_EQUIPOS", 60, "maquinas.png"),
+        (f_maestros, cab_mae.id, "Proveedores", "ABMProveedores.ABMProveedoresController", "ABM_PROVEEDORES", 70, "proveedores.png"),
+        (f_demo, cab_demo.id, "Restablecer datos demo", "ResetDemo.ResetDemoController", "RESET_DEMO", 80, "edit.png"),
     )
     for padre, menu_parent, nombre, archivo, valid, orden, imag in opciones:
         f = formula(nombre, orden, archivo, valid, pare=padre.for_id, imag=imag)
