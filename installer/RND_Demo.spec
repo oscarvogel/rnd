@@ -46,6 +46,7 @@ exe = EXE(
     strip=False,
     upx=True,
     console=False,
+    contents_directory=".",
     icon="../imagenes/vogel_consultoria_oficial.ico",
 )
 
@@ -57,5 +58,4 @@ coll = COLLECT(
     upx=True,
     upx_exclude=[],
     name="RND Demo",
-    contents_directory=".",
 )
