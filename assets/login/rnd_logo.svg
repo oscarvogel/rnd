@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="160" viewBox="0 0 520 160">
+<g transform="translate(15 20)">
+  <text x="0" y="70" font-family="Arial Black,Segoe UI,Arial" font-size="74" font-style="italic" font-weight="800" fill="#595b5d">RND</text>
+  <path d="M220 22h190c0 0-3 28-30 28H220z" fill="#00983e"/>
+  <path d="M220 56h160c0 0-3 28-29 28H220z" fill="#ed1c24"/>
+  <path d="M220 90h128c0 0-3 28-28 28H220z" fill="#00983e"/>
+  <text x="3" y="119" font-family="Segoe UI,Arial" font-size="23" font-style="italic" fill="#55575a">Logística y Distribución</text>
+</g></svg>
