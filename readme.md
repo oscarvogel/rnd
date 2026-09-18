@@ -60,6 +60,26 @@ dist\main\main.exe           <- Ejecutable
 dist\installer\setup_rnd.exe <- Instalador Windows
 ```
 
+### Generar el ejecutable DEMO para compartir
+
+La DEMO funciona con SQLite local y no requiere MySQL ni configurar
+credenciales del cliente. Con Python y las dependencias instaladas en
+`.venv-build`, ejecutar:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_demo_installer.ps1 -SkipInstallDependencies
+```
+
+El script ejecuta los tests, compila la DEMO y genera:
+
+```text
+dist\installer\setup_rnd_demo.exe <- instalador para compartir
+dist\RND Demo\RND Demo.exe       <- bundle portable (con su carpeta)
+```
+
+El acceso DEMO es `demo` / `DEMO`. Para compilar desde cero, quitar
+`-SkipInstallDependencies`.
+
 
 ## Uso
 - Ejecutar la aplicación de escritorio.
