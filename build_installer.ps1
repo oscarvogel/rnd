@@ -1,11 +1,23 @@
 $ErrorActionPreference = 'Stop'
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$PythonLauncher = 'py'
-$PythonVersion = '-3.10'
+$PythonExecutable = 'python'
 $VenvDir = Join-Path $Root '.venv-build'
 $VenvPython = Join-Path $VenvDir 'Scripts\python.exe'
-$InnoCompiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+$InnoCompilerCandidates = @(
+    $env:INNO_SETUP_COMPILER,
+    'C:\InnoSetup6\ISCC.exe',
+    'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+    'C:\Program Files\Inno Setup 6\ISCC.exe'
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+$InnoCompiler = $null
+foreach ($Candidate in $InnoCompilerCandidates) {
+    if (Test-Path -LiteralPath $Candidate -PathType Leaf) {
+        $InnoCompiler = [string]$Candidate
+        break
+    }
+}
 $RequiredBuildFiles = @(
     'dist\main\main.exe',
     'dist\main\imagenes',
@@ -33,13 +45,13 @@ function Invoke-Step {
 
 Set-Location $Root
 
-Invoke-Step 'Checking Python 3.10 x64' {
-    & $PythonLauncher $PythonVersion -c "import platform, sys; assert platform.architecture()[0] == '64bit', platform.architecture(); print(sys.version)"
+Invoke-Step 'Checking Python x64' {
+    & $PythonExecutable -c "import platform, sys; assert platform.architecture()[0] == '64bit', platform.architecture(); print(sys.executable); print(sys.version)"
 }
 
 if (-not (Test-Path $VenvPython)) {
     Invoke-Step 'Creating .venv-build' {
-        & $PythonLauncher $PythonVersion -m venv $VenvDir
+        & $PythonExecutable -m venv $VenvDir
     }
 }
 
@@ -69,14 +81,19 @@ Invoke-Step 'Verifying PyInstaller output' {
 }
 
 Invoke-Step 'Compiling Inno Setup installer' {
-    if (-not (Test-Path $InnoCompiler)) {
-        throw "Inno Setup compiler not found: $InnoCompiler"
+    if ([string]::IsNullOrWhiteSpace($InnoCompiler) -or -not (Test-Path -LiteralPath $InnoCompiler -PathType Leaf)) {
+        throw "Inno Setup compiler not found. Set INNO_SETUP_COMPILER or install ISCC.exe in a known location."
     }
-    & $InnoCompiler (Join-Path $Root 'installer\RND.iss')
+    Write-Host "Using Inno Setup compiler: $InnoCompiler"
+    $InnoArgs = @((Join-Path $Root 'installer\RND.iss'))
+    Start-Process -FilePath $InnoCompiler -ArgumentList $InnoArgs -NoNewWindow -Wait
+    if ($LASTEXITCODE -ne 0) {
+        throw "Inno Setup fallo con codigo $LASTEXITCODE."
+    }
 }
 
 Invoke-Step 'Verifying installer output' {
-    $Installer = Join-Path $Root 'dist\installer\setup_rnd.exe'
+    $Installer = Join-Path $Root 'dist\installer\RND_Setup.exe'
     if (-not (Test-Path $Installer)) {
         throw "Missing installer output: $Installer"
     }

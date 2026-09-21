@@ -1,5 +1,8 @@
 #define AppName "RND"
-#define AppVersion "2026.8.11.1"
+#ifndef MyAppVersion
+  #define MyAppVersion "2026.8.11.1"
+#endif
+#define AppVersion MyAppVersion
 #define AppPublisher "Jose Oscar Vogel"
 #define AppExeName "main.exe"
 
@@ -14,7 +17,7 @@ DisableDirPage=yes
 DisableProgramGroupPage=yes
 UsePreviousAppDir=no
 OutputDir=..\dist\installer
-OutputBaseFilename=setup_rnd
+OutputBaseFilename=RND_Setup
 SetupIconFile=..\imagenes\vogel_consultoria_oficial.ico
 Compression=lzma2
 SolidCompression=yes

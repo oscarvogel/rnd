@@ -84,7 +84,8 @@ class PackagingStaticTests(unittest.TestCase):
             re.search(r'__version__\s*=\s*"([^"]+)"', main_source).group(1),
             expected,
         )
-        self.assertIn('#define AppVersion "{}"'.format(expected), installer)
+        self.assertIn('#define MyAppVersion "{}"'.format(expected), installer)
+        self.assertIn("#define AppVersion MyAppVersion", installer)
         self.assertIn(
             "filevers=({})".format(", ".join(expected.split("."))),
             version_info,

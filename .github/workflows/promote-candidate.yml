@@ -1,0 +1,117 @@
+name: Promote RND candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: Notas de la version aprobada
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rnd-promote-production
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RELEASE_REPO: oscarvogel/vogel-releases
+      GH_TOKEN: ${{ secrets.VOGEL_RELEASES_TOKEN }}
+      ASSET_NAME: RND_Setup.exe
+
+    steps:
+      - name: Validate publication credentials
+        shell: bash
+        run: |
+          test -n "$GH_TOKEN" || { echo 'Falta VOGEL_RELEASES_TOKEN'; exit 1; }
+
+      - name: Checkout release repository
+        uses: actions/checkout@v6
+        with:
+          repository: oscarvogel/vogel-releases
+          token: ${{ secrets.VOGEL_RELEASES_TOKEN }}
+          path: vogel-releases
+
+      - name: Read and validate candidate manifest
+        id: candidate
+        shell: pwsh
+        run: |
+          $path = Join-Path $pwd 'vogel-releases/apps/rnd/candidate.json'
+          if (-not (Test-Path $path)) { throw 'No existe apps/rnd/candidate.json' }
+          $candidate = Get-Content $path -Raw | ConvertFrom-Json
+          if ($candidate.app_id -ne 'rnd') { throw 'Candidate de otra aplicacion' }
+          if (-not $candidate.version -or -not $candidate.sha256) { throw 'Candidate incompleto' }
+          "version=$($candidate.version)" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "sha256=$($candidate.sha256)" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "source_commit=$($candidate.source_commit)" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Download exact candidate asset
+        shell: bash
+        run: gh release download candidate --repo "$RELEASE_REPO" --pattern "$ASSET_NAME" --dir candidate
+
+      - name: Verify SHA256 before promotion
+        shell: pwsh
+        run: |
+          $actual = (Get-FileHash -Algorithm SHA256 'candidate/RND_Setup.exe').Hash.ToLowerInvariant()
+          $expected = '${{ steps.candidate.outputs.sha256 }}'.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "SHA256 candidate invalido: $actual != $expected" }
+
+      - name: Publish production asset
+        shell: bash
+        run: |
+          gh release view latest --repo "$RELEASE_REPO" >/dev/null 2>&1 || \
+            gh release create latest --repo "$RELEASE_REPO" --title 'Production latest' --notes 'Instaladores de produccion.'
+          gh release upload latest candidate/RND_Setup.exe --repo "$RELEASE_REPO" --clobber
+
+      - name: Write production manifest and changelog
+        shell: pwsh
+        env:
+          RELEASE_NOTES: ${{ inputs.notes }}
+        run: |
+          $dir = Join-Path $pwd 'vogel-releases/apps/rnd'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $notes = if ([string]::IsNullOrWhiteSpace($env:RELEASE_NOTES)) { 'Candidate RND validado y promovido a produccion.' } else { $env:RELEASE_NOTES }
+          $manifest = [ordered]@{
+            schema_version = 1
+            app_id = 'rnd'
+            version = '${{ steps.candidate.outputs.version }}'
+            published_at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            mandatory = $false
+            download_url = 'https://github.com/oscarvogel/vogel-releases/releases/download/latest/RND_Setup.exe'
+            sha256 = '${{ steps.candidate.outputs.sha256 }}'
+            source_commit = '${{ steps.candidate.outputs.source_commit }}'
+            notes = $notes
+          }
+          [IO.File]::WriteAllText((Join-Path $dir 'latest.json'), ($manifest | ConvertTo-Json -Depth 6) + "`n", (New-Object Text.UTF8Encoding($false)))
+
+          $changelogPath = Join-Path $dir 'changelog.json'
+          $items = @()
+          if (Test-Path $changelogPath) {
+            $loaded = Get-Content $changelogPath -Raw | ConvertFrom-Json
+            if ($loaded) { $items = @($loaded) }
+          }
+          $entry = [ordered]@{
+            version = $manifest.version
+            published_at = $manifest.published_at
+            notes = $notes
+            source_commit = $manifest.source_commit
+          }
+          $items = @($entry) + @($items | Where-Object { $_.version -ne $manifest.version })
+          [IO.File]::WriteAllText($changelogPath, ($items | ConvertTo-Json -Depth 6) + "`n", (New-Object Text.UTF8Encoding($false)))
+
+      - name: Commit production metadata
+        shell: bash
+        working-directory: vogel-releases
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/rnd/latest.json apps/rnd/changelog.json
+          if ! git diff --cached --quiet; then
+            git commit -m "release(rnd): ${{ steps.candidate.outputs.version }}"
+            git push
+          fi
