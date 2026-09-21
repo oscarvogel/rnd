@@ -15,6 +15,7 @@ from utiles.dashboard_flujo import (
     ACCION_ORGANIZAR, ACCION_REVISAR, ACCION_VALIDAR,
 )
 from vistas.Main import MainView
+from vistas.MigracionProgress import MigracionProgressDialog
 from vistas.dashboard.dashboard_view import (
     NAV_ALERTAS, NAV_HOJAS_RUTA_DIA, NAV_IMPORTAR_PEDIDOS,
     NAV_ORGANIZAR_PEDIDOS, NAV_PENDIENTES, NAV_VENCIMIENTOS, DashboardView,
@@ -50,7 +51,7 @@ class MainController(ControladorBase):
                 from vistas.dashboard.ejecutor import EjecutorConsultasSincrono
                 ejecutor = EjecutorConsultasSincrono()
             else:
-                MigracionBaseDatos()
+                self._ejecutar_migraciones_con_feedback()
                 propiedades = getFileProperties("main.exe")
                 versionexe = propiedades["StringFileInfo"]["FileVersion"] if propiedades["StringFileInfo"] else ""
                 servidor = LeerIni("ServerDB") or ""
@@ -66,6 +67,28 @@ class MainController(ControladorBase):
             if not demo_mode:
                 self._programar_actualizaciones()
         return lRetVal
+
+    def _ejecutar_migraciones_con_feedback(self):
+        migracion = MigracionBaseDatos()
+        dialogo = MigracionProgressDialog(self.view)
+        temporizador = QTimer(dialogo)
+        temporizador.setInterval(100)
+
+        def comprobar_fin():
+            hilo = getattr(migracion, "thread", None)
+            if hilo is None or not hilo.is_alive():
+                temporizador.stop()
+                dialogo.finalizar()
+
+        temporizador.timeout.connect(comprobar_fin)
+        temporizador.start()
+        QTimer.singleShot(0, comprobar_fin)
+        dialogo.exec_()
+        migracion.esperar_migracion()
+
+        error = getattr(migracion, "error", None)
+        if error is not None:
+            raise RuntimeError("No se pudieron aplicar las migraciones de la base de datos") from error
 
     def _programar_actualizaciones(self):
         try:
