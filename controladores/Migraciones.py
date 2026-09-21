@@ -27,6 +27,7 @@ class MigracionBaseDatos:
         self.migraciones = []
         self.migrator = MySQLMigrator(database)
         self.thread = None
+        self.error = None
         self.Migrar()
 
     def MigrarVersion(self):
@@ -155,11 +156,15 @@ class MigracionBaseDatos:
                     continue
                 ex = traceback.format_exception(sys.exc_info()[0], sys.exc_info()[1], sys.exc_info()[2])
                 self.Traceback = ''.join(ex)
-                logging.debug(self.Traceback)
-                print(self.Traceback)
+                logging.error(self.Traceback)
+                raise
 
     def _run_in_thread(self):
-        self.MigrarVersion()
+        try:
+            self.MigrarVersion()
+        except Exception as exc:
+            self.error = exc
+            logging.exception("Falló la migración de la base de datos")
 
     def Migrar(self):
         if not self.thread or not self.thread.is_alive():
