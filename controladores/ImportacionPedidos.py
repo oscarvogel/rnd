@@ -51,6 +51,15 @@ COLUMNAS_NORMALIZADAS = {
 }
 
 
+def valor_para_vista_previa(valor):
+    """Convierte valores de pandas/Excel a texto seguro para QTableWidgetItem."""
+    if pd.isna(valor):
+        return ""
+    if isinstance(valor, float) and valor.is_integer():
+        return str(int(valor))
+    return str(valor)
+
+
 class ImportacionPedidosController(ControladorBase):
     def __init__(self):
         super().__init__()
@@ -281,7 +290,10 @@ class ImportacionPedidosController(ControladorBase):
             showAlert("Sistema", "La fila de inicio especificada está fuera del rango")
             return
 
-        cabeceras = ["Importa"] + df.iloc[fila_cabeceras].tolist()
+        cabeceras = ["Importa"] + [
+            valor_para_vista_previa(valor)
+            for valor in df.iloc[fila_cabeceras].tolist()
+        ]
         inicio_datos = fila_cabeceras + 1
         df_datos = df.iloc[inicio_datos:].reset_index(drop=True)
         df_datos.columns = df.iloc[fila_cabeceras]
@@ -315,7 +327,7 @@ class ImportacionPedidosController(ControladorBase):
             )
             row = df_datos.iloc[i]
             item = [True]
-            item.extend("" if pd.isna(valor) else valor for valor in row.tolist())
+            item.extend(valor_para_vista_previa(valor) for valor in row.tolist())
             self.view.grid_datos.AgregaItem(item)
 
         self.view.avance.finalizar("Vista previa lista")
