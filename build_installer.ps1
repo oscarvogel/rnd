@@ -1,8 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$PythonLauncher = 'py'
-$PythonVersion = '-3.10'
+$PythonExecutable = 'python'
 $VenvDir = Join-Path $Root '.venv-build'
 $VenvPython = Join-Path $VenvDir 'Scripts\python.exe'
 $InnoCompiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
@@ -33,13 +32,13 @@ function Invoke-Step {
 
 Set-Location $Root
 
-Invoke-Step 'Checking Python 3.10 x64' {
-    & $PythonLauncher $PythonVersion -c "import platform, sys; assert platform.architecture()[0] == '64bit', platform.architecture(); print(sys.version)"
+Invoke-Step 'Checking Python x64' {
+    & $PythonExecutable -c "import platform, sys; assert platform.architecture()[0] == '64bit', platform.architecture(); print(sys.executable); print(sys.version)"
 }
 
 if (-not (Test-Path $VenvPython)) {
     Invoke-Step 'Creating .venv-build' {
-        & $PythonLauncher $PythonVersion -m venv $VenvDir
+        & $PythonExecutable -m venv $VenvDir
     }
 }
 
