@@ -68,9 +68,10 @@ Invoke-Step 'Verifying PyInstaller output' {
 }
 
 Invoke-Step 'Compiling Inno Setup installer' {
-    if (-not (Test-Path $InnoCompiler)) {
-        throw "Inno Setup compiler not found: $InnoCompiler"
+    if (-not $InnoCompiler) {
+        throw "Inno Setup compiler not found. Set INNO_SETUP_COMPILER or install ISCC.exe in a known location."
     }
+    Write-Host "Using Inno Setup compiler: $InnoCompiler"
     & $InnoCompiler (Join-Path $Root 'installer\RND.iss')
 }
 
