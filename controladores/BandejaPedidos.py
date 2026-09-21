@@ -564,10 +564,64 @@ class BandejaPedidosController(ControladorBase):
             if idx_lugar >= 0:
                 cbo_lugar.setCurrentIndex(idx_lugar)
 
+        def recargar_clientes(*_):
+            """Refresca clientes/lugares al volver del ABM sin perder la selección."""
+            cliente_id_previo = int(cbo_cliente.currentData() or 0)
+            texto_previo = str(cbo_cliente.currentText() or "").strip()
+
+            cbo_cliente.blockSignals(True)
+            try:
+                clientes[:] = list(
+                    Cliente.select()
+                    .where(Cliente.activo == True)
+                    .order_by(Cliente.razon_social)
+                )
+                cbo_cliente.clear()
+                cbo_cliente.addItem("", 0)
+                for cliente in clientes:
+                    cbo_cliente.addItem(cliente.razon_social, cliente.id)
+
+                idx = cbo_cliente.findData(cliente_id_previo) if cliente_id_previo else -1
+                if idx >= 0:
+                    cbo_cliente.setCurrentIndex(idx)
+                elif texto_previo:
+                    cbo_cliente.setEditText(texto_previo)
+            finally:
+                cbo_cliente.blockSignals(False)
+            cargar_lugares()
+
         def gestionar_clientes():
             from controladores.ABMClientes import ABMClientesController
-            self.gestor_clientes = ABMClientesController()
-            self.gestor_clientes.run()
+
+            gestor_actual = getattr(self, "gestor_clientes", None)
+            if gestor_actual is not None:
+                try:
+                    if gestor_actual.view.isVisible():
+                        gestor_actual.view.raise_()
+                        gestor_actual.view.activateWindow()
+                        return
+                except RuntimeError:
+                    self.gestor_clientes = None
+
+            gestor = ABMClientesController()
+            self.gestor_clientes = gestor
+
+            # El diálogo de asignación está ejecutándose con exec_() y es modal.
+            # Hacemos al ABM una ventana hija de ese diálogo para que Qt no lo
+            # bloquee ni lo mande detrás de la ventana modal.
+            gestor.view.setParent(dialogo, Qt.Window)
+            gestor.view.setAttribute(Qt.WA_DeleteOnClose, True)
+
+            def al_cerrar_abm(*_):
+                self.gestor_clientes = None
+                recargar_clientes()
+                dialogo.raise_()
+                dialogo.activateWindow()
+
+            gestor.view.destroyed.connect(al_cerrar_abm)
+            gestor.run()
+            gestor.view.raise_()
+            gestor.view.activateWindow()
 
         btn_gestionar.clicked.connect(gestionar_clientes)
         botones = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
