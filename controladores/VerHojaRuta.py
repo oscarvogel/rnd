@@ -3,6 +3,8 @@ import peewee
 from PyQt5.QtWidgets import QApplication
 
 from modelos.HojaRuta import HojaDeRuta
+from modelos.Empleados import Empleado
+from modelos.Equipos import Equipos
 from modelos.Documentos import actualizar_remito_de_hoja, referencias_por_hojas
 from modelos.ModeloBase import reconnect_if_needed
 from modelos.ParametrosSistema import ParamSist
@@ -49,6 +51,34 @@ class VerHojaRutaController(ControladorBase):
                     interno.setCurrentIndex(idx)
                     return
     
+    @staticmethod
+    def _fk_id(registro, atributo):
+        """Devuelve el id crudo de una FK sin forzar a Peewee a cargar la fila relacionada."""
+        return int(getattr(registro, "{}_id".format(atributo), 0) or 0)
+
+    @staticmethod
+    def _limpiar_validador(validador):
+        validador.lineEditCodigo.setText("")
+        nombre = getattr(validador, "textNombre", None)
+        if nombre is not None and hasattr(nombre, "setText"):
+            nombre.setText("")
+
+    def _cargar_recurso(self, validador, modelo, recurso_id, generico_id):
+        """Carga un recurso real y deja en blanco los placeholders o referencias huérfanas."""
+        recurso_id = int(recurso_id or 0)
+        generico_id = int(generico_id or 0)
+        if not recurso_id or recurso_id == generico_id:
+            self._limpiar_validador(validador)
+            return False
+
+        if modelo.get_or_none(modelo.id == recurso_id) is None:
+            self._limpiar_validador(validador)
+            return False
+
+        validador.lineEditCodigo.setText(str(recurso_id))
+        validador.lineEditCodigo.valida()
+        return True
+
     def conectarWidgets(self):
         self.view.btn_cerrar.clicked.connect(self.view.Cerrar)
         self.view.btn_cargar.clicked.connect(self.on_click_btn_cargar)
@@ -81,21 +111,29 @@ class VerHojaRutaController(ControladorBase):
         self.view.lbl_titulo_hoja.setText("Hoja de ruta - {} - {}".format(fecha_txt, ruta_txt))
         referencias = referencias_por_hojas([h.id for h in hoja_ruta]) if total else {}
         avance = 0
-        self.view.equipo.lineEditCodigo.setText(hoja_ruta[0].equipo_asignado.id if total > 0 and hoja_ruta[0].equipo_asignado else 0)
-        self.view.empleado.lineEditCodigo.setText(hoja_ruta[0].responsable.id if total > 0 and hoja_ruta[0].responsable else 0)
-        self.view.empleado.lineEditCodigo.valida()
-        self.view.equipo.lineEditCodigo.valida()
+        empleado_generico = int(ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23") or 0)
+        camion_generico = int(ParamSist.ObtenerParametro("CAMION_GENERICO", "1") or 0)
+        responsable_id = self._fk_id(hoja_ruta[0], "responsable") if total else 0
+        equipo_id = self._fk_id(hoja_ruta[0], "equipo_asignado") if total else 0
+        self._cargar_recurso(self.view.empleado, Empleado, responsable_id, empleado_generico)
+        self._cargar_recurso(self.view.equipo, Equipos, equipo_id, camion_generico)
+
+        responsable_seleccionado = int(self.view.empleado.lineEditCodigo.valor() or 0)
+        equipo_seleccionado = int(self.view.equipo.lineEditCodigo.valor() or 0)
         for h in hoja_ruta:
             avance += 1
             self.view.avance.actualizar(avance / total * 100)
             QApplication.processEvents()
-            seleccionado = False
-            #si el equipo asignado o el empleado asignado a la hoja de ruta conincide con lo seleccionado marca como que esta seleccionado
-            if h.equipo_asignado.id == int(self.view.equipo.lineEditCodigo.text()) or h.responsable.id == int(self.view.empleado.lineEditCodigo.text()):
-                seleccionado = True
+            h_equipo_id = self._fk_id(h, "equipo_asignado")
+            h_responsable_id = self._fk_id(h, "responsable")
+            seleccionado = (
+                (equipo_seleccionado and h_equipo_id == equipo_seleccionado)
+                or (responsable_seleccionado and h_responsable_id == responsable_seleccionado)
+            )
 
-            # Verificar si el equipo o el responsable son genéricos
-            if self.view.equipo.lineEditCodigo.valor() == ParamSist.ObtenerParametro("CAMION_GENERICO", "1") or h.responsable.id == ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23"):
+            # Los IDs genéricos representan "pendiente"; no deben validarse ni
+            # obligar a Peewee a buscar una fila que puede no existir.
+            if h_equipo_id == camion_generico or h_responsable_id == empleado_generico:
                 seleccionado = False
             
             referencia = referencias.get(h.id, {})
@@ -104,7 +142,7 @@ class VerHojaRutaController(ControladorBase):
                 referencia.get("factura") or h.comprobante or "",
                 referencia.get("remito") or "",
                 h.producto, h.cantidad, h.kg, h.cantidad_bultos,
-                h.observaciones, h.id, h.cliente.id
+                h.observaciones, h.id, int(getattr(h, "cliente_id", 0) or 0)
             ]
             self.view.grilla_datos.AgregaItem(item)
         self.view.grilla_datos.setSortingEnabled(True)
@@ -294,7 +332,15 @@ class MdoficaHojaRutaController(ControladorBase):
         self.view.text_kg.setValue(hoja_ruta.kg)
         self.view.text_bultos.setValue(hoja_ruta.cantidad_bultos)
         self.view.text_observaciones.setText(hoja_ruta.observaciones if hoja_ruta.observaciones else "")
-        self.view.layout_empleado.lineEditCodigo.setText(hoja_ruta.responsable.id if hoja_ruta.responsable else 0)
-        self.view.layout_empleado.lineEditCodigo.valida()
-        self.view.layout_equipo.lineEditCodigo.setText(hoja_ruta.equipo_asignado.id if hoja_ruta.equipo_asignado else 0)
-        self.view.layout_equipo.lineEditCodigo.valida()
+        self._cargar_recurso(
+            self.view.layout_empleado,
+            Empleado,
+            self._fk_id(hoja_ruta, "responsable"),
+            int(ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23") or 0),
+        )
+        self._cargar_recurso(
+            self.view.layout_equipo,
+            Equipos,
+            self._fk_id(hoja_ruta, "equipo_asignado"),
+            int(ParamSist.ObtenerParametro("CAMION_GENERICO", "1") or 0),
+        )
