@@ -19,9 +19,11 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
 
 Write-Host ""
 Write-Host "[1/3] Ejecutando tests y generando instalador DEMO..." -ForegroundColor Cyan
-$buildArgs = @{}
-if ($SkipInstallDependencies) { $buildArgs["SkipInstallDependencies"] = $true }
-& $BuildScript @buildArgs
+if ($SkipInstallDependencies) {
+    & $BuildScript -SkipInstallDependencies
+} else {
+    & $BuildScript
+}
 if ($LASTEXITCODE -ne 0) {
     throw "Fallo la generacion del instalador DEMO."
 }
