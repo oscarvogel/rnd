@@ -336,6 +336,12 @@ class MdoficaHojaRutaController(ControladorBase):
     hoja_ruta_id = 0
     ruta_id = 0
 
+    @staticmethod
+    def _fk_id(registro, atributo):
+        if registro is None:
+            return 0
+        return int(getattr(registro, "{}_id".format(atributo), 0) or 0)
+
     def __init__(self):
         super().__init__()
         self.view = ModificaHojaDeRutaView()
@@ -360,8 +366,28 @@ class MdoficaHojaRutaController(ControladorBase):
         hoja_ruta.kg = self.view.text_kg.valor()
         hoja_ruta.cantidad_bultos = self.view.text_bultos.valor()
         hoja_ruta.observaciones = self.view.text_observaciones.valor()
-        hoja_ruta.responsable = self.view.layout_empleado.valor() if self.view.layout_empleado.valor() else ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23")
-        hoja_ruta.equipo_asignado = self.view.layout_equipo.valor() if self.view.layout_equipo.valor() else ParamSist.ObtenerParametro("CAMION_GENERICO", "1")
+        # Chofer y camión se administran únicamente desde Asignar recursos.
+        # En altas nuevas se heredan de la hoja/ruta existente para no crear
+        # asignaciones mixtas por renglón.
+        if not getattr(hoja_ruta, "responsable_id", None) or not getattr(
+            hoja_ruta, "equipo_asignado_id", None
+        ):
+            referencia_recursos = (
+                HojaDeRuta.select()
+                .where(HojaDeRuta.ruta == self.ruta_id)
+                .order_by(HojaDeRuta.id)
+                .first()
+            )
+            hoja_ruta.responsable = (
+                self._fk_id(referencia_recursos, "responsable")
+                if referencia_recursos is not None
+                else ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23")
+            )
+            hoja_ruta.equipo_asignado = (
+                self._fk_id(referencia_recursos, "equipo_asignado")
+                if referencia_recursos is not None
+                else ParamSist.ObtenerParametro("CAMION_GENERICO", "1")
+            )
         hoja_ruta.ruta = self.ruta_id
         hoja_ruta.nombre_cliente = self.view.cliente.labelNombre.text()
         hoja_ruta.save()
@@ -386,16 +412,6 @@ class MdoficaHojaRutaController(ControladorBase):
         self.view.text_cantidad.setValue(hoja_ruta.cantidad)
         self.view.text_kg.setValue(hoja_ruta.kg)
         self.view.text_bultos.setValue(hoja_ruta.cantidad_bultos)
-        self.view.text_observaciones.setText(hoja_ruta.observaciones if hoja_ruta.observaciones else "")
-        self._cargar_recurso(
-            self.view.layout_empleado,
-            Empleado,
-            self._fk_id(hoja_ruta, "responsable"),
-            int(ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23") or 0),
-        )
-        self._cargar_recurso(
-            self.view.layout_equipo,
-            Equipos,
-            self._fk_id(hoja_ruta, "equipo_asignado"),
-            int(ParamSist.ObtenerParametro("CAMION_GENERICO", "1") or 0),
+        self.view.text_observaciones.setText(
+            hoja_ruta.observaciones if hoja_ruta.observaciones else ""
         )
