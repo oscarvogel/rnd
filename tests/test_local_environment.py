@@ -32,6 +32,17 @@ class LocalEnvironmentTests(unittest.TestCase):
             self.assertFalse(ready)
             self.assertTrue((base / run_local.LOCAL_INI).exists())
 
+    def test_demo_entrypoint_clears_qt_offscreen_before_importing_pyqt(self):
+        source = (Path(__file__).resolve().parents[1] / "demo_main.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('QT_QPA_PLATFORM', source)
+        self.assertIn('os.environ.pop("QT_QPA_PLATFORM", None)', source)
+        self.assertLess(
+            source.index('os.environ.pop("QT_QPA_PLATFORM", None)'),
+            source.index("from PyQt5.QtWidgets import QApplication"),
+        )
+
     def test_existing_local_config_is_used_without_touching_production(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             base = Path(temp_dir)
