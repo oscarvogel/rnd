@@ -10,6 +10,18 @@ import sys
 from pathlib import Path
 
 
+def _configurar_fuentes_qt_windows():
+    """Evita el fallback roto PyQt5/Qt5/lib/fonts en instalaciones modernas."""
+    if os.name != "nt":
+        return
+    windows_fonts = os.path.join(os.environ.get("WINDIR", r"C:\\Windows"), "Fonts")
+    if os.path.isdir(windows_fonts):
+        os.environ.setdefault("QT_QPA_FONTDIR", windows_fonts)
+
+
+_configurar_fuentes_qt_windows()
+
+
 def _app_root() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
