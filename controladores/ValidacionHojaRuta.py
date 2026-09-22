@@ -38,6 +38,7 @@ class ValidacionHojaRutaController(ControladorBase):
         self.view.btn_hoja.clicked.connect(self.ver_hoja_ruta)
         self.view.btn_despachar.clicked.connect(lambda: self.cambiar_estado(EstadoHojaRuta.DESPACHADA))
         self.view.btn_asignar.clicked.connect(self.resolver_recursos)
+        self.view.tabla.cellDoubleClicked.connect(self.resolver_pendiente)
         self.view.btn_cerrar.clicked.connect(self.view.close)
 
     def fecha_actual(self):
@@ -92,6 +93,100 @@ class ValidacionHojaRutaController(ControladorBase):
         estado.save()
         showAlert("Sistema", "Hoja de ruta actualizada a {}".format(destino))
         self.cargar()
+
+    def resolver_pendiente(self, row, _column=0):
+        codigo = self.view.codigo_fila(row)
+        if not codigo:
+            return
+
+        item = next(
+            (x for x in self.resultado_actual.items if x.codigo == codigo),
+            None,
+        )
+        if item is None or item.cumplido:
+            return
+
+        if codigo in ("chofer", "camion"):
+            self.resolver_recursos()
+            return
+        if codigo == "datos":
+            self.resolver_datos_operativos()
+            return
+        if codigo == "pedidos":
+            self.resolver_pedidos()
+            return
+        if codigo == "fecha":
+            self.view.fecha.setFocus()
+            showAlert("Sistema", "Seleccione la fecha de reparto y vuelva a revisar.")
+            return
+        if codigo == "ruta":
+            self.view.cbo_ruta.setFocus()
+            showAlert("Sistema", "Seleccione la ruta de reparto y vuelva a revisar.")
+
+    @staticmethod
+    def _registro_con_error_datos(registros):
+        for registro in registros:
+            if not getattr(registro, "cliente_id", 0):
+                return registro
+            if not getattr(registro, "lugar_entrega_id", 0):
+                return registro
+            if not str(getattr(registro, "comprobante", "") or "").strip():
+                return registro
+            try:
+                if float(getattr(registro, "cantidad", 0) or 0) <= 0:
+                    return registro
+            except (TypeError, ValueError):
+                return registro
+        return None
+
+    def resolver_pedidos(self):
+        from controladores.BandejaPedidos import BandejaPedidosController
+
+        self.ventana_correccion = BandejaPedidosController(
+            fecha_inicial=self.fecha_actual()
+        )
+        self.ventana_correccion.run()
+        self.view.close()
+
+    @reconnect_if_needed
+    @inicializar_y_capturar_excepciones
+    def resolver_datos_operativos(self):
+        ruta_id = self.view.ruta_id()
+        if not ruta_id:
+            showAlert("Sistema", "Seleccione una ruta antes de corregir los pedidos.")
+            return
+
+        registros = list(
+            HojaDeRuta.select().where(
+                (HojaDeRuta.fecha == self.fecha_actual()) &
+                (HojaDeRuta.ruta == ruta_id)
+            )
+        )
+        registro = self._registro_con_error_datos(registros)
+        if registro is None:
+            showAlert(
+                "Sistema",
+                "No se encontró el pedido pendiente. Vuelva a revisar la hoja.",
+            )
+            self.cargar()
+            return
+
+        from controladores.BandejaPedidos import BandejaPedidosController
+
+        self.ventana_correccion = BandejaPedidosController(
+            fecha_inicial=self.fecha_actual()
+        )
+        self.ventana_correccion.run()
+        if not self.ventana_correccion.seleccionar_factura_por_hoja(
+            registro.id,
+            abrir=True,
+        ):
+            showAlert(
+                "Sistema",
+                "Se abrió Organizar pedidos, pero no se pudo ubicar automáticamente "
+                "la factura pendiente.",
+            )
+        self.view.close()
 
     def ver_hoja_ruta(self):
         ruta_id = self.view.ruta_id()
