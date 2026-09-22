@@ -72,10 +72,13 @@ class VerHojaRutaView(VistaBase):
         
         self.grilla_datos = Grilla()
         cabeceras = [
-            "Selecciona", "Cliente", "Comprobante", "Factura", "Remito", "Producto", "Cantidad", "KG", "Bultos", "Observaciones", "id", "codigo_cliente"
+            "Cliente", "Comprobante", "Factura", "Remito", "Producto",
+            "Cantidad", "KG", "Bultos", "Observaciones", "id", "codigo_cliente"
         ]
         self.grilla_datos.ArmaCabeceras(cabeceras=cabeceras)
-        self.grilla_datos.columnasHabilitadas = [0,]
+        self.grilla_datos.columnasHabilitadas = []
+        self.grilla_datos.setColumnHidden(9, True)
+        self.grilla_datos.setColumnHidden(10, True)
         layoutPpal.addWidget(self.grilla_datos)
         
         layout_botones = QHBoxLayout()
@@ -139,6 +142,7 @@ class VerHojaRutaView(VistaBase):
                 estado, "Estado: {}".format(estado or "sin definir")
             )
         self.lbl_estado_operativo.setText(texto_estado)
+        self.btn_recursos.setEnabled(bool(pedidos) and estado != "DESPACHADA")
         self.lbl_resumen_hoja.setText(
             "Pedidos: {} · KG: {} · Bultos: {}".format(pedidos, kg, bultos)
         )
