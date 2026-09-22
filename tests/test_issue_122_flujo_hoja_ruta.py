@@ -34,7 +34,7 @@ def test_asignacion_muestra_revision_como_siguiente_paso_y_oculta_atajo_validaci
             "Camion 10",
         )
         assert view.btn_ver_hoja.isEnabled()
-        assert view.panel_exito.isVisible() is False  # padre no mostrado en test offscreen
+        assert not view.panel_exito.isHidden()
         assert "Hoja lista para revisar" in view.lbl_exito.text()
     finally:
         view.deleteLater()
