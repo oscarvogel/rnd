@@ -102,5 +102,18 @@ class PackagingStaticTests(unittest.TestCase):
                 self.assertIn("InicioSistema = C:\\RND\\", content)
 
 
+    def test_production_build_keeps_version_templates_clean(self):
+        build_script = (ROOT / "scripts" / "build_installer.ps1").read_text(encoding="utf-8")
+        spec = (ROOT / "main.spec").read_text(encoding="utf-8")
+
+        self.assertIn("installer\\.production_build_state", build_script)
+        self.assertIn("build\\generated", build_script)
+        self.assertIn('"/DMyAppVersion=$Version"', build_script)
+        self.assertNotIn("WriteAllText($VersionFile", build_script)
+        self.assertNotIn("WriteAllText($IssFile", build_script)
+        self.assertIn('os.environ.get("RND_VERSION_FILE", "version.txt")', spec)
+        self.assertIn("version=version_file", spec)
+
+
 if __name__ == "__main__":
     unittest.main()
