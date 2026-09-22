@@ -11,11 +11,23 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Python = Join-Path $RepoRoot ".venv-build\Scripts\python.exe"
 $StateFile = Join-Path $RepoRoot "installer\.demo_build_state"
 $IsccCandidates = @(
+    $env:INNO_SETUP_COMPILER,
+    'C:\InnoSetup6\ISCC.exe',
     "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
     "${env:ProgramFiles}\Inno Setup 6\ISCC.exe",
     "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
-)
-$Iscc = $IsccCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+$Iscc = $IsccCandidates |
+    Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+    Select-Object -First 1
+
+if (-not $Iscc) {
+    $IsccCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($IsccCommand) {
+        $Iscc = $IsccCommand.Source
+    }
+}
 
 function Get-DemoBuildVersion {
     param([string]$Path)
@@ -34,11 +46,16 @@ function Get-DemoBuildVersion {
 }
 
 if (-not (Test-Path $Python)) {
-    throw "No existe $Python. Crear .venv-build antes de compilar."
+    Write-Host "[RND DEMO] Creando .venv-build..." -ForegroundColor Cyan
+    py -3.11 -m venv (Join-Path $RepoRoot ".venv-build")
+    if ($LASTEXITCODE -ne 0) {
+        throw "No se pudo crear .venv-build con Python 3.11."
+    }
 }
 if (-not $Iscc) {
-    throw "No se encontro Inno Setup 6 (ISCC.exe)."
+    throw "No se encontro Inno Setup 6 (ISCC.exe). Configure INNO_SETUP_COMPILER o instale Inno Setup 6."
 }
+Write-Host "[RND DEMO] Inno Setup: $Iscc" -ForegroundColor DarkGray
 
 $BuildVersion = Get-DemoBuildVersion -Path $StateFile
 
