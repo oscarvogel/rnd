@@ -15,6 +15,7 @@ build/
 dist/
 *.spec.bak
 installer/.demo_build_state
+installer/.production_build_state
 
 # Local configuration and secrets
 .env
