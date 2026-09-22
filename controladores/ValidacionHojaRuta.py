@@ -114,3 +114,4 @@ class ValidacionHojaRutaController(ControladorBase):
             ruta_inicial=self.view.ruta_id(),
         )
         self.ventana_siguiente.run()
+        self.view.close()
