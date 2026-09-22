@@ -82,7 +82,7 @@ class AsignacionRecursosView(QWidget):
         self.btn_guardar.setEnabled(False)
         acciones.addWidget(self.btn_guardar)
         self.btn_ver_hoja = QPushButton("Revisar hoja de ruta")
-        self.btn_ver_hoja.setProperty("role", "primary")
+        self.btn_ver_hoja.setProperty("role", "secondary")
         self.btn_ver_hoja.setCursor(Qt.PointingHandCursor)
         self.btn_ver_hoja.setEnabled(False)
         acciones.addWidget(self.btn_ver_hoja)
