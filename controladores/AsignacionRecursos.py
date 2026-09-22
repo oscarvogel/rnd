@@ -60,6 +60,7 @@ class AsignacionRecursosController(ControladorBase):
     @reconnect_if_needed
     @inicializar_y_capturar_excepciones
     def cargar_hoja(self, *args, **kwargs):
+        self.view.ocultar_exito()
         ruta_id = self.view.ruta_id()
         if not ruta_id:
             self.resumen_actual = construir_resumen([])
@@ -162,9 +163,12 @@ class AsignacionRecursosController(ControladorBase):
             self.cargar_hoja()
             return
 
-        showAlert("Sistema", "Chofer y camión asignados correctamente. La hoja de ruta ya está lista para revisar.")
+        fecha = self.fecha_actual()
+        ruta = self.view.cbo_ruta.currentText()
+        responsable = self._nombre_responsable(responsable_id)
+        equipo = self._nombre_equipo(equipo_id)
         self.cargar_hoja()
-        self.view.btn_ver_hoja.setFocus()
+        self.view.mostrar_exito(fecha, ruta, responsable, equipo)
 
     def ver_hoja_ruta(self):
         from controladores.VerHojaRuta import VerHojaRutaController
