@@ -315,6 +315,7 @@ class VerHojaRutaController(ControladorBase):
     def on_click_btn_agregar(self, *args, **kwargs):
         controlador = MdoficaHojaRutaController()
         controlador.ruta_id = self.view.cbo_ruta_reparto.valor()
+        controlador.fecha = self.view.fecha_reparto.valor()
         controlador.exec_()
         self.on_click_btn_cargar()
 
@@ -327,6 +328,7 @@ class VerHojaRutaController(ControladorBase):
         controlador = MdoficaHojaRutaController()
         controlador.hoja_ruta_id = self.view.grilla_datos.ObtenerItemNumerico(fila=row, col='id')
         controlador.ruta_id = self.view.cbo_ruta_reparto.valor()
+        controlador.fecha = self.view.fecha_reparto.valor()
         controlador.CargaDatos()
         controlador.exec_()
         self.on_click_btn_cargar()
@@ -335,6 +337,7 @@ class MdoficaHojaRutaController(ControladorBase):
     
     hoja_ruta_id = 0
     ruta_id = 0
+    fecha = None
 
     @staticmethod
     def _fk_id(registro, atributo):
@@ -357,7 +360,7 @@ class MdoficaHojaRutaController(ControladorBase):
             hoja_ruta = HojaDeRuta.get_by_id(self.hoja_ruta_id)
         except peewee.DoesNotExist:
             hoja_ruta = HojaDeRuta()
-            hoja_ruta.fecha = date.today()
+            hoja_ruta.fecha = self.fecha or date.today()
             
         hoja_ruta.cliente = self.view.cliente.valor()
         hoja_ruta.comprobante = self.view.text_comprobante.valor()
@@ -374,7 +377,10 @@ class MdoficaHojaRutaController(ControladorBase):
         ):
             referencia_recursos = (
                 HojaDeRuta.select()
-                .where(HojaDeRuta.ruta == self.ruta_id)
+                .where(
+                    (HojaDeRuta.ruta == self.ruta_id) &
+                    (HojaDeRuta.fecha == hoja_ruta.fecha)
+                )
                 .order_by(HojaDeRuta.id)
                 .first()
             )
