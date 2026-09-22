@@ -44,3 +44,13 @@ def test_dashboard_abre_hoja_con_ruta_y_muestra_estado():
     assert "Pendiente de asignación" in servicios
     assert "cantidad=len(por_ruta)" in servicios
     assert "ruta_inicial=ruta_id" in main
+
+
+def test_ver_hoja_no_dereferencia_recursos_genericos_inexistentes():
+    controlador = _source("controladores/VerHojaRuta.py")
+    assert "def _fk_id" in controlador
+    assert "def _cargar_recurso" in controlador
+    assert ".responsable.id" not in controlador
+    assert ".equipo_asignado.id" not in controlador
+    assert 'getattr(registro, "{}_id".format(atributo), 0)' in controlador
+    assert "modelo.get_or_none(modelo.id == recurso_id)" in controlador
