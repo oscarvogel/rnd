@@ -1,8 +1,6 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox, QLabel
 from modelos.Clientes import ValidaCliente, cboRutaReparto
-from modelos.Empleados import ValidaEmpleado
-from modelos.Equipos import ValidaEquipo
 from pyqt5libs.libs.vistas.VistaBase import VistaBase
 from pyqt5libs.pyqt5libs.EntradaTexto import EntradaTexto
 from pyqt5libs.pyqt5libs.Etiquetas import Etiqueta
@@ -190,12 +188,6 @@ class ModificaHojaDeRutaView(VistaBase):
         layout_datos = QFormLayout()
         self.cliente = ValidaCliente()
         layout_datos.addRow(self.cliente)
-        
-        self.layout_empleado = ValidaEmpleado()
-        layout_datos.addRow(self.layout_empleado)
-        
-        self.layout_equipo = ValidaEquipo()
-        layout_datos.addRow(self.layout_equipo)
         
         lbl_comprobante = Etiqueta(texto="Comprobante:")
         self.text_comprobante = EntradaTexto()
