@@ -49,6 +49,7 @@ def test_revision_continua_a_validacion_con_misma_fecha_y_ruta():
     controller.view = MagicMock()
     controller.view.cbo_ruta_reparto.valor.return_value = 7
     controller.view.fecha_reparto.valor.return_value = date(2026, 9, 22)
+    controller.recursos_completos_actual = True
 
     destino = MagicMock()
     with patch(
@@ -267,7 +268,7 @@ def test_checklist_pendiente_expone_codigo_para_doble_click():
     try:
         view.mostrar(resultado, "EN_PREPARACION")
         assert view.codigo_fila(0) == "datos"
-        assert "Doble clic" in view.lbl_ayuda.text()
+        assert "doble clic" in view.lbl_ayuda.text().lower()
         assert "Doble clic" in view.tabla.item(0, 2).toolTip()
     finally:
         view.deleteLater()
