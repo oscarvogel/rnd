@@ -3,6 +3,7 @@ import peewee
 from PyQt5.QtWidgets import QApplication
 
 from modelos.HojaRuta import HojaDeRuta
+from modelos.EstadoHojaRuta import EstadoHojaRuta
 from modelos.Empleados import Empleado
 from modelos.Equipos import Equipos
 from modelos.Documentos import actualizar_remito_de_hoja, referencias_por_hojas
@@ -15,10 +16,11 @@ from vistas.VerHojaRuta import ModificaHojaDeRutaView, VerHojaRutaView
 
 
 class VerHojaRutaController(ControladorBase):
-    def __init__(self, fecha_inicial=None, ruta_inicial=0):
+    def __init__(self, fecha_inicial=None, ruta_inicial=0, permitir_continuar=True):
         super().__init__()
         self.view = VerHojaRutaView()
         self.ruta_inicial = int(ruta_inicial or 0)
+        self.permitir_continuar = bool(permitir_continuar)
         if fecha_inicial is not None:
             self.view.fecha_reparto.setFecha(fecha_inicial)
         self._seleccionar_ruta_inicial()
@@ -87,6 +89,7 @@ class VerHojaRutaController(ControladorBase):
         self.view.btn_imprimir.clicked.connect(self.on_click_btn_imprimir)
         self.view.btn_agregar.clicked.connect(self.on_click_btn_agregar)
         self.view.btn_modificar.clicked.connect(self.on_click_btn_modificar)
+        self.view.btn_continuar.clicked.connect(self.ir_validacion)
     
     @inicializar_y_capturar_excepciones
     @reconnect_if_needed
@@ -106,6 +109,24 @@ class VerHojaRutaController(ControladorBase):
             )
 
         total = len(hoja_ruta)
+        estado_registro = EstadoHojaRuta.get_or_none(
+            (EstadoHojaRuta.fecha == self.view.fecha_reparto.valor()) &
+            (EstadoHojaRuta.ruta == self.view.cbo_ruta_reparto.valor())
+        )
+        estado_operativo = (
+            estado_registro.estado
+            if estado_registro is not None
+            else EstadoHojaRuta.EN_PREPARACION
+        )
+        kg_total = sum((h.kg or 0) for h in hoja_ruta) if total else 0
+        bultos_total = sum((h.cantidad_bultos or 0) for h in hoja_ruta) if total else 0
+        self.view.mostrar_estado_operativo(
+            estado_operativo,
+            total,
+            kg_total,
+            bultos_total,
+            permitir_continuar=self.permitir_continuar,
+        )
         fecha_txt = self.view.fecha_reparto.valor().strftime("%d/%m/%Y")
         ruta_txt = str(self.view.cbo_ruta_reparto.currentText()) if hasattr(self.view.cbo_ruta_reparto, "currentText") else str(self.view.cbo_ruta_reparto.valor())
         self.view.lbl_titulo_hoja.setText("Hoja de ruta - {} - {}".format(fecha_txt, ruta_txt))
@@ -161,6 +182,20 @@ class VerHojaRutaController(ControladorBase):
                 "No hay datos para esta fecha y ruta. Revise la fecha, la ruta, la asignación de chofer/camión y que existan pedidos organizados."
             )
     
+    def ir_validacion(self):
+        ruta_id = int(self.view.cbo_ruta_reparto.valor() or 0)
+        if not ruta_id:
+            showAlert("Sistema", "Seleccione una ruta antes de continuar.")
+            return
+        from controladores.ValidacionHojaRuta import ValidacionHojaRutaController
+
+        self.ventana_validacion = ValidacionHojaRutaController(
+            fecha_inicial=self.view.fecha_reparto.valor(),
+            ruta_inicial=ruta_id,
+        )
+        self.ventana_validacion.run()
+        self.view.close()
+
     @inicializar_y_capturar_excepciones
     def on_click_btn_grabar(self, *args, **kwargs):
         if not self.view.empleado.valor() or not self.view.equipo.valor():
