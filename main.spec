@@ -1,8 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 block_cipher = None
+version_file = os.environ.get("RND_VERSION_FILE", "version.txt")
 
 pyqt5libs_datas, pyqt5libs_binaries, pyqt5libs_hiddenimports = collect_all("pyqt5libs")
 libs_datas, libs_binaries, libs_hiddenimports = collect_all("libs")
@@ -60,7 +63,7 @@ exe = EXE(pyz,
           codesign_identity=None,
           entitlements_file=None,
           contents_directory='.',
-          version='version.txt',
+          version=version_file,
           icon='imagenes\\vogel_consultoria_oficial.ico')
 coll = COLLECT(exe,
                a.binaries,
