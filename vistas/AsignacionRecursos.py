@@ -72,10 +72,16 @@ class AsignacionRecursosView(QWidget):
         self.btn_guardar.setCursor(Qt.PointingHandCursor)
         self.btn_guardar.setEnabled(False)
         acciones.addWidget(self.btn_guardar)
+        self.btn_ver_hoja = QPushButton("Ver hoja de ruta ahora")
+        self.btn_ver_hoja.setProperty("role", "primary")
+        self.btn_ver_hoja.setCursor(Qt.PointingHandCursor)
+        self.btn_ver_hoja.setEnabled(False)
+        acciones.addWidget(self.btn_ver_hoja)
+
         self.btn_siguiente = QPushButton("Validar hoja de ruta")
         self.btn_siguiente.setEnabled(False)
         acciones.addWidget(self.btn_siguiente)
-        self.btn_cerrar = QPushButton("Cerrar")
+        self.btn_cerrar = QPushButton("Volver al dashboard")
         acciones.addWidget(self.btn_cerrar)
         raiz.addLayout(acciones)
 
