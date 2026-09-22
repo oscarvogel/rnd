@@ -1,7 +1,7 @@
 # coding=utf-8
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QComboBox, QDateEdit, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
+    QComboBox, QCompleter, QDateEdit, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
     QPushButton, QVBoxLayout, QWidget,
 )
 
@@ -57,6 +57,8 @@ class AsignacionRecursosView(QWidget):
         form_recursos = QFormLayout(recursos)
         self.cbo_responsable = QComboBox()
         self.cbo_equipo = QComboBox()
+        self._configurar_autocomplete(self.cbo_responsable, "Buscar chofer…")
+        self._configurar_autocomplete(self.cbo_equipo, "Buscar camión…")
         form_recursos.addRow("Chofer / responsable:", self.cbo_responsable)
         form_recursos.addRow("Camión / equipo:", self.cbo_equipo)
         raiz.addWidget(recursos)
@@ -95,6 +97,31 @@ class AsignacionRecursosView(QWidget):
         self.btn_cerrar = QPushButton("Volver al dashboard")
         acciones.addWidget(self.btn_cerrar)
         raiz.addLayout(acciones)
+
+    @staticmethod
+    def _configurar_autocomplete(combo, placeholder):
+        combo.setEditable(True)
+        combo.setInsertPolicy(QComboBox.NoInsert)
+        combo.lineEdit().setPlaceholderText(placeholder)
+        completer = QCompleter(combo.model(), combo)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCompletionMode(QCompleter.PopupCompletion)
+        combo.setCompleter(completer)
+
+    @staticmethod
+    def _valor_combo(combo):
+        valor = int(combo.currentData() or 0)
+        if valor:
+            return valor
+        texto = str(combo.currentText() or "").strip()
+        if not texto:
+            return 0
+        idx = combo.findText(texto, Qt.MatchFixedString)
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
+            return int(combo.itemData(idx) or 0)
+        return 0
 
     def cargar_rutas(self, rutas, seleccion=0):
         self.cbo_ruta.clear()
@@ -157,7 +184,7 @@ class AsignacionRecursosView(QWidget):
         return int(self.cbo_ruta.currentData() or 0)
 
     def responsable_id(self):
-        return int(self.cbo_responsable.currentData() or 0)
+        return self._valor_combo(self.cbo_responsable)
 
     def equipo_id(self):
-        return int(self.cbo_equipo.currentData() or 0)
+        return self._valor_combo(self.cbo_equipo)
