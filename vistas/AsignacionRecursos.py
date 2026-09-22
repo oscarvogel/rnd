@@ -81,15 +81,17 @@ class AsignacionRecursosView(QWidget):
         self.btn_guardar.setCursor(Qt.PointingHandCursor)
         self.btn_guardar.setEnabled(False)
         acciones.addWidget(self.btn_guardar)
-        self.btn_ver_hoja = QPushButton("Ver hoja de ruta ahora")
+        self.btn_ver_hoja = QPushButton("Revisar hoja de ruta")
         self.btn_ver_hoja.setProperty("role", "primary")
         self.btn_ver_hoja.setCursor(Qt.PointingHandCursor)
         self.btn_ver_hoja.setEnabled(False)
         acciones.addWidget(self.btn_ver_hoja)
 
+        # Compatibilidad con controladores/tests anteriores: la validación ya no
+        # compite como CTA en esta pantalla. El flujo visible continúa por revisión.
         self.btn_siguiente = QPushButton("Validar hoja de ruta")
         self.btn_siguiente.setEnabled(False)
-        acciones.addWidget(self.btn_siguiente)
+        self.btn_siguiente.setVisible(False)
         self.btn_cerrar = QPushButton("Volver al dashboard")
         acciones.addWidget(self.btn_cerrar)
         raiz.addLayout(acciones)
@@ -128,11 +130,21 @@ class AsignacionRecursosView(QWidget):
             )
         )
         self.panel_exito.setVisible(True)
+        self._set_role(self.btn_guardar, "secondary")
+        self._set_role(self.btn_ver_hoja, "primary")
         self.btn_ver_hoja.setEnabled(True)
         self.btn_ver_hoja.setFocus()
 
     def ocultar_exito(self):
         self.panel_exito.setVisible(False)
+        self._set_role(self.btn_guardar, "primary")
+        self._set_role(self.btn_ver_hoja, "secondary")
+
+    @staticmethod
+    def _set_role(boton, role):
+        boton.setProperty("role", role)
+        boton.style().unpolish(boton)
+        boton.style().polish(boton)
 
     def set_resumen(self, resumen, texto_actual):
         self.lbl_pedidos.setText(str(resumen.pedidos))
