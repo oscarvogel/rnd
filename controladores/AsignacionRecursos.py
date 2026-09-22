@@ -1,5 +1,5 @@
 # coding=utf-8
-from datetime import date
+from datetime import date, datetime
 
 from PyQt5.QtCore import QDate
 
@@ -7,11 +7,12 @@ from modelos.Clientes import RutaReparto
 from modelos.Empleados import Empleado
 from modelos.Equipos import Equipos
 from modelos.HojaRuta import HojaDeRuta
+from modelos.EstadoHojaRuta import EstadoHojaRuta
 from modelos.ModeloBase import reconnect_if_needed
 from modelos.ParametrosSistema import ParamSist
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.pyqt5libs.Ventanas import showAlert
-from pyqt5libs.pyqt5libs.utiles import inicializar_y_capturar_excepciones
+from pyqt5libs.pyqt5libs.utiles import LeerConf, inicializar_y_capturar_excepciones
 from utiles.asignacion_recursos import construir_resumen, validar_asignacion
 from vistas.AsignacionRecursos import AsignacionRecursosView
 
@@ -134,6 +135,17 @@ class AsignacionRecursosController(ControladorBase):
             showAlert("Sistema", mensaje)
             return
 
+        estado = EstadoHojaRuta.get_or_none(
+            (EstadoHojaRuta.fecha == self.fecha_actual()) &
+            (EstadoHojaRuta.ruta == ruta_id)
+        )
+        if estado is not None and estado.estado == EstadoHojaRuta.DESPACHADA:
+            showAlert(
+                "Sistema",
+                "La hoja ya fue despachada. No se pueden modificar sus recursos.",
+            )
+            return
+
         (
             HojaDeRuta.update(
                 responsable=responsable_id,
@@ -162,6 +174,12 @@ class AsignacionRecursosController(ControladorBase):
             showAlert("Sistema", "No se pudieron actualizar todos los pedidos de la hoja")
             self.cargar_hoja()
             return
+
+        if estado is not None and estado.estado != EstadoHojaRuta.EN_PREPARACION:
+            estado.estado = EstadoHojaRuta.EN_PREPARACION
+            estado.actualizado_en = datetime.now()
+            estado.actualizado_por = LeerConf("usuario") or ""
+            estado.save()
 
         fecha = self.fecha_actual()
         ruta = self.view.cbo_ruta.currentText()
