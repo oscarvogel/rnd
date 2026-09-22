@@ -145,3 +145,57 @@ def test_detalle_sin_encabezado_falla(tmp_path):
     )
     with pytest.raises(ValueError, match="encabezado"):
         procesar_detalle_ventas(str(entrada))
+
+
+def _crear_tio_pujio_layout_real(path):
+    filas = [[""] * 18 for _ in range(10)]
+    header = [""] * 18
+    header[2] = "Fecha"
+    header[5] = "Tipo"
+    header[6] = "Comprobante"
+    header[10] = "Hormas"
+    header[11] = "Kilos"
+    filas.append(header)
+
+    cliente = [""] * 18
+    cliente[0] = "Cliente :"
+    cliente[4] = 10148
+    cliente[6] = "DUOMO S.A"
+    filas.append(cliente)
+
+    pedido = [""] * 18
+    pedido[1] = "07/09/2026"
+    pedido[5] = "PED"
+    pedido[7] = "N0001-00116570"
+    filas.append(pedido)
+
+    producto = [""] * 18
+    producto[1] = 69
+    producto[3] = "CREMA X 10"
+    producto[9] = 250
+    producto[11] = 2500
+    filas.append(producto)
+
+    subtotal = [""] * 18
+    subtotal[3] = "SubTotales :"
+    subtotal[9] = 250
+    subtotal[11] = 2500
+    filas.append(subtotal)
+
+    pd.DataFrame(filas).to_excel(path, index=False, header=False)
+
+
+def test_tio_pujio_soporta_layout_real_control_de_pedidos(tmp_path):
+    entrada = tmp_path / "CONTROL DE PEDIDOS - Misiones 07-09.xlsx"
+    _crear_tio_pujio_layout_real(entrada)
+
+    salida = procesar_tio_pujio(str(entrada))
+    df = pd.read_excel(salida)
+
+    assert len(df) == 1
+    assert str(df.iloc[0]["codigo_cliente"]) == "10148"
+    assert df.iloc[0]["detalle_cliente"] == "DUOMO S.A"
+    assert df.iloc[0]["comprobante"] == "N0001-00116570"
+    assert df.iloc[0]["producto"] == "CREMA X 10"
+    assert df.iloc[0]["bultos"] == 250
+    assert df.iloc[0]["kilos"] == 2500
