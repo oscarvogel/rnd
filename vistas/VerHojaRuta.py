@@ -1,5 +1,5 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QFormLayout, QLabel
+from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox, QLabel
 from modelos.Clientes import ValidaCliente, cboRutaReparto
 from modelos.Empleados import ValidaEmpleado
 from modelos.Equipos import ValidaEquipo
@@ -57,12 +57,20 @@ class VerHojaRutaView(VistaBase):
         layout_fechas.addWidget(self.cbo_ruta_reparto)
         layoutPpal.addLayout(layout_fechas)
                 
-        layout_equipo = QHBoxLayout()
-        self.equipo = ValidaEquipo(texto="Camion Asignado:")
-        layout_equipo.addLayout(self.equipo)
-        self.empleado = ValidaEmpleado(texto="Chofer Responsable:")
-        layout_equipo.addLayout(self.empleado)
-        layoutPpal.addLayout(layout_equipo)
+        recursos = QGroupBox("Recursos asignados")
+        form_recursos = QFormLayout(recursos)
+        self.lbl_camion = QLabel("Camión pendiente")
+        self.lbl_chofer = QLabel("Chofer pendiente")
+        self.lbl_camion.setObjectName("hojaRutaCamion")
+        self.lbl_chofer.setObjectName("hojaRutaChofer")
+        form_recursos.addRow("Camión:", self.lbl_camion)
+        form_recursos.addRow("Chofer:", self.lbl_chofer)
+        self.btn_recursos = self.CreaBoton(
+            "Modificar chofer / camión", imagen_str="edit.png"
+        )
+        self.btn_recursos.setProperty("role", "secondary")
+        form_recursos.addRow("", self.btn_recursos)
+        layoutPpal.addWidget(recursos)
         
         self.grilla_datos = Grilla()
         cabeceras = [
@@ -76,7 +84,10 @@ class VerHojaRutaView(VistaBase):
         self.btn_cargar = self.CreaBoton("Actualizar", imagen_str="search.png")
         self.btn_agregar = self.CreaBoton("Agregar", imagen_str="new.png")
         self.btn_modificar = self.CreaBoton("Modificar", imagen_str="edit.png")
+        # Los recursos se editan únicamente desde Asignar recursos.
+        # Se conserva el atributo por compatibilidad con código legacy.
         self.btn_grabar = self.CreaBoton("Grabar", imagen_str="save.png")
+        self.btn_grabar.setVisible(False)
         self.btn_borrar = self.CreaBoton("Borrar", imagen_str="delete.png")
         self.btn_continuar = self.CreaBoton(
             "Hoja correcta → Continuar a validación", imagen_str="save.png"
@@ -102,6 +113,10 @@ class VerHojaRutaView(VistaBase):
         layout_botones.addWidget(self.btn_cerrar)
         layoutPpal.addLayout(layout_botones)
 
+    def mostrar_recursos(self, chofer, camion):
+        self.lbl_chofer.setText(chofer or "Chofer pendiente")
+        self.lbl_camion.setText(camion or "Camión pendiente")
+
     @staticmethod
     def _set_role(boton, role):
         boton.setProperty("role", role)
@@ -109,25 +124,43 @@ class VerHojaRutaView(VistaBase):
         boton.style().polish(boton)
 
     def mostrar_estado_operativo(
-        self, estado, pedidos, kg, bultos, permitir_continuar=True
+        self, estado, pedidos, kg, bultos, permitir_continuar=True,
+        recursos_completos=True,
     ):
-        textos = {
-            "EN_PREPARACION": "Estado: EN PREPARACIÓN — Falta revisar y validar",
-            "LISTA": "Estado: LISTA — Puede imprimir / despachar",
-            "DESPACHADA": "Estado: DESPACHADA — Circuito operativo finalizado",
-        }
-        self.lbl_estado_operativo.setText(
-            textos.get(estado, "Estado: {}".format(estado or "sin definir"))
-        )
+        if pedidos and not recursos_completos:
+            texto_estado = (
+                "Estado: REQUIERE CORRECCIÓN — Falta asignar chofer y/o camión"
+            )
+        else:
+            textos = {
+                "EN_PREPARACION": "Estado: EN PREPARACIÓN — Falta revisar y validar",
+                "LISTA": "Estado: LISTA — Puede imprimir / despachar",
+                "DESPACHADA": "Estado: DESPACHADA — Circuito operativo finalizado",
+            }
+            texto_estado = textos.get(
+                estado, "Estado: {}".format(estado or "sin definir")
+            )
+        self.lbl_estado_operativo.setText(texto_estado)
         self.lbl_resumen_hoja.setText(
             "Pedidos: {} · KG: {} · Bultos: {}".format(pedidos, kg, bultos)
         )
 
-        puede_continuar = bool(pedidos) and estado != "DESPACHADA" and permitir_continuar
+        puede_continuar = (
+            bool(pedidos)
+            and recursos_completos
+            and estado != "DESPACHADA"
+            and permitir_continuar
+        )
         self.btn_continuar.setEnabled(puede_continuar)
         self.btn_continuar.setVisible(permitir_continuar)
+        self.btn_imprimir.setEnabled(bool(pedidos) and recursos_completos)
 
-        if estado == "EN_PREPARACION":
+        if not recursos_completos:
+            self.btn_continuar.setText("Asignar recursos antes de continuar")
+            self.btn_imprimir.setText("PDF no disponible")
+            self._set_role(self.btn_continuar, "secondary")
+            self._set_role(self.btn_imprimir, "secondary")
+        elif estado == "EN_PREPARACION":
             self.btn_continuar.setText("Hoja correcta → Continuar a validación")
             self.btn_imprimir.setText("Vista previa PDF")
             self._set_role(self.btn_continuar, "primary")
