@@ -35,6 +35,7 @@ class ValidacionHojaRutaController(ControladorBase):
         self.view.btn_cargar.clicked.connect(self.cargar)
         self.view.cbo_ruta.currentIndexChanged.connect(self.cargar)
         self.view.btn_lista.clicked.connect(lambda: self.cambiar_estado(EstadoHojaRuta.LISTA))
+        self.view.btn_hoja.clicked.connect(self.ver_hoja_ruta)
         self.view.btn_despachar.clicked.connect(lambda: self.cambiar_estado(EstadoHojaRuta.DESPACHADA))
         self.view.btn_asignar.clicked.connect(self.resolver_recursos)
         self.view.btn_cerrar.clicked.connect(self.view.close)
@@ -91,6 +92,20 @@ class ValidacionHojaRutaController(ControladorBase):
         estado.save()
         showAlert("Sistema", "Hoja de ruta actualizada a {}".format(destino))
         self.cargar()
+
+    def ver_hoja_ruta(self):
+        ruta_id = self.view.ruta_id()
+        if not ruta_id:
+            showAlert("Sistema", "Seleccione una ruta")
+            return
+        from controladores.VerHojaRuta import VerHojaRutaController
+
+        self.ventana_hoja = VerHojaRutaController(
+            fecha_inicial=self.fecha_actual(),
+            ruta_inicial=ruta_id,
+            permitir_continuar=False,
+        )
+        self.ventana_hoja.run()
 
     def resolver_recursos(self):
         from controladores.AsignacionRecursos import AsignacionRecursosController
