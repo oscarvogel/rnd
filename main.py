@@ -18,6 +18,18 @@ import subprocess
 import sys
 from pathlib import Path
 
+
+def _configurar_fuentes_qt_windows():
+    """Usa las fuentes del sistema antes de inicializar Qt/PyQt5."""
+    if os.name != "nt":
+        return
+    windows_fonts = os.path.join(os.environ.get("WINDIR", r"C:\\Windows"), "Fonts")
+    if os.path.isdir(windows_fonts):
+        os.environ.setdefault("QT_QPA_FONTDIR", windows_fonts)
+
+
+_configurar_fuentes_qt_windows()
+
 from pyqt5libs.pyqt5libs.utiles import BorrarConf, GrabaConf, LeerIni, initialize_logger
 from rnd_credentials import (
     AuthenticationRejected,
