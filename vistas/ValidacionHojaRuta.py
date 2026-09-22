@@ -46,6 +46,20 @@ class ValidacionHojaRutaView(QWidget):
         resumen.addWidget(self.lbl_bultos, 1, 1)
         raiz.addLayout(resumen)
 
+        self.lbl_ayuda = QLabel("")
+        self.lbl_ayuda.setObjectName("validacionHojaAyuda")
+        self.lbl_ayuda.setWordWrap(True)
+        self.lbl_ayuda.setTextFormat(Qt.RichText)
+        self.lbl_ayuda.setStyleSheet(
+            "QLabel#validacionHojaAyuda {"
+            "padding: 8px 10px;"
+            "border: 1px solid palette(mid);"
+            "border-radius: 6px;"
+            "font-weight: 600;"
+            "}"
+        )
+        raiz.addWidget(self.lbl_ayuda)
+
         self.tabla = QTableWidget(0, 3)
         self.tabla.setHorizontalHeaderLabels(["Estado", "Requisito", "Detalle"])
         self.tabla.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -54,12 +68,6 @@ class ValidacionHojaRutaView(QWidget):
             "Doble clic en un requisito PENDIENTE para ir a corregirlo."
         )
         raiz.addWidget(self.tabla)
-
-        self.lbl_ayuda = QLabel(
-            "Doble clic en un requisito PENDIENTE para corregirlo."
-        )
-        self.lbl_ayuda.setObjectName("validacionHojaAyuda")
-        raiz.addWidget(self.lbl_ayuda)
 
         self.lbl_mensaje = QLabel("")
         self.lbl_mensaje.setWordWrap(True)
@@ -122,6 +130,17 @@ class ValidacionHojaRutaView(QWidget):
             self.tabla.setItem(row, 1, requisito_item)
             self.tabla.setItem(row, 2, detalle_item)
         self.tabla.resizeColumnsToContents()
+        pendientes = [item for item in resultado.items if not item.cumplido]
+        if pendientes:
+            self.lbl_ayuda.setText(
+                "<b>Cómo resolver:</b> hacé doble clic sobre cualquier renglón "
+                "<b>PENDIENTE</b> y RND te llevará directamente al lugar donde "
+                "podés corregirlo."
+            )
+        else:
+            self.lbl_ayuda.setText(
+                "<b>Checklist completo.</b> No quedan requisitos pendientes."
+            )
         self.btn_lista.setEnabled(estado != "DESPACHADA" and resultado.valida)
         self.btn_hoja.setEnabled(estado in ("LISTA", "DESPACHADA") and resultado.pedidos > 0)
         self.btn_despachar.setEnabled(estado == "LISTA" and resultado.valida)
