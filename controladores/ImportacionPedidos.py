@@ -52,11 +52,15 @@ COLUMNAS_NORMALIZADAS = {
 
 
 def valor_para_vista_previa(valor):
-    """Convierte valores de pandas/Excel a texto seguro para QTableWidgetItem."""
+    """Convierte valores de pandas/Excel a texto seguro y legible para la grilla."""
     if pd.isna(valor):
         return ""
-    if isinstance(valor, float) and valor.is_integer():
-        return str(int(valor))
+    if isinstance(valor, float):
+        if valor.is_integer():
+            return str(int(valor))
+        # Evita artefactos binarios de IEEE-754 en pantalla, por ejemplo
+        # 70.85000000000001 -> 70.85, sin alterar el valor usado por pandas.
+        return format(valor, ".15g")
     return str(valor)
 
 

@@ -70,7 +70,12 @@ def _es_tio_pujio(df):
 
 
 def procesar_tio_pujio(archivo_entrada, progreso=None):
-    """Convierte CONTROL DE PEDIDOS de Tio Pujio a columnas normalizadas."""
+    """Convierte CONTROL DE PEDIDOS de Tio Pujio a columnas normalizadas.
+
+    El reporte cambia de posiciones entre versiones/exportaciones. Por eso no
+    dependemos de columnas fijas: detectamos Cliente, PED, Hormas y Kilos por
+    contenido, y usamos esas referencias para extraer cada línea.
+    """
     if not os.path.exists(archivo_entrada):
         raise FileNotFoundError(archivo_entrada)
 
@@ -82,33 +87,118 @@ def procesar_tio_pujio(archivo_entrada, progreso=None):
     comprobante = ""
     filas = []
     total = max(len(df), 1)
+    columna_hormas = None
+    columna_kilos = None
+
+    def no_vacios(valores):
+        return [
+            (indice, _texto(valor))
+            for indice, valor in enumerate(valores)
+            if _texto(valor)
+        ]
 
     for indice, row in df.iterrows():
         valores = row.tolist()
-        textos = [_texto(v) for v in valores]
-        primero = textos[0].upper() if textos else ""
+        celdas = no_vacios(valores)
+        textos_mayus = {pos: texto.upper() for pos, texto in celdas}
 
-        if primero == "CLIENTE :":
-            codigo_cliente = textos[2] if len(textos) > 2 else ""
-            nombre_cliente = textos[4] if len(textos) > 4 else ""
+        # Las cabeceras se repiten en cada página. En las exportaciones reales
+        # la cifra de Hormas aparece una columna a la izquierda del rótulo.
+        pos_hormas = next(
+            (pos for pos, texto in textos_mayus.items() if texto == "HORMAS"),
+            None,
+        )
+        pos_kilos = next(
+            (pos for pos, texto in textos_mayus.items() if texto == "KILOS"),
+            None,
+        )
+        if pos_hormas is not None and pos_kilos is not None:
+            columna_hormas = max(0, pos_hormas - 1)
+            columna_kilos = pos_kilos
+            continue
+
+        cliente_pos = next(
+            (pos for pos, texto in textos_mayus.items() if texto == "CLIENTE :"),
+            None,
+        )
+        if cliente_pos is not None:
+            posteriores = [
+                (pos, texto) for pos, texto in celdas if pos > cliente_pos
+            ]
+            codigo_cliente = posteriores[0][1] if posteriores else ""
+            nombre_cliente = posteriores[1][1] if len(posteriores) > 1 else ""
             comprobante = ""
             continue
 
-        tipo = textos[3].upper() if len(textos) > 3 else ""
-        if tipo == "PED":
-            comprobante = textos[5] if len(textos) > 5 else ""
+        ped_pos = next(
+            (pos for pos, texto in textos_mayus.items() if texto == "PED"),
+            None,
+        )
+        if ped_pos is not None:
+            posteriores = [
+                texto for pos, texto in celdas if pos > ped_pos
+            ]
+            comprobante = posteriores[0] if posteriores else ""
             continue
 
-        descripcion = textos[2] if len(textos) > 2 else ""
-        if not codigo_cliente or not nombre_cliente or not descripcion:
+        if not codigo_cliente or not nombre_cliente or not comprobante:
             continue
-        if descripcion.upper().startswith("SUBTOTALES"):
+        if columna_hormas is None or columna_kilos is None:
             continue
 
-        codigo_producto = textos[1] if len(textos) > 1 else ""
-        hormas = valores[7] if len(valores) > 7 and not pd.isna(valores[7]) else ""
-        kilos = valores[10] if len(valores) > 10 and not pd.isna(valores[10]) else ""
-        if not codigo_producto or hormas == "" or kilos == "":
+        # Una línea de producto tiene un código numérico antes de una
+        # descripción textual y cantidades en las columnas Hormas/Kilos.
+        hormas = (
+            valores[columna_hormas]
+            if columna_hormas < len(valores) and not pd.isna(valores[columna_hormas])
+            else ""
+        )
+        kilos = (
+            valores[columna_kilos]
+            if columna_kilos < len(valores) and not pd.isna(valores[columna_kilos])
+            else ""
+        )
+        if hormas == "" or kilos == "":
+            continue
+
+        descripcion_pos = None
+        descripcion = ""
+        for pos, texto in celdas:
+            mayus = texto.upper()
+            if mayus.startswith("SUBTOTALES") or mayus == "TOTALES :":
+                descripcion = ""
+                break
+            if pos >= columna_hormas:
+                break
+            # Evitar fechas, tipos y comprobantes; la descripción es el primer
+            # texto de producto que aparece antes de las cantidades.
+            if mayus == "PED" or re.match(r"^\d{1,2}/\d{1,2}/\d{4}$", texto):
+                continue
+            if re.match(r"^[A-Z]\d{4}-", mayus):
+                continue
+            try:
+                float(texto.replace(",", "."))
+                continue
+            except ValueError:
+                descripcion_pos = pos
+                descripcion = texto
+                break
+
+        if not descripcion or descripcion_pos is None:
+            continue
+
+        codigo_producto = ""
+        for pos, texto in reversed(celdas):
+            if pos >= descripcion_pos:
+                continue
+            try:
+                numero = float(texto.replace(",", "."))
+            except ValueError:
+                continue
+            codigo_producto = str(int(numero)) if numero.is_integer() else texto
+            break
+
+        if not codigo_producto:
             continue
 
         filas.append({
@@ -129,7 +219,6 @@ def procesar_tio_pujio(archivo_entrada, progreso=None):
     salida = _guardar_temporal(filas)
     _notificar(progreso, 100)
     return salida
-
 
 def _buscar_fila_encabezados(df):
     requeridas = {
