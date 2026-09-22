@@ -35,6 +35,7 @@ class AsignacionRecursosController(ControladorBase):
         self.view.btn_cargar.clicked.connect(self.cargar_hoja)
         self.view.cbo_ruta.currentIndexChanged.connect(self.cargar_hoja)
         self.view.btn_guardar.clicked.connect(self.guardar_asignacion)
+        self.view.btn_ver_hoja.clicked.connect(self.ver_hoja_ruta)
         self.view.btn_siguiente.clicked.connect(self.ir_validacion)
         self.view.btn_cerrar.clicked.connect(self.view.close)
 
@@ -59,12 +60,14 @@ class AsignacionRecursosController(ControladorBase):
     @reconnect_if_needed
     @inicializar_y_capturar_excepciones
     def cargar_hoja(self, *args, **kwargs):
+        self.view.ocultar_exito()
         ruta_id = self.view.ruta_id()
         if not ruta_id:
             self.resumen_actual = construir_resumen([])
             self.view.set_resumen(self.resumen_actual, "Seleccione una ruta")
             self.view.lbl_estado.setText("Seleccione una hoja de ruta para continuar.")
             self.view.btn_siguiente.setEnabled(False)
+            self.view.btn_ver_hoja.setEnabled(False)
             return
 
         registros = list(
@@ -91,8 +94,9 @@ class AsignacionRecursosController(ControladorBase):
             self.empleado_generico, self.camion_generico
         )
         self.view.btn_siguiente.setEnabled(completa)
+        self.view.btn_ver_hoja.setEnabled(not self.resumen_actual.vacia)
         self.view.lbl_estado.setText(
-            "Recursos completos. Puede continuar a validar la hoja."
+            "Recursos completos. Revise la hoja de ruta y luego continúe con la validación."
             if completa else
             "Falta asignar un chofer y un camión válidos."
         )
@@ -159,8 +163,20 @@ class AsignacionRecursosController(ControladorBase):
             self.cargar_hoja()
             return
 
-        showAlert("Sistema", "Chofer y camión asignados correctamente a toda la hoja de ruta")
+        fecha = self.fecha_actual()
+        ruta = self.view.cbo_ruta.currentText()
+        responsable = self._nombre_responsable(responsable_id)
+        equipo = self._nombre_equipo(equipo_id)
         self.cargar_hoja()
+        self.view.mostrar_exito(fecha, ruta, responsable, equipo)
+
+    def ver_hoja_ruta(self):
+        from controladores.VerHojaRuta import VerHojaRutaController
+        self.ventana_hoja = VerHojaRutaController(
+            fecha_inicial=self.fecha_actual(),
+            ruta_inicial=self.view.ruta_id(),
+        )
+        self.ventana_hoja.run()
 
     def ir_validacion(self):
         from controladores.ValidacionHojaRuta import ValidacionHojaRutaController

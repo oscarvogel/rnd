@@ -34,6 +34,7 @@ class DashboardView(QWidget):
         self._ejecutor = ejecutor or EjecutorConsultasQt()
         self._accion_flujo = NAV_IMPORTAR_PEDIDOS
         self._ruta_recomendada = 0
+        self._ruta_hero = 0
         self._build_ui()
 
     def _build_ui(self):
@@ -103,8 +104,8 @@ class DashboardView(QWidget):
         grid = QGridLayout(contenido)
         grid.setSpacing(16)
 
-        self.hero = TarjetaHero("Hojas de ruta del dia")
-        self.hero.clicked.connect(lambda: self.navegar.emit(NAV_HOJAS_RUTA_DIA))
+        self.hero = TarjetaHero("Hojas de ruta del día")
+        self.hero.clicked.connect(self._emitir_hero)
         self.hero.conectar_reintentar(self._cargar_hero)
         grid.addWidget(self.hero, 0, 0, 1, 2)
 
@@ -180,7 +181,14 @@ class DashboardView(QWidget):
             clave = "{}|{}".format(clave, self._ruta_recomendada)
         self.navegar.emit(clave)
 
+    def _emitir_hero(self):
+        clave = NAV_HOJAS_RUTA_DIA
+        if self._ruta_hero:
+            clave = "{}|{}".format(clave, self._ruta_hero)
+        self.navegar.emit(clave)
+
     def _cargar_hero(self):
+        self._ruta_hero = 0
         self.hero.mostrar_cargando()
         self._ejecutor.ejecutar(
             lambda: servicios.hojas_ruta_del_dia(self._usu_id),
@@ -222,7 +230,10 @@ class DashboardView(QWidget):
         elif resultado.es_vacio:
             tarjeta.mostrar_vacio()
         else:
-            detalle = ""
-            if alto_impacto and resultado.fecha:
-                detalle = "Fecha: {}".format(resultado.fecha.isoformat())
+            detalle = resultado.detalle or ""
+            if alto_impacto:
+                self._ruta_hero = int(getattr(resultado, "ruta_id", 0) or 0)
+                fecha_txt = resultado.fecha.strftime("%d/%m/%Y") if resultado.fecha else ""
+                prefijo = "HOJAS DEL {}\n".format(fecha_txt) if fecha_txt else ""
+                detalle = prefijo + detalle
             tarjeta.mostrar_ok(resultado.cantidad, detalle=detalle)

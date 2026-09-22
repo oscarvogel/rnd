@@ -3,6 +3,8 @@ import peewee
 from PyQt5.QtWidgets import QApplication
 
 from modelos.HojaRuta import HojaDeRuta
+from modelos.Empleados import Empleado
+from modelos.Equipos import Equipos
 from modelos.Documentos import actualizar_remito_de_hoja, referencias_por_hojas
 from modelos.ModeloBase import reconnect_if_needed
 from modelos.ParametrosSistema import ParamSist
@@ -13,13 +15,70 @@ from vistas.VerHojaRuta import ModificaHojaDeRutaView, VerHojaRutaView
 
 
 class VerHojaRutaController(ControladorBase):
-    def __init__(self, fecha_inicial=None):
+    def __init__(self, fecha_inicial=None, ruta_inicial=0):
         super().__init__()
         self.view = VerHojaRutaView()
+        self.ruta_inicial = int(ruta_inicial or 0)
         if fecha_inicial is not None:
             self.view.fecha_reparto.setFecha(fecha_inicial)
+        self._seleccionar_ruta_inicial()
         self.conectarWidgets()
+        self.view.showMaximized()
+        if self.ruta_inicial:
+            self.on_click_btn_cargar()
+
+    def _seleccionar_ruta_inicial(self):
+        if not self.ruta_inicial:
+            return
+        combo = self.view.cbo_ruta_reparto
+        if hasattr(combo, "setValor"):
+            try:
+                combo.setValor(self.ruta_inicial)
+                return
+            except Exception:
+                pass
+        if hasattr(combo, "setCurrentIndex") and hasattr(combo, "count") and hasattr(combo, "itemData"):
+            for idx in range(combo.count()):
+                if int(combo.itemData(idx) or 0) == self.ruta_inicial:
+                    combo.setCurrentIndex(idx)
+                    return
+        for nombre in ("combo", "comboBox", "cbo"):
+            interno = getattr(combo, nombre, None)
+            if interno is None or not hasattr(interno, "count"):
+                continue
+            for idx in range(interno.count()):
+                if int(interno.itemData(idx) or 0) == self.ruta_inicial:
+                    interno.setCurrentIndex(idx)
+                    return
     
+    @staticmethod
+    def _fk_id(registro, atributo):
+        """Devuelve el id crudo de una FK sin forzar a Peewee a cargar la fila relacionada."""
+        return int(getattr(registro, "{}_id".format(atributo), 0) or 0)
+
+    @staticmethod
+    def _limpiar_validador(validador):
+        validador.lineEditCodigo.setText("")
+        nombre = getattr(validador, "textNombre", None)
+        if nombre is not None and hasattr(nombre, "setText"):
+            nombre.setText("")
+
+    def _cargar_recurso(self, validador, modelo, recurso_id, generico_id):
+        """Carga un recurso real y deja en blanco los placeholders o referencias huérfanas."""
+        recurso_id = int(recurso_id or 0)
+        generico_id = int(generico_id or 0)
+        if not recurso_id or recurso_id == generico_id:
+            self._limpiar_validador(validador)
+            return False
+
+        if modelo.get_or_none(modelo.id == recurso_id) is None:
+            self._limpiar_validador(validador)
+            return False
+
+        validador.lineEditCodigo.setText(str(recurso_id))
+        validador.lineEditCodigo.valida()
+        return True
+
     def conectarWidgets(self):
         self.view.btn_cerrar.clicked.connect(self.view.Cerrar)
         self.view.btn_cargar.clicked.connect(self.on_click_btn_cargar)
@@ -47,23 +106,34 @@ class VerHojaRutaController(ControladorBase):
             )
 
         total = len(hoja_ruta)
+        fecha_txt = self.view.fecha_reparto.valor().strftime("%d/%m/%Y")
+        ruta_txt = str(self.view.cbo_ruta_reparto.currentText()) if hasattr(self.view.cbo_ruta_reparto, "currentText") else str(self.view.cbo_ruta_reparto.valor())
+        self.view.lbl_titulo_hoja.setText("Hoja de ruta - {} - {}".format(fecha_txt, ruta_txt))
         referencias = referencias_por_hojas([h.id for h in hoja_ruta]) if total else {}
         avance = 0
-        self.view.equipo.lineEditCodigo.setText(hoja_ruta[0].equipo_asignado.id if total > 0 and hoja_ruta[0].equipo_asignado else 0)
-        self.view.empleado.lineEditCodigo.setText(hoja_ruta[0].responsable.id if total > 0 and hoja_ruta[0].responsable else 0)
-        self.view.empleado.lineEditCodigo.valida()
-        self.view.equipo.lineEditCodigo.valida()
+        empleado_generico = int(ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23") or 0)
+        camion_generico = int(ParamSist.ObtenerParametro("CAMION_GENERICO", "1") or 0)
+        responsable_id = self._fk_id(hoja_ruta[0], "responsable") if total else 0
+        equipo_id = self._fk_id(hoja_ruta[0], "equipo_asignado") if total else 0
+        self._cargar_recurso(self.view.empleado, Empleado, responsable_id, empleado_generico)
+        self._cargar_recurso(self.view.equipo, Equipos, equipo_id, camion_generico)
+
+        responsable_seleccionado = int(self.view.empleado.lineEditCodigo.valor() or 0)
+        equipo_seleccionado = int(self.view.equipo.lineEditCodigo.valor() or 0)
         for h in hoja_ruta:
             avance += 1
             self.view.avance.actualizar(avance / total * 100)
             QApplication.processEvents()
-            seleccionado = False
-            #si el equipo asignado o el empleado asignado a la hoja de ruta conincide con lo seleccionado marca como que esta seleccionado
-            if h.equipo_asignado.id == int(self.view.equipo.lineEditCodigo.text()) or h.responsable.id == int(self.view.empleado.lineEditCodigo.text()):
-                seleccionado = True
+            h_equipo_id = self._fk_id(h, "equipo_asignado")
+            h_responsable_id = self._fk_id(h, "responsable")
+            seleccionado = (
+                (equipo_seleccionado and h_equipo_id == equipo_seleccionado)
+                or (responsable_seleccionado and h_responsable_id == responsable_seleccionado)
+            )
 
-            # Verificar si el equipo o el responsable son genéricos
-            if self.view.equipo.lineEditCodigo.valor() == ParamSist.ObtenerParametro("CAMION_GENERICO", "1") or h.responsable.id == ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23"):
+            # Los IDs genéricos representan "pendiente"; no deben validarse ni
+            # obligar a Peewee a buscar una fila que puede no existir.
+            if h_equipo_id == camion_generico or h_responsable_id == empleado_generico:
                 seleccionado = False
             
             referencia = referencias.get(h.id, {})
@@ -72,13 +142,24 @@ class VerHojaRutaController(ControladorBase):
                 referencia.get("factura") or h.comprobante or "",
                 referencia.get("remito") or "",
                 h.producto, h.cantidad, h.kg, h.cantidad_bultos,
-                h.observaciones, h.id, h.cliente.id
+                h.observaciones, h.id, int(getattr(h, "cliente_id", 0) or 0)
             ]
             self.view.grilla_datos.AgregaItem(item)
         self.view.grilla_datos.setSortingEnabled(True)
         self.view.grilla_datos.resizeColumnsToContents()
         self.view.grilla_datos.resizeRowsToContents()
         self.view.avance.actualizar(100)
+        self.view.btn_imprimir.setEnabled(total > 0)
+        if total:
+            responsable_txt = self.view.empleado.textNombre.text() or "Chofer pendiente"
+            equipo_txt = self.view.equipo.textNombre.text() or "Camión pendiente"
+            self.view.lbl_estado_hoja.setText(
+                "{} pedidos · Chofer: {} · Camión: {}".format(total, responsable_txt, equipo_txt)
+            )
+        else:
+            self.view.lbl_estado_hoja.setText(
+                "No hay datos para esta fecha y ruta. Revise la fecha, la ruta, la asignación de chofer/camión y que existan pedidos organizados."
+            )
     
     @inicializar_y_capturar_excepciones
     def on_click_btn_grabar(self, *args, **kwargs):
@@ -137,7 +218,6 @@ class VerHojaRutaController(ControladorBase):
     @inicializar_y_capturar_excepciones
     def on_click_btn_imprimir(self, *args, **kwargs):
         from utiles.Reportes import GeneradorPDFHojaRuta
-        from tkinter import messagebox
 
         fecha = self.view.fecha_reparto.valor()
         ruta = self.view.cbo_ruta_reparto.valor()
@@ -147,7 +227,7 @@ class VerHojaRutaController(ControladorBase):
         equipo = self.view.equipo.textNombre.text()
 
         if not all([fecha, ruta, responsable, equipo]):
-            messagebox.showwarning("Datos incompletos", "Por favor, seleccione fecha, ruta, responsable y equipo.")
+            showAlert("Datos incompletos", "Seleccione fecha, ruta, responsable y equipo antes de imprimir.")
             return
 
         try:
@@ -157,7 +237,7 @@ class VerHojaRutaController(ControladorBase):
             )
 
             if not hoja_ruta_query.exists():
-                messagebox.showinfo("Sin Datos", "No se encontraron registros para la fecha y ruta seleccionadas.")
+                showAlert("Sin datos", "No se encontraron registros para la fecha y ruta seleccionadas.")
                 return
             if not responsable:
                 responsable = hoja_ruta_query[0].responsable.nombre if hoja_ruta_query[0].responsable else "N/A"
@@ -174,7 +254,7 @@ class VerHojaRutaController(ControladorBase):
             )
 
         except Exception as e:
-            messagebox.showerror("Error", f"Ocurrió un error al generar el reporte: {e}")
+            showAlert("Error", "Ocurrió un error al generar el reporte: {}".format(e))
     
     @inicializar_y_capturar_excepciones
     def on_click_btn_agregar(self, *args, **kwargs):
@@ -252,7 +332,15 @@ class MdoficaHojaRutaController(ControladorBase):
         self.view.text_kg.setValue(hoja_ruta.kg)
         self.view.text_bultos.setValue(hoja_ruta.cantidad_bultos)
         self.view.text_observaciones.setText(hoja_ruta.observaciones if hoja_ruta.observaciones else "")
-        self.view.layout_empleado.lineEditCodigo.setText(hoja_ruta.responsable.id if hoja_ruta.responsable else 0)
-        self.view.layout_empleado.lineEditCodigo.valida()
-        self.view.layout_equipo.lineEditCodigo.setText(hoja_ruta.equipo_asignado.id if hoja_ruta.equipo_asignado else 0)
-        self.view.layout_equipo.lineEditCodigo.valida()
+        self._cargar_recurso(
+            self.view.layout_empleado,
+            Empleado,
+            self._fk_id(hoja_ruta, "responsable"),
+            int(ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23") or 0),
+        )
+        self._cargar_recurso(
+            self.view.layout_equipo,
+            Equipos,
+            self._fk_id(hoja_ruta, "equipo_asignado"),
+            int(ParamSist.ObtenerParametro("CAMION_GENERICO", "1") or 0),
+        )
