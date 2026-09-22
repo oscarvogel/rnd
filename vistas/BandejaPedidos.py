@@ -202,6 +202,22 @@ class BandejaPedidosView(QWidget):
         item = self.tabla.item(row, 0)
         return str(item.data(Qt.UserRole) or "") if item else ""
 
+    def seleccionar_clave(self, clave):
+        clave = str(clave or "")
+        if not clave:
+            return False
+        self.txt_comprobante.clear()
+        for row in range(self.tabla.rowCount()):
+            item = self.tabla.item(row, 0)
+            if item and str(item.data(Qt.UserRole) or "") == clave:
+                self.tabla.setRowHidden(row, False)
+                self.tabla.setCurrentCell(row, self.COLUMNA_FACTURA)
+                factura_item = self.tabla.item(row, self.COLUMNA_FACTURA)
+                if factura_item is not None:
+                    self.tabla.scrollToItem(factura_item)
+                return True
+        return False
+
     def ruta_destino(self):
         return int(self.cbo_ruta.currentData() or 0)
 
