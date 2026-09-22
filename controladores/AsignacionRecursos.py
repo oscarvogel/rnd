@@ -177,6 +177,9 @@ class AsignacionRecursosController(ControladorBase):
             ruta_inicial=self.view.ruta_id(),
         )
         self.ventana_hoja.run()
+        # El flujo continúa en revisión; evitamos dejar dos ventanas operativas
+        # apiladas y, al finalizar, el usuario vuelve al dashboard principal.
+        self.view.close()
 
     def ir_validacion(self):
         from controladores.ValidacionHojaRuta import ValidacionHojaRutaController
