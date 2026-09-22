@@ -111,6 +111,7 @@ class VerHojaRutaController(ControladorBase):
         self.view.grilla_datos.resizeColumnsToContents()
         self.view.grilla_datos.resizeRowsToContents()
         self.view.avance.actualizar(100)
+        self.view.btn_imprimir.setEnabled(total > 0)
         if total:
             responsable_txt = self.view.empleado.textNombre.text() or "Chofer pendiente"
             equipo_txt = self.view.equipo.textNombre.text() or "Camión pendiente"
@@ -179,7 +180,6 @@ class VerHojaRutaController(ControladorBase):
     @inicializar_y_capturar_excepciones
     def on_click_btn_imprimir(self, *args, **kwargs):
         from utiles.Reportes import GeneradorPDFHojaRuta
-        from tkinter import messagebox
 
         fecha = self.view.fecha_reparto.valor()
         ruta = self.view.cbo_ruta_reparto.valor()
@@ -189,7 +189,7 @@ class VerHojaRutaController(ControladorBase):
         equipo = self.view.equipo.textNombre.text()
 
         if not all([fecha, ruta, responsable, equipo]):
-            messagebox.showwarning("Datos incompletos", "Por favor, seleccione fecha, ruta, responsable y equipo.")
+            showAlert("Datos incompletos", "Seleccione fecha, ruta, responsable y equipo antes de imprimir.")
             return
 
         try:
@@ -199,7 +199,7 @@ class VerHojaRutaController(ControladorBase):
             )
 
             if not hoja_ruta_query.exists():
-                messagebox.showinfo("Sin Datos", "No se encontraron registros para la fecha y ruta seleccionadas.")
+                showAlert("Sin datos", "No se encontraron registros para la fecha y ruta seleccionadas.")
                 return
             if not responsable:
                 responsable = hoja_ruta_query[0].responsable.nombre if hoja_ruta_query[0].responsable else "N/A"
@@ -216,7 +216,7 @@ class VerHojaRutaController(ControladorBase):
             )
 
         except Exception as e:
-            messagebox.showerror("Error", f"Ocurrió un error al generar el reporte: {e}")
+            showAlert("Error", "Ocurrió un error al generar el reporte: {}".format(e))
     
     @inicializar_y_capturar_excepciones
     def on_click_btn_agregar(self, *args, **kwargs):
