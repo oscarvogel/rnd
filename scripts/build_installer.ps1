@@ -101,7 +101,7 @@ if (-not (Test-VersionFormat $Version)) {
 New-GeneratedVersionFile -Template $VersionFile -Destination $GeneratedVersionFile -BuildVersion $Version
 Write-OK "Version del build: $Version"
 Write-OK "Metadata temporal: $GeneratedVersionFile"
-Write-OK "version.txt e installer\\RND.iss quedan intactos"
+Write-OK "version.txt e installer\RND.iss quedan intactos"
 
 # 2) Tests
 if (-not $SkipTests) {
@@ -207,12 +207,12 @@ function Get-AutomaticBuildVersion {
 function New-GeneratedVersionFile {
     param([string]$Template, [string]$Destination, [string]$BuildVersion)
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Destination) | Out-Null
-    $versionTuple = $BuildVersion -replace '\\.', ', '
+    $versionTuple = $BuildVersion -replace '\.', ', '
     $v = Get-Content $Template -Raw -Encoding UTF8
-    $v = $v -replace 'filevers=\\(\\d[\\d, ]+\\)', "filevers=($versionTuple)"
-    $v = $v -replace 'prodvers=\\(\\d[\\d, ]+\\)', "prodvers=($versionTuple)"
-    $v = $v -replace "u'ProductVersion', u'[\\d, ]+'", "u'ProductVersion', u'$versionTuple'"
-    $v = $v -replace "u'FileVersion', u'[\\d, ]+'", "u'FileVersion', u'$versionTuple'"
+    $v = $v -replace 'filevers=\(\d[\d, ]+\)', "filevers=($versionTuple)"
+    $v = $v -replace 'prodvers=\(\d[\d, ]+\)', "prodvers=($versionTuple)"
+    $v = $v -replace "u'ProductVersion', u'[\d, ]+'", "u'ProductVersion', u'$versionTuple'"
+    $v = $v -replace "u'FileVersion', u'[\d, ]+'", "u'FileVersion', u'$versionTuple'"
     [System.IO.File]::WriteAllText($Destination, $v, [System.Text.UTF8Encoding]::new($false))
 }
 

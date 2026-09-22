@@ -126,6 +126,12 @@ def procesar_tio_pujio(archivo_entrada, progreso=None):
                 (pos, texto) for pos, texto in celdas if pos > cliente_pos
             ]
             codigo_cliente = posteriores[0][1] if posteriores else ""
+            try:
+                numero_cliente = float(codigo_cliente.replace(",", "."))
+                if numero_cliente.is_integer():
+                    codigo_cliente = str(int(numero_cliente))
+            except (TypeError, ValueError):
+                pass
             nombre_cliente = posteriores[1][1] if len(posteriores) > 1 else ""
             comprobante = ""
             continue
