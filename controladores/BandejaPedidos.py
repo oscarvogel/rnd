@@ -125,6 +125,25 @@ class BandejaPedidosController(ControladorBase):
         ids = set(getattr(factura, "hoja_ids", ()) or ())
         return [p for p in self._pedidos if p.id in ids]
 
+    def seleccionar_factura_por_hoja(self, hoja_id, abrir=False):
+        hoja_id = int(hoja_id or 0)
+        if not hoja_id:
+            return False
+        factura = next(
+            (
+                item for item in self._facturas
+                if hoja_id in set(getattr(item, "hoja_ids", ()) or ())
+            ),
+            None,
+        )
+        if factura is None:
+            return False
+        if not self.view.seleccionar_clave(factura.clave):
+            return False
+        if abrir:
+            self.editar_factura_actual()
+        return True
+
     def actualizar_totales(self):
         totales = totales_facturas(self.facturas_seleccionadas())
         self.view.set_totales(totales["facturas"], totales["kg"], totales["bultos"])
