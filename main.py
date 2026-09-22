@@ -19,16 +19,24 @@ import sys
 from pathlib import Path
 
 
-def _configurar_fuentes_qt_windows():
-    """Usa las fuentes del sistema antes de inicializar Qt/PyQt5."""
+def _configurar_qt_windows():
+    """Normaliza Qt para ejecucion interactiva en Windows."""
     if os.name != "nt":
         return
+
+    # Algunos tests usan QT_QPA_PLATFORM=offscreen. Si esa variable queda
+    # heredada en la terminal, la aplicacion arranca pero no muestra ventanas.
+    # RND es una aplicacion de escritorio: al iniciar normalmente debe usar
+    # siempre el plugin nativo de Windows.
+    if os.environ.get("QT_QPA_PLATFORM", "").strip().lower() == "offscreen":
+        os.environ.pop("QT_QPA_PLATFORM", None)
+
     windows_fonts = os.path.join(os.environ.get("WINDIR", r"C:\\Windows"), "Fonts")
     if os.path.isdir(windows_fonts):
         os.environ.setdefault("QT_QPA_FONTDIR", windows_fonts)
 
 
-_configurar_fuentes_qt_windows()
+_configurar_qt_windows()
 
 from pyqt5libs.pyqt5libs.utiles import BorrarConf, GrabaConf, LeerIni, initialize_logger
 from rnd_credentials import (

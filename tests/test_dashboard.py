@@ -18,6 +18,7 @@ Cubre:
 import os
 import unittest
 from datetime import date
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 # Forzar plataforma offscreen antes de importar PyQt5 widgets.
@@ -118,22 +119,42 @@ class ServiciosDashboardTests(unittest.TestCase):
         # No se ejecuto la query
         self.mock_hoja.assert_not_called()
 
-    def test_hojas_ruta_del_dia_ok_con_cantidad(self):
-        # Mock count() -> 7
-        mock_query = MagicMock()
-        mock_query.where.return_value.count.return_value = 7
-        self.mock_hoja.return_value = mock_query
+    def test_hojas_ruta_del_dia_cuenta_rutas_y_no_renglones(self):
         from vistas.dashboard import servicios
-        resultado = servicios.hojas_ruta_del_dia(
-            usu_id=1, fecha=date(2026, 1, 1)
-        )
+
+        registros = [
+            SimpleNamespace(ruta_id=2, responsable_id=10, equipo_asignado_id=5),
+            SimpleNamespace(ruta_id=2, responsable_id=10, equipo_asignado_id=5),
+            SimpleNamespace(ruta_id=3, responsable_id=23, equipo_asignado_id=1),
+        ]
+        mock_query = MagicMock()
+        mock_query.where.return_value.__iter__.return_value = iter(registros)
+        self.mock_hoja.return_value = mock_query
+
+        ruta_q = MagicMock()
+        ruta_q.where.return_value.__iter__.return_value = iter([
+            SimpleNamespace(id=2, descripcion="Centro"),
+            SimpleNamespace(id=3, descripcion="Norte"),
+        ])
+        estado_q = MagicMock()
+        estado_q.where.return_value.__iter__.return_value = iter([])
+
+        with patch.object(servicios.RutaReparto, "select", return_value=ruta_q), \
+             patch.object(servicios.EstadoHojaRuta, "select", return_value=estado_q), \
+             patch.object(servicios.ParamSist, "ObtenerParametro", side_effect=("1", "23")):
+            resultado = servicios.hojas_ruta_del_dia(
+                usu_id=1, fecha=date(2026, 1, 1)
+            )
+
         self.assertEqual(resultado.estado, "ok")
-        self.assertEqual(resultado.cantidad, 7)
+        self.assertEqual(resultado.cantidad, 2)
+        self.assertIn("Centro", resultado.detalle)
+        self.assertIn("Norte", resultado.detalle)
         self.assertEqual(resultado.fecha, date(2026, 1, 1))
 
     def test_hojas_ruta_del_dia_vacio(self):
         mock_query = MagicMock()
-        mock_query.where.return_value.count.return_value = 0
+        mock_query.where.return_value.__iter__.return_value = iter([])
         self.mock_hoja.return_value = mock_query
         from vistas.dashboard import servicios
         resultado = servicios.hojas_ruta_del_dia(usu_id=1, fecha=date.today())
@@ -143,7 +164,7 @@ class ServiciosDashboardTests(unittest.TestCase):
 
     def test_hojas_ruta_del_dia_captura_excepcion_como_error(self):
         mock_query = MagicMock()
-        mock_query.where.return_value.count.side_effect = RuntimeError("BD caida")
+        mock_query.where.side_effect = RuntimeError("BD caida")
         self.mock_hoja.return_value = mock_query
         from vistas.dashboard import servicios
         resultado = servicios.hojas_ruta_del_dia(usu_id=1)
@@ -286,23 +307,27 @@ class DashboardViewTests(unittest.TestCase):
 
     def test_hero_visible_con_ok_si_hay_permiso_y_datos(self):
         self.mock_perm.return_value = True
-        mock_q = MagicMock()
-        mock_q.where.return_value.count.return_value = 5
-        self.mock_hoja.return_value = mock_q
+        from vistas.dashboard import servicios
+        resultado = servicios.ResultadoConsulta(
+            estado="ok", cantidad=2, detalle="Centro · Lista para revisar", fecha=date.today()
+        )
         d = _dashboard_sincrono()
-        d.cargar()
+        with patch.object(servicios, "hojas_ruta_del_dia", return_value=resultado):
+            d.cargar()
         self.assertFalse(d.hero.isHidden())
-        self.assertEqual(d.hero._etiqueta_valor.text(), "5")
+        self.assertEqual(d.hero._etiqueta_valor.text(), "2")
         self.assertEqual(d.hero._etiqueta_estado.text(), "OK")
         d.deleteLater()
 
     def test_hero_muestra_estado_vacio(self):
         self.mock_perm.return_value = True
-        mock_q = MagicMock()
-        mock_q.where.return_value.count.return_value = 0
-        self.mock_hoja.return_value = mock_q
+        from vistas.dashboard import servicios
         d = _dashboard_sincrono()
-        d.cargar()
+        with patch.object(
+            servicios, "hojas_ruta_del_dia",
+            return_value=servicios.ResultadoConsulta(estado="vacio", fecha=date.today()),
+        ):
+            d.cargar()
         self.assertFalse(d.hero.isHidden())
         self.assertEqual(d.hero._etiqueta_valor.text(), "0")
         self.assertEqual(d.hero._etiqueta_estado.text(), "Vacio")
@@ -310,11 +335,13 @@ class DashboardViewTests(unittest.TestCase):
 
     def test_hero_muestra_estado_error_y_boton_reintentar(self):
         self.mock_perm.return_value = True
-        mock_q = MagicMock()
-        mock_q.where.return_value.count.side_effect = RuntimeError("boom")
-        self.mock_hoja.return_value = mock_q
+        from vistas.dashboard import servicios
         d = _dashboard_sincrono()
-        d.cargar()
+        with patch.object(
+            servicios, "hojas_ruta_del_dia",
+            return_value=servicios.ResultadoConsulta(estado="error", detalle="boom", fecha=date.today()),
+        ):
+            d.cargar()
         self.assertFalse(d.hero.isHidden())
         self.assertFalse(d.hero._boton_reintentar.isHidden())
         self.assertEqual(d.hero._etiqueta_estado.text(), "Error")
@@ -324,16 +351,14 @@ class DashboardViewTests(unittest.TestCase):
         # El hero falla, pero el de vencimientos debe quedar visible
         # y mostrar ok si hay permiso.
         self.mock_perm.return_value = True
-        # hoja -> error
-        mock_hoja_q = MagicMock()
-        mock_hoja_q.where.return_value.count.side_effect = RuntimeError(
-            "BD caida"
-        )
-        self.mock_hoja.return_value = mock_hoja_q
-        # venc -> 2
+        from vistas.dashboard import servicios
         self.mock_venc.return_value = [MagicMock(), MagicMock()]
         d = _dashboard_sincrono()
-        d.cargar()
+        with patch.object(
+            servicios, "hojas_ruta_del_dia",
+            return_value=servicios.ResultadoConsulta(estado="error", detalle="BD caida", fecha=date.today()),
+        ):
+            d.cargar()
         self.assertFalse(d.hero.isHidden())
         self.assertFalse(d.hero._boton_reintentar.isHidden())
         self.assertFalse(d.tarjeta_vencimientos.isHidden())
@@ -342,21 +367,25 @@ class DashboardViewTests(unittest.TestCase):
 
     def test_click_en_hero_emite_senal_de_navegacion(self):
         self.mock_perm.return_value = True
-        mock_q = MagicMock()
-        mock_q.where.return_value.count.return_value = 1
-        self.mock_hoja.return_value = mock_q
+        from vistas.dashboard import servicios
         from vistas.dashboard.dashboard_view import (
             NAV_HOJAS_RUTA_DIA,
         )
         d = _dashboard_sincrono()
-        d.cargar()
+        with patch.object(
+            servicios, "hojas_ruta_del_dia",
+            return_value=servicios.ResultadoConsulta(
+                estado="ok", cantidad=1, detalle="Centro", fecha=date.today(), ruta_id=7
+            ),
+        ):
+            d.cargar()
         capturados = []
         d.navegar.connect(lambda c: capturados.append(c))
         # Simulamos click izquierdo sobre la tarjeta
         evento = MagicMock()
         evento.button.return_value = Qt.LeftButton
         d.hero.mousePressEvent(evento)
-        self.assertEqual(capturados, [NAV_HOJAS_RUTA_DIA])
+        self.assertEqual(capturados, [NAV_HOJAS_RUTA_DIA + "|7"])
         d.deleteLater()
 
     def test_click_en_secundaria_emite_senal_vencimientos(self):
@@ -377,14 +406,17 @@ class DashboardViewTests(unittest.TestCase):
 
     def test_recargar_repite_consultas(self):
         self.mock_perm.return_value = True
-        mock_q = MagicMock()
-        mock_q.where.return_value.count.return_value = 3
-        self.mock_hoja.return_value = mock_q
+        from vistas.dashboard import servicios
         d = _dashboard_sincrono()
-        d.cargar()
-        d.recargar()
-        # El servicio de hoja se llamo al menos dos veces
-        self.assertGreaterEqual(mock_q.where.return_value.count.call_count, 2)
+        with patch.object(
+            servicios, "hojas_ruta_del_dia",
+            return_value=servicios.ResultadoConsulta(
+                estado="ok", cantidad=1, detalle="Centro", fecha=date.today(), ruta_id=7
+            ),
+        ) as cargar_hojas:
+            d.cargar()
+            d.recargar()
+        self.assertGreaterEqual(cargar_hojas.call_count, 2)
         d.deleteLater()
 
     def test_objetos_expuestos_con_objectName_para_qss(self):
@@ -409,7 +441,7 @@ class DashboardViewTests(unittest.TestCase):
         ) as crear:
             controller._navegar_desde_dashboard(NAV_HOJAS_RUTA_DIA)
 
-        crear.assert_called_once_with(fecha_inicial=date.today())
+        crear.assert_called_once_with(fecha_inicial=date.today(), ruta_inicial=0)
         destino.run.assert_called_once_with()
 
 

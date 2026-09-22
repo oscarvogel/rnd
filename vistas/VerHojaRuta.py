@@ -1,4 +1,5 @@
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QFormLayout
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QFormLayout, QLabel
 from modelos.Clientes import ValidaCliente, cboRutaReparto
 from modelos.Empleados import ValidaEmpleado
 from modelos.Equipos import ValidaEquipo
@@ -19,8 +20,18 @@ class VerHojaRutaView(VistaBase):
 
     def initUi(self):
         self.setWindowTitle("Ver Hoja de Ruta")
-        self.resize(1000, 650)
+        self.resize(1180, 760)
         layoutPpal = QVBoxLayout(self)
+
+        self.lbl_titulo_hoja = QLabel("Hoja de ruta")
+        self.lbl_titulo_hoja.setObjectName("hojaRutaTitulo")
+        self.lbl_titulo_hoja.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        layoutPpal.addWidget(self.lbl_titulo_hoja)
+
+        self.lbl_estado_hoja = QLabel("Seleccione fecha y ruta para cargar la hoja.")
+        self.lbl_estado_hoja.setObjectName("hojaRutaEstado")
+        self.lbl_estado_hoja.setWordWrap(True)
+        layoutPpal.addWidget(self.lbl_estado_hoja)
         
         self.avance = Avance()
         layoutPpal.addWidget(self.avance)
@@ -52,12 +63,15 @@ class VerHojaRutaView(VistaBase):
         layoutPpal.addWidget(self.grilla_datos)
         
         layout_botones = QHBoxLayout()
-        self.btn_cargar = self.CreaBoton("Cargar", imagen_str="search.png")
+        self.btn_cargar = self.CreaBoton("Actualizar", imagen_str="search.png")
         self.btn_agregar = self.CreaBoton("Agregar", imagen_str="new.png")
         self.btn_modificar = self.CreaBoton("Modificar", imagen_str="edit.png")
         self.btn_grabar = self.CreaBoton("Grabar", imagen_str="save.png")
         self.btn_borrar = self.CreaBoton("Borrar", imagen_str="delete.png")
-        self.btn_imprimir = self.CreaBoton("Imprimir", imagen_str="printing.png")
+        self.btn_imprimir = self.CreaBoton("Imprimir PDF", imagen_str="printing.png")
+        self.btn_imprimir.setProperty("role", "primary")
+        self.btn_imprimir.setMinimumHeight(42)
+        self.btn_imprimir.setCursor(Qt.PointingHandCursor)
         self.btn_cerrar = self.CreaBoton("Cerrar", imagen_str="close.png")
         layout_botones.addWidget(self.btn_cargar)
         layout_botones.addWidget(self.btn_agregar)

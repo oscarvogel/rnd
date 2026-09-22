@@ -65,6 +65,15 @@ class AsignacionRecursosView(QWidget):
         self.lbl_estado.setWordWrap(True)
         raiz.addWidget(self.lbl_estado)
 
+        self.panel_exito = QGroupBox("Asignación guardada")
+        self.panel_exito.setObjectName("asignacionRecursosExito")
+        layout_exito = QVBoxLayout(self.panel_exito)
+        self.lbl_exito = QLabel("")
+        self.lbl_exito.setWordWrap(True)
+        layout_exito.addWidget(self.lbl_exito)
+        self.panel_exito.setVisible(False)
+        raiz.addWidget(self.panel_exito)
+
         acciones = QHBoxLayout()
         acciones.addStretch(1)
         self.btn_guardar = QPushButton("Guardar asignación")
@@ -72,10 +81,16 @@ class AsignacionRecursosView(QWidget):
         self.btn_guardar.setCursor(Qt.PointingHandCursor)
         self.btn_guardar.setEnabled(False)
         acciones.addWidget(self.btn_guardar)
+        self.btn_ver_hoja = QPushButton("Ver hoja de ruta ahora")
+        self.btn_ver_hoja.setProperty("role", "primary")
+        self.btn_ver_hoja.setCursor(Qt.PointingHandCursor)
+        self.btn_ver_hoja.setEnabled(False)
+        acciones.addWidget(self.btn_ver_hoja)
+
         self.btn_siguiente = QPushButton("Validar hoja de ruta")
         self.btn_siguiente.setEnabled(False)
         acciones.addWidget(self.btn_siguiente)
-        self.btn_cerrar = QPushButton("Cerrar")
+        self.btn_cerrar = QPushButton("Volver al dashboard")
         acciones.addWidget(self.btn_cerrar)
         raiz.addLayout(acciones)
 
@@ -105,6 +120,19 @@ class AsignacionRecursosView(QWidget):
         for combo, valor in ((self.cbo_responsable, responsable_id), (self.cbo_equipo, equipo_id)):
             idx = combo.findData(int(valor or 0))
             combo.setCurrentIndex(idx if idx >= 0 else 0)
+
+    def mostrar_exito(self, fecha, ruta, responsable, equipo):
+        self.lbl_exito.setText(
+            "Hoja lista para revisar · {} · {}\nChofer: {} · Camión: {}".format(
+                fecha.strftime("%d/%m/%Y"), ruta, responsable, equipo
+            )
+        )
+        self.panel_exito.setVisible(True)
+        self.btn_ver_hoja.setEnabled(True)
+        self.btn_ver_hoja.setFocus()
+
+    def ocultar_exito(self):
+        self.panel_exito.setVisible(False)
 
     def set_resumen(self, resumen, texto_actual):
         self.lbl_pedidos.setText(str(resumen.pedidos))
