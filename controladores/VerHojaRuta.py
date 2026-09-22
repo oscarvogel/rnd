@@ -193,7 +193,7 @@ class VerHojaRutaController(ControladorBase):
             QApplication.processEvents()
             referencia = referencias.get(h.id, {})
             item = [
-                False, h.nombre_cliente, h.comprobante,
+                h.nombre_cliente, h.comprobante,
                 referencia.get("factura") or h.comprobante or "",
                 referencia.get("remito") or "",
                 h.producto, h.cantidad, h.kg, h.cantidad_bultos,
