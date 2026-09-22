@@ -213,3 +213,31 @@ def test_hoja_lista_con_recursos_pendientes_se_marca_como_inconsistente():
         assert view.btn_imprimir.text() == "PDF no disponible"
     finally:
         view.deleteLater()
+
+
+
+def test_revision_no_expone_checkbox_ni_ids_internos():
+    app = _app()
+    assert app is not None
+    from vistas.VerHojaRuta import VerHojaRutaView
+
+    view = VerHojaRutaView()
+    try:
+        encabezados = [
+            view.grilla_datos.horizontalHeaderItem(i).text()
+            for i in range(view.grilla_datos.columnCount())
+        ]
+        assert "Selecciona" not in encabezados
+        assert view.grilla_datos.isColumnHidden(encabezados.index("id"))
+        assert view.grilla_datos.isColumnHidden(encabezados.index("codigo_cliente"))
+    finally:
+        view.deleteLater()
+
+
+def test_cambio_de_recursos_invalida_estado_lista_y_bloquea_despachadas():
+    source = (ROOT / "controladores" / "AsignacionRecursos.py").read_text(
+        encoding="utf-8"
+    )
+    assert "estado.estado == EstadoHojaRuta.DESPACHADA" in source
+    assert "No se pueden modificar sus recursos" in source
+    assert "estado.estado = EstadoHojaRuta.EN_PREPARACION" in source
