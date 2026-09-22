@@ -146,6 +146,12 @@ class AsignacionRecursosController(ControladorBase):
             )
             return
 
+        cambio_recursos = (
+            self.resumen_actual.asignacion_mixta
+            or int(self.resumen_actual.responsable_id or 0) != int(responsable_id)
+            or int(self.resumen_actual.equipo_id or 0) != int(equipo_id)
+        )
+
         (
             HojaDeRuta.update(
                 responsable=responsable_id,
@@ -175,7 +181,11 @@ class AsignacionRecursosController(ControladorBase):
             self.cargar_hoja()
             return
 
-        if estado is not None and estado.estado != EstadoHojaRuta.EN_PREPARACION:
+        if (
+            cambio_recursos
+            and estado is not None
+            and estado.estado != EstadoHojaRuta.EN_PREPARACION
+        ):
             estado.estado = EstadoHojaRuta.EN_PREPARACION
             estado.actualizado_en = datetime.now()
             estado.actualizado_por = LeerConf("usuario") or ""
