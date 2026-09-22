@@ -13,12 +13,41 @@ from vistas.VerHojaRuta import ModificaHojaDeRutaView, VerHojaRutaView
 
 
 class VerHojaRutaController(ControladorBase):
-    def __init__(self, fecha_inicial=None):
+    def __init__(self, fecha_inicial=None, ruta_inicial=0):
         super().__init__()
         self.view = VerHojaRutaView()
+        self.ruta_inicial = int(ruta_inicial or 0)
         if fecha_inicial is not None:
             self.view.fecha_reparto.setFecha(fecha_inicial)
+        self._seleccionar_ruta_inicial()
         self.conectarWidgets()
+        self.view.showMaximized()
+        if self.ruta_inicial:
+            self.on_click_btn_cargar()
+
+    def _seleccionar_ruta_inicial(self):
+        if not self.ruta_inicial:
+            return
+        combo = self.view.cbo_ruta_reparto
+        if hasattr(combo, "setValor"):
+            try:
+                combo.setValor(self.ruta_inicial)
+                return
+            except Exception:
+                pass
+        if hasattr(combo, "setCurrentIndex") and hasattr(combo, "count") and hasattr(combo, "itemData"):
+            for idx in range(combo.count()):
+                if int(combo.itemData(idx) or 0) == self.ruta_inicial:
+                    combo.setCurrentIndex(idx)
+                    return
+        for nombre in ("combo", "comboBox", "cbo"):
+            interno = getattr(combo, nombre, None)
+            if interno is None or not hasattr(interno, "count"):
+                continue
+            for idx in range(interno.count()):
+                if int(interno.itemData(idx) or 0) == self.ruta_inicial:
+                    interno.setCurrentIndex(idx)
+                    return
     
     def conectarWidgets(self):
         self.view.btn_cerrar.clicked.connect(self.view.Cerrar)
@@ -47,6 +76,9 @@ class VerHojaRutaController(ControladorBase):
             )
 
         total = len(hoja_ruta)
+        fecha_txt = self.view.fecha_reparto.valor().strftime("%d/%m/%Y")
+        ruta_txt = str(self.view.cbo_ruta_reparto.currentText()) if hasattr(self.view.cbo_ruta_reparto, "currentText") else str(self.view.cbo_ruta_reparto.valor())
+        self.view.lbl_titulo_hoja.setText("Hoja de ruta - {} - {}".format(fecha_txt, ruta_txt))
         referencias = referencias_por_hojas([h.id for h in hoja_ruta]) if total else {}
         avance = 0
         self.view.equipo.lineEditCodigo.setText(hoja_ruta[0].equipo_asignado.id if total > 0 and hoja_ruta[0].equipo_asignado else 0)
@@ -79,6 +111,16 @@ class VerHojaRutaController(ControladorBase):
         self.view.grilla_datos.resizeColumnsToContents()
         self.view.grilla_datos.resizeRowsToContents()
         self.view.avance.actualizar(100)
+        if total:
+            responsable_txt = self.view.empleado.textNombre.text() or "Chofer pendiente"
+            equipo_txt = self.view.equipo.textNombre.text() or "Camión pendiente"
+            self.view.lbl_estado_hoja.setText(
+                "{} pedidos · Chofer: {} · Camión: {}".format(total, responsable_txt, equipo_txt)
+            )
+        else:
+            self.view.lbl_estado_hoja.setText(
+                "No hay datos para esta fecha y ruta. Revise la fecha, la ruta, la asignación de chofer/camión y que existan pedidos organizados."
+            )
     
     @inicializar_y_capturar_excepciones
     def on_click_btn_grabar(self, *args, **kwargs):
