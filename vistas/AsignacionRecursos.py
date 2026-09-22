@@ -111,16 +111,21 @@ class AsignacionRecursosView(QWidget):
 
     @staticmethod
     def _valor_combo(combo):
-        valor = int(combo.currentData() or 0)
-        if valor:
-            return valor
         texto = str(combo.currentText() or "").strip()
         if not texto:
             return 0
-        idx = combo.findText(texto, Qt.MatchFixedString)
-        if idx >= 0:
-            combo.setCurrentIndex(idx)
-            return int(combo.itemData(idx) or 0)
+
+        idx_actual = combo.currentIndex()
+        if idx_actual >= 0:
+            texto_actual = str(combo.itemText(idx_actual) or "").strip()
+            if texto_actual.casefold() == texto.casefold():
+                return int(combo.itemData(idx_actual) or 0)
+
+        for idx in range(combo.count()):
+            candidato = str(combo.itemText(idx) or "").strip()
+            if candidato.casefold() == texto.casefold():
+                combo.setCurrentIndex(idx)
+                return int(combo.itemData(idx) or 0)
         return 0
 
     def cargar_rutas(self, rutas, seleccion=0):
