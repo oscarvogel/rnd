@@ -582,28 +582,25 @@ QTreeWidget::item:selected {
 }
 
 QHeaderView::section {
-    background: qlineargradient(
-        x1:0, y1:0, x2:1, y2:0,
-        stop:0 #0A5F9E,
-        stop:1 #0A84D8
-    );
-    color: #FFFFFF;
+    background-color: #F4F7FA;
+    color: #243447;
     padding: 9px 10px;
     border: none;
-    border-right: 1px solid #50B8E2;
-    border-bottom: 1px solid #0871B9;
+    border-right: 1px solid #D7DFEA;
+    border-bottom: 2px solid #C7D2E0;
     font-weight: 700;
 }
 
 QHeaderView::section:hover {
-    background-color: #13A9E0;
+    background-color: #EAF1F7;
+    color: #083B6D;
 }
 
 QTableCornerButton::section {
-    background-color: #0A5F9E;
+    background-color: #F4F7FA;
     border: none;
-    border-right: 1px solid #50B8E2;
-    border-bottom: 1px solid #0871B9;
+    border-right: 1px solid #D7DFEA;
+    border-bottom: 2px solid #C7D2E0;
 }
 
 
