@@ -20,7 +20,8 @@ def _app():
 
 
 def test_asignacion_muestra_revision_como_siguiente_paso_y_oculta_atajo_validacion():
-    _app()
+    app = _app()
+    assert app is not None
     from vistas.AsignacionRecursos import AsignacionRecursosView
 
     view = AsignacionRecursosView()
@@ -87,7 +88,8 @@ def test_validacion_abre_hoja_para_imprimir_sin_anidar_otro_continuar():
 
 
 def test_validacion_lista_habilita_ver_imprimir_y_despachar():
-    _app()
+    app = _app()
+    assert app is not None
     from vistas.ValidacionHojaRuta import ValidacionHojaRutaView
 
     view = ValidacionHojaRutaView()
@@ -112,3 +114,13 @@ def test_dashboard_se_recarga_al_recuperar_el_foco_principal():
     assert "QEvent.WindowActivate" in source
     assert "_recargar_dashboard_si_visible" in source
     assert "dashboard.recargar()" in source
+
+
+def test_flujo_organizar_asignar_revisar_no_deja_ventanas_anteriores_abiertas():
+    bandeja = (ROOT / "controladores/BandejaPedidos.py").read_text(encoding="utf-8")
+    asignacion = (ROOT / "controladores/AsignacionRecursos.py").read_text(encoding="utf-8")
+    revision = (ROOT / "controladores/VerHojaRuta.py").read_text(encoding="utf-8")
+
+    assert "self.ventana_siguiente.run()\n        self.view.close()" in bandeja
+    assert "self.ventana_hoja.run()\n        # El flujo continúa" in asignacion
+    assert "self.ventana_validacion.run()\n        self.view.close()" in revision
