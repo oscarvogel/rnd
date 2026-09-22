@@ -647,3 +647,4 @@ class BandejaPedidosController(ControladorBase):
             ruta_inicial=ruta_id,
         )
         self.ventana_siguiente.run()
+        self.view.close()
