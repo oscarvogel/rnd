@@ -62,6 +62,9 @@ class ValidacionHojaRutaView(QWidget):
         self.btn_lista = QPushButton("Marcar LISTA")
         self.btn_lista.setProperty("role", "primary")
         acciones.addWidget(self.btn_lista)
+        self.btn_hoja = QPushButton("Ver / imprimir hoja")
+        self.btn_hoja.setEnabled(False)
+        acciones.addWidget(self.btn_hoja)
         self.btn_despachar = QPushButton("Marcar DESPACHADA")
         acciones.addWidget(self.btn_despachar)
         self.btn_cerrar = QPushButton("Cerrar")
@@ -95,9 +98,15 @@ class ValidacionHojaRutaView(QWidget):
             self.tabla.setItem(row, 2, QTableWidgetItem(item.detalle or ""))
         self.tabla.resizeColumnsToContents()
         self.btn_lista.setEnabled(estado != "DESPACHADA" and resultado.valida)
+        self.btn_hoja.setEnabled(estado in ("LISTA", "DESPACHADA") and resultado.pedidos > 0)
         self.btn_despachar.setEnabled(estado == "LISTA" and resultado.valida)
         self.btn_asignar.setEnabled(any(i.codigo in ("chofer", "camion") and not i.cumplido for i in resultado.items))
-        self.lbl_mensaje.setText(
-            "La hoja cumple todos los requisitos." if resultado.valida else
-            "Complete los requisitos pendientes antes de marcar la hoja como LISTA."
-        )
+        if estado == "LISTA":
+            mensaje = "Hoja validada. Genere o revise el PDF y luego marque el despacho."
+        elif estado == "DESPACHADA":
+            mensaje = "Hoja despachada. El circuito operativo está finalizado."
+        elif resultado.valida:
+            mensaje = "La hoja cumple todos los requisitos. Puede marcarla como LISTA."
+        else:
+            mensaje = "Complete los requisitos pendientes antes de marcar la hoja como LISTA."
+        self.lbl_mensaje.setText(mensaje)
