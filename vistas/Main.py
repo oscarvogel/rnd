@@ -104,12 +104,12 @@ class MainView(QMainWindow):
 
     def event(self, event):
         """Recarga el dashboard al recuperar el foco de una ventana operativa."""
-        if event.type() == QEvent.WindowActivate and self.dashboard is not None:
+        if event.type() == QEvent.WindowActivate and getattr(self, "dashboard", None) is not None:
             QTimer.singleShot(0, self._recargar_dashboard_si_visible)
         return super().event(event)
 
     def _recargar_dashboard_si_visible(self):
-        dashboard = self.dashboard
+        dashboard = getattr(self, "dashboard", None)
         if dashboard is None:
             return
         try:
