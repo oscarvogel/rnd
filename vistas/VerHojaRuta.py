@@ -87,6 +87,7 @@ class VerHojaRutaView(VistaBase):
         self.btn_continuar.setEnabled(False)
         self.btn_imprimir = self.CreaBoton("Vista previa PDF", imagen_str="printing.png")
         self.btn_imprimir.setProperty("role", "secondary")
+        self.btn_imprimir.setEnabled(False)
         self.btn_imprimir.setMinimumHeight(42)
         self.btn_imprimir.setCursor(Qt.PointingHandCursor)
         self.btn_cerrar = self.CreaBoton("Cerrar", imagen_str="close.png")
