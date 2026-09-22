@@ -49,7 +49,17 @@ class ValidacionHojaRutaView(QWidget):
         self.tabla = QTableWidget(0, 3)
         self.tabla.setHorizontalHeaderLabels(["Estado", "Requisito", "Detalle"])
         self.tabla.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tabla.setToolTip(
+            "Doble clic en un requisito PENDIENTE para ir a corregirlo."
+        )
         raiz.addWidget(self.tabla)
+
+        self.lbl_ayuda = QLabel(
+            "Doble clic en un requisito PENDIENTE para corregirlo."
+        )
+        self.lbl_ayuda.setObjectName("validacionHojaAyuda")
+        raiz.addWidget(self.lbl_ayuda)
 
         self.lbl_mensaje = QLabel("")
         self.lbl_mensaje.setWordWrap(True)
@@ -84,6 +94,12 @@ class ValidacionHojaRutaView(QWidget):
     def ruta_id(self):
         return int(self.cbo_ruta.currentData() or 0)
 
+    def codigo_fila(self, row):
+        if row < 0 or row >= self.tabla.rowCount():
+            return ""
+        item = self.tabla.item(row, 0)
+        return str(item.data(Qt.UserRole) or "") if item else ""
+
     def mostrar(self, resultado, estado):
         self.lbl_estado.setText("Estado: {}".format(estado))
         self.lbl_pedidos.setText("Pedidos: {}".format(resultado.pedidos))
@@ -93,9 +109,18 @@ class ValidacionHojaRutaView(QWidget):
         for item in resultado.items:
             row = self.tabla.rowCount()
             self.tabla.insertRow(row)
-            self.tabla.setItem(row, 0, QTableWidgetItem("OK" if item.cumplido else "PENDIENTE"))
-            self.tabla.setItem(row, 1, QTableWidgetItem(item.descripcion))
-            self.tabla.setItem(row, 2, QTableWidgetItem(item.detalle or ""))
+            estado_item = QTableWidgetItem("OK" if item.cumplido else "PENDIENTE")
+            estado_item.setData(Qt.UserRole, item.codigo)
+            requisito_item = QTableWidgetItem(item.descripcion)
+            detalle_item = QTableWidgetItem(item.detalle or "")
+            if not item.cumplido:
+                tooltip = "Doble clic para corregir este requisito."
+                estado_item.setToolTip(tooltip)
+                requisito_item.setToolTip(tooltip)
+                detalle_item.setToolTip(tooltip)
+            self.tabla.setItem(row, 0, estado_item)
+            self.tabla.setItem(row, 1, requisito_item)
+            self.tabla.setItem(row, 2, detalle_item)
         self.tabla.resizeColumnsToContents()
         self.btn_lista.setEnabled(estado != "DESPACHADA" and resultado.valida)
         self.btn_hoja.setEnabled(estado in ("LISTA", "DESPACHADA") and resultado.pedidos > 0)
