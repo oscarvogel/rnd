@@ -8,6 +8,8 @@ from controladores.ImportacionPedidos import valor_para_vista_previa
 def test_issue_105_valores_excel_se_convierten_a_texto_seguro():
     assert valor_para_vista_previa(28.0) == "28"
     assert valor_para_vista_previa(31.82) == "31.82"
+    assert valor_para_vista_previa(70.85000000000001) == "70.85"
+    assert valor_para_vista_previa(10509.759999999998) == "10509.76"
     assert valor_para_vista_previa(7) == "7"
     assert valor_para_vista_previa("QUESO TYBO") == "QUESO TYBO"
     assert valor_para_vista_previa(float("nan")) == ""
