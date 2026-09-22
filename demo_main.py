@@ -11,9 +11,16 @@ from pathlib import Path
 
 
 def _configurar_fuentes_qt_windows():
-    """Evita el fallback roto PyQt5/Qt5/lib/fonts en instalaciones modernas."""
+    """Normaliza Qt para que el DEMO abra una ventana real en Windows."""
     if os.name != "nt":
         return
+
+    # Pytest usa a menudo QT_QPA_PLATFORM=offscreen. Si esa variable queda
+    # heredada en la misma consola, Qt arranca correctamente pero sin mostrar
+    # ninguna ventana y demo.ps1 parece quedar colgado.
+    if os.environ.get("QT_QPA_PLATFORM", "").strip().lower() == "offscreen":
+        os.environ.pop("QT_QPA_PLATFORM", None)
+
     windows_fonts = os.path.join(os.environ.get("WINDIR", r"C:\\Windows"), "Fonts")
     if os.path.isdir(windows_fonts):
         os.environ.setdefault("QT_QPA_FONTDIR", windows_fonts)
