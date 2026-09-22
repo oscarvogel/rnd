@@ -20,7 +20,9 @@ from datetime import date
 from typing import Optional
 
 from modelos.Accesos import Acceso
+from modelos.Clientes import RutaReparto
 from modelos.Equipos import Vencimientos, get_vencimientos_proximos
+from modelos.EstadoHojaRuta import EstadoHojaRuta
 from modelos.HojaRuta import HojaDeRuta
 from modelos.ParametrosSistema import ParamSist
 
@@ -41,6 +43,7 @@ class ResultadoConsulta:
     cantidad: int = 0
     detalle: str = ""
     fecha: Optional[date] = None
+    ruta_id: int = 0
 
     @property
     def es_visible(self):
@@ -71,36 +74,115 @@ def _validar_permiso(usu_id, for_valid):
         return False
 
 
-def _to_resultado(estado, cantidad=0, detalle="", fecha=None):
+def _to_resultado(estado, cantidad=0, detalle="", fecha=None, ruta_id=0):
     return ResultadoConsulta(
         estado=estado,
         cantidad=cantidad,
         detalle=detalle,
         fecha=fecha,
+        ruta_id=int(ruta_id or 0),
     )
 
 
 def hojas_ruta_del_dia(usu_id, fecha=None):
-    """Cantidad de hojas de ruta para ``fecha`` (hoy por default).
+    """Resumen de hojas/rutas del día, no cantidad de renglones.
 
-    Retorna ``estado="sin_permiso"`` si el usuario no tiene acceso
-    al modulo de hoja de ruta. Esto evita tanto la consulta como
-    la revelacion del conteo.
+    Una hoja de ruta puede contener muchos pedidos. El dashboard debe contar
+    rutas distintas y mostrar su estado operativo para evitar que el usuario
+    confunda cantidad de líneas con cantidad de hojas.
     """
     fecha = fecha or date.today()
     if not _validar_permiso(usu_id, PERMISO_HOJA_RUTA):
         return _to_resultado("sin_permiso", fecha=fecha)
     try:
-        cantidad = (
-            HojaDeRuta.select()
-            .where(HojaDeRuta.fecha == fecha)
-            .count()
+        registros = list(HojaDeRuta.select().where(HojaDeRuta.fecha == fecha))
+        if not registros:
+            return _to_resultado("vacio", fecha=fecha)
+
+        camion_generico = int(
+            ParamSist.ObtenerParametro("CAMION_GENERICO", "1") or 1
+        )
+        empleado_generico = int(
+            ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23") or 23
+        )
+
+        por_ruta = {}
+        for registro in registros:
+            ruta_id = int(getattr(registro, "ruta_id", 0) or 0)
+            if ruta_id:
+                por_ruta.setdefault(ruta_id, []).append(registro)
+
+        if not por_ruta:
+            return _to_resultado(
+                "vacio",
+                detalle="Hay pedidos del día todavía sin organizar en una ruta.",
+                fecha=fecha,
+            )
+
+        nombres = {
+            int(r.id): r.descripcion
+            for r in RutaReparto.select().where(RutaReparto.id.in_(list(por_ruta)))
+        }
+        estados = {
+            int(e.ruta_id): e.estado
+            for e in EstadoHojaRuta.select().where(EstadoHojaRuta.fecha == fecha)
+        }
+
+        lineas = []
+        for ruta_id, pedidos in sorted(
+            por_ruta.items(), key=lambda item: nombres.get(item[0], str(item[0]))
+        ):
+            primero = pedidos[0]
+            responsable_id = int(getattr(primero, "responsable_id", 0) or 0)
+            equipo_id = int(getattr(primero, "equipo_asignado_id", 0) or 0)
+            recursos_ok = (
+                responsable_id not in (0, empleado_generico)
+                and equipo_id not in (0, camion_generico)
+            )
+            estado = estados.get(ruta_id, EstadoHojaRuta.EN_PREPARACION)
+            if not recursos_ok:
+                estado_txt = "Pendiente de asignación"
+            elif estado == EstadoHojaRuta.DESPACHADA:
+                estado_txt = "Despachada"
+            elif estado == EstadoHojaRuta.LISTA:
+                estado_txt = "Lista para imprimir"
+            else:
+                estado_txt = "Lista para revisar"
+
+            chofer = "Chofer pendiente"
+            camion = "Camión pendiente"
+            if recursos_ok:
+                try:
+                    chofer = primero.responsable.nombre_completo
+                except Exception:
+                    chofer = "Chofer #{}".format(responsable_id)
+                try:
+                    camion = str(primero.equipo_asignado)
+                except Exception:
+                    camion = "Camión #{}".format(equipo_id)
+
+            lineas.append(
+                "{} · {} · {} · {}".format(
+                    nombres.get(ruta_id, "Ruta #{}".format(ruta_id)),
+                    estado_txt,
+                    chofer,
+                    camion,
+                )
+            )
+
+        detalle = "\n".join(lineas[:4])
+        if len(lineas) > 4:
+            detalle += "\n+ {} hoja(s) más".format(len(lineas) - 4)
+        unica = next(iter(por_ruta)) if len(por_ruta) == 1 else 0
+        return _to_resultado(
+            "ok",
+            cantidad=len(por_ruta),
+            detalle=detalle,
+            fecha=fecha,
+            ruta_id=unica,
         )
     except Exception as exc:
         return _to_resultado("error", detalle=str(exc), fecha=fecha)
-    if cantidad == 0:
-        return _to_resultado("vacio", fecha=fecha)
-    return _to_resultado("ok", cantidad=cantidad, fecha=fecha)
 
 
 def hojas_ruta_pendientes(usu_id, fecha=None):
