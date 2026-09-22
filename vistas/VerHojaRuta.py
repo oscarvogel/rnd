@@ -28,10 +28,20 @@ class VerHojaRutaView(VistaBase):
         self.lbl_titulo_hoja.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layoutPpal.addWidget(self.lbl_titulo_hoja)
 
+        self.lbl_estado_operativo = QLabel("Estado: sin cargar")
+        self.lbl_estado_operativo.setObjectName("hojaRutaEstadoOperativo")
+        self.lbl_estado_operativo.setWordWrap(True)
+        layoutPpal.addWidget(self.lbl_estado_operativo)
+
         self.lbl_estado_hoja = QLabel("Seleccione fecha y ruta para cargar la hoja.")
         self.lbl_estado_hoja.setObjectName("hojaRutaEstado")
         self.lbl_estado_hoja.setWordWrap(True)
         layoutPpal.addWidget(self.lbl_estado_hoja)
+
+        self.lbl_resumen_hoja = QLabel("Pedidos: 0 · KG: 0 · Bultos: 0")
+        self.lbl_resumen_hoja.setObjectName("hojaRutaResumen")
+        self.lbl_resumen_hoja.setWordWrap(True)
+        layoutPpal.addWidget(self.lbl_resumen_hoja)
         
         self.avance = Avance()
         layoutPpal.addWidget(self.avance)
@@ -68,8 +78,15 @@ class VerHojaRutaView(VistaBase):
         self.btn_modificar = self.CreaBoton("Modificar", imagen_str="edit.png")
         self.btn_grabar = self.CreaBoton("Grabar", imagen_str="save.png")
         self.btn_borrar = self.CreaBoton("Borrar", imagen_str="delete.png")
-        self.btn_imprimir = self.CreaBoton("Imprimir PDF", imagen_str="printing.png")
-        self.btn_imprimir.setProperty("role", "primary")
+        self.btn_continuar = self.CreaBoton(
+            "Hoja correcta → Continuar a validación", imagen_str="save.png"
+        )
+        self.btn_continuar.setProperty("role", "primary")
+        self.btn_continuar.setMinimumHeight(42)
+        self.btn_continuar.setCursor(Qt.PointingHandCursor)
+        self.btn_continuar.setEnabled(False)
+        self.btn_imprimir = self.CreaBoton("Vista previa PDF", imagen_str="printing.png")
+        self.btn_imprimir.setProperty("role", "secondary")
         self.btn_imprimir.setMinimumHeight(42)
         self.btn_imprimir.setCursor(Qt.PointingHandCursor)
         self.btn_cerrar = self.CreaBoton("Cerrar", imagen_str="close.png")
@@ -78,9 +95,51 @@ class VerHojaRutaView(VistaBase):
         layout_botones.addWidget(self.btn_modificar)
         layout_botones.addWidget(self.btn_grabar)
         layout_botones.addWidget(self.btn_borrar)
+        layout_botones.addStretch(1)
+        layout_botones.addWidget(self.btn_continuar)
         layout_botones.addWidget(self.btn_imprimir)
         layout_botones.addWidget(self.btn_cerrar)
         layoutPpal.addLayout(layout_botones)
+
+    @staticmethod
+    def _set_role(boton, role):
+        boton.setProperty("role", role)
+        boton.style().unpolish(boton)
+        boton.style().polish(boton)
+
+    def mostrar_estado_operativo(
+        self, estado, pedidos, kg, bultos, permitir_continuar=True
+    ):
+        textos = {
+            "EN_PREPARACION": "Estado: EN PREPARACIÓN — Falta revisar y validar",
+            "LISTA": "Estado: LISTA — Puede imprimir / despachar",
+            "DESPACHADA": "Estado: DESPACHADA — Circuito operativo finalizado",
+        }
+        self.lbl_estado_operativo.setText(
+            textos.get(estado, "Estado: {}".format(estado or "sin definir"))
+        )
+        self.lbl_resumen_hoja.setText(
+            "Pedidos: {} · KG: {} · Bultos: {}".format(pedidos, kg, bultos)
+        )
+
+        puede_continuar = bool(pedidos) and estado != "DESPACHADA" and permitir_continuar
+        self.btn_continuar.setEnabled(puede_continuar)
+        self.btn_continuar.setVisible(permitir_continuar)
+
+        if estado == "EN_PREPARACION":
+            self.btn_continuar.setText("Hoja correcta → Continuar a validación")
+            self.btn_imprimir.setText("Vista previa PDF")
+            self._set_role(self.btn_continuar, "primary")
+            self._set_role(self.btn_imprimir, "secondary")
+        elif estado == "LISTA":
+            self.btn_continuar.setText("Continuar a despacho")
+            self.btn_imprimir.setText("Imprimir PDF")
+            self._set_role(self.btn_continuar, "secondary")
+            self._set_role(self.btn_imprimir, "primary")
+        else:
+            self.btn_imprimir.setText("Reimprimir PDF")
+            self._set_role(self.btn_continuar, "secondary")
+            self._set_role(self.btn_imprimir, "secondary")
 
 
 class ModificaHojaDeRutaView(VistaBase):
