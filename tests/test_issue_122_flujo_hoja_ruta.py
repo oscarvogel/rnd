@@ -241,3 +241,103 @@ def test_cambio_de_recursos_invalida_estado_lista_y_bloquea_despachadas():
     assert "estado.estado == EstadoHojaRuta.DESPACHADA" in source
     assert "No se pueden modificar sus recursos" in source
     assert "estado.estado = EstadoHojaRuta.EN_PREPARACION" in source
+
+
+
+def test_checklist_pendiente_expone_codigo_para_doble_click():
+    app = _app()
+    assert app is not None
+    from vistas.ValidacionHojaRuta import ValidacionHojaRutaView
+
+    view = ValidacionHojaRutaView()
+    resultado = SimpleNamespace(
+        pedidos=1,
+        kg=10,
+        bultos=1,
+        valida=False,
+        items=(
+            SimpleNamespace(
+                codigo="datos",
+                descripcion="No contiene errores operativos bloqueantes",
+                cumplido=False,
+                detalle="Hay pedidos sin cliente o lugar de entrega.",
+            ),
+        ),
+    )
+    try:
+        view.mostrar(resultado, "EN_PREPARACION")
+        assert view.codigo_fila(0) == "datos"
+        assert "Doble clic" in view.lbl_ayuda.text()
+        assert "Doble clic" in view.tabla.item(0, 2).toolTip()
+    finally:
+        view.deleteLater()
+
+
+def test_doble_click_datos_deriva_a_correccion_operativa():
+    from controladores.ValidacionHojaRuta import ValidacionHojaRutaController
+
+    controller = ValidacionHojaRutaController.__new__(ValidacionHojaRutaController)
+    controller.view = MagicMock()
+    controller.view.codigo_fila.return_value = "datos"
+    controller.resultado_actual = SimpleNamespace(
+        items=(
+            SimpleNamespace(
+                codigo="datos",
+                cumplido=False,
+            ),
+        )
+    )
+    controller.resolver_datos_operativos = MagicMock()
+
+    controller.resolver_pendiente(5, 2)
+
+    controller.resolver_datos_operativos.assert_called_once_with()
+
+
+def test_doble_click_recursos_deriva_a_asignacion():
+    from controladores.ValidacionHojaRuta import ValidacionHojaRutaController
+
+    controller = ValidacionHojaRutaController.__new__(ValidacionHojaRutaController)
+    controller.view = MagicMock()
+    controller.view.codigo_fila.return_value = "chofer"
+    controller.resultado_actual = SimpleNamespace(
+        items=(
+            SimpleNamespace(
+                codigo="chofer",
+                cumplido=False,
+            ),
+        )
+    )
+    controller.resolver_recursos = MagicMock()
+
+    controller.resolver_pendiente(3, 1)
+
+    controller.resolver_recursos.assert_called_once_with()
+
+
+def test_bandeja_puede_enfocar_factura_por_hoja():
+    app = _app()
+    assert app is not None
+    from vistas.BandejaPedidos import BandejaPedidosView
+
+    view = BandejaPedidosView()
+    try:
+        factura = SimpleNamespace(
+            clave="F-TEST",
+            estado=lambda *_: "observado",
+            factura="N0001-000001",
+            cliente="Cliente",
+            lugar_entrega="Lugar",
+            ruta="Centro",
+            productos=1,
+            cantidad=1,
+            kg=10,
+            bultos=1,
+            remito="",
+            observaciones="",
+        )
+        view.cargar_facturas([factura], 23, 1)
+        assert view.seleccionar_clave("F-TEST")
+        assert view.clave_fila_actual() == "F-TEST"
+    finally:
+        view.deleteLater()
