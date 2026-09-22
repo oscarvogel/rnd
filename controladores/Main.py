@@ -106,7 +106,9 @@ class MainController(ControladorBase):
             self.view.ventana_menu_lateral = ValidacionHojaRutaController(fecha_inicial=date.today(), ruta_inicial=ruta_id)
         elif accion == NAV_HOJAS_RUTA_DIA:
             from controladores.VerHojaRuta import VerHojaRutaController
-            self.view.ventana_menu_lateral = VerHojaRutaController(fecha_inicial=date.today())
+            self.view.ventana_menu_lateral = VerHojaRutaController(
+                fecha_inicial=date.today(), ruta_inicial=ruta_id
+            )
         elif accion in (NAV_VENCIMIENTOS, NAV_ALERTAS):
             from controladores.ABMEquipos import ABMEquiposController
             self.view.ventana_menu_lateral = ABMEquiposController()
