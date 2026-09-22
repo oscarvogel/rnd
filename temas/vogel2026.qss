@@ -10,7 +10,7 @@
  *   blue-500   #0A84D8   accion principal, seleccion, foco
  *   blue-600   #0866C8   hover/pressed de accion principal
  *   yellow-500 #F5C518   acento restringido (indicadores puntuales)
- *   bg         #F2F8FC   fondo de la ventana
+ *   bg         #F8FAFC   fondo de la ventana
  *   surface    #FFFFFF   tarjetas y campos
  *   text       #0F172A   texto principal
  *   text-muted #475569   texto secundario
@@ -48,14 +48,14 @@ QWidget#shellCentralRoot {
 QWidget#areaCentralShell,
 QWidget#shellCuerpo,
 QDialog {
-    background-color: #F2F8FC;
+    background-color: #F8FAFC;
 }
 
 QWidget {
     /* Fondo seguro para cualquier formulario o contenedor sin selector.
      * No usar transparent aqui: en Windows con paleta oscura expone negro
      * mientras el texto global sigue siendo #0F172A. */
-    background-color: #F2F8FC;
+    background-color: #F8FAFC;
     selection-background-color: #0A84D8;
     selection-color: #FFFFFF;
 }
@@ -64,7 +64,7 @@ QWidget {
  * Esta regla debe quedar despues de QWidget: de otro modo el fondo
  * transparente expone el respaldo negro de la ventana nativa. */
 QDialog {
-    background-color: #F2F8FC;
+    background-color: #F8FAFC;
     color: #0F172A;
 }
 
