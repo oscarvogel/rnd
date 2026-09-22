@@ -177,16 +177,25 @@ class ValidacionHojaRutaController(ControladorBase):
             fecha_inicial=self.fecha_actual()
         )
         self.ventana_correccion.run()
-        if not self.ventana_correccion.seleccionar_factura_por_hoja(
+        encontrada = self.ventana_correccion.seleccionar_factura_por_hoja(
             registro.id,
             abrir=True,
-        ):
+        )
+        if not encontrada:
             showAlert(
                 "Sistema",
                 "Se abrió Organizar pedidos, pero no se pudo ubicar automáticamente "
                 "la factura pendiente.",
             )
-        self.view.close()
+            self.view.close()
+            return
+
+        # El editor de factura es modal. Al cerrarlo, volvemos al checklist
+        # y mostramos inmediatamente si queda otro requisito pendiente.
+        self.ventana_correccion.view.close()
+        self.cargar()
+        self.view.raise_()
+        self.view.activateWindow()
 
     def ver_hoja_ruta(self):
         ruta_id = self.view.ruta_id()
