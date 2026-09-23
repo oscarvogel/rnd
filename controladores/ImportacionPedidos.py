@@ -72,6 +72,10 @@ class ImportacionPedidosController(ControladorBase):
         self.resumen_actual = ResumenImportacion()
         self.archivo_normalizado = False
         self.origen_pdf_ia = False
+        # La UI muestra siempre el archivo original elegido por el operador.
+        # Si necesita normalizacion, archivo_trabajo apunta al XLSX temporal.
+        self.archivo_trabajo = None
+        self.archivo_origen = None
         self.conectarWidgets()
 
     def run(self):
@@ -220,50 +224,114 @@ class ImportacionPedidosController(ControladorBase):
         if not cArchivo:
             return
 
-        self.archivo_normalizado = False
-        extension_origen = str(cArchivo).lower().rsplit(".", 1)[-1] if "." in str(cArchivo) else ""
-        self.origen_pdf_ia = extension_origen in {"pdf", "png", "jpg", "jpeg"}
-        self.view.avance.iniciar("Analizando archivo")
+        self.archivo_origen = cArchivo
+        self.archivo_trabajo = None
         self.view.txt_archivo.setText(cArchivo)
+
+        if not self._preparar_archivo(cArchivo):
+            return
+
+    def _preparar_archivo(self, archivo_origen):
+        """Convierte el archivo externo a un Excel legible por la vista previa.
+
+        La ruta original permanece visible en pantalla. Para PDF/imagen el
+        resultado de IA se guarda en self.archivo_trabajo. Si falla, nunca
+        se intenta abrir el PDF directamente con pandas.
+        """
+        archivo_origen = str(archivo_origen or "").strip()
+        if not archivo_origen:
+            return False
+
+        extension = archivo_origen.lower().rsplit(".", 1)[-1] if "." in archivo_origen else ""
+        self.origen_pdf_ia = extension in {"pdf", "png", "jpg", "jpeg"}
+        self.archivo_normalizado = False
+        self.archivo_trabajo = None
+        self.view.avance.iniciar(
+            "Procesando PDF/imagen con IA" if self.origen_pdf_ia else "Analizando archivo"
+        )
 
         metodo = self._metodo_importacion_proveedor()
         try:
             archivo_normalizado = normalizar_archivo_pedidos(
-                cArchivo,
+                archivo_origen,
                 progreso=self._actualizar_avance_preprocesamiento,
                 metodo=metodo,
             )
-        except ValueError as exc:
-            self.view.avance.marcar_error("Formato de archivo incorrecto")
+        except (ValueError, FileNotFoundError) as exc:
+            self.view.avance.marcar_error("No se pudo preparar el archivo")
+            self.view.lbl_previa.setText(
+                "El archivo todavía no está listo para cargar. Corrija el problema y vuelva a intentar."
+            )
             showAlert("Sistema", str(exc))
-            return
+            return False
+        except Exception as exc:
+            self.view.avance.marcar_error("No se pudo preparar el archivo")
+            self.view.lbl_previa.setText(
+                "El archivo todavía no está listo para cargar. Corrija el problema y vuelva a intentar."
+            )
+            showAlert(
+                "Sistema",
+                "No se pudo preparar el archivo para la importación: {}".format(exc),
+            )
+            return False
 
         if archivo_normalizado:
             self.archivo_normalizado = True
-            cArchivo = archivo_normalizado
-            self.view.txt_archivo.setText(cArchivo)
-            self.view.avance.finalizar("Archivo normalizado")
+            self.archivo_trabajo = archivo_normalizado
+            self.view.avance.finalizar(
+                "PDF/imagen procesado" if self.origen_pdf_ia else "Archivo normalizado"
+            )
         else:
+            if self.origen_pdf_ia:
+                self.view.avance.marcar_error("No se pudo procesar PDF/imagen")
+                self.view.lbl_previa.setText(
+                    "El PDF/imagen no pudo convertirse a pedidos. Vuelva a procesarlo."
+                )
+                showAlert(
+                    "Sistema",
+                    "El PDF/imagen no pudo convertirse al formato de importación.",
+                )
+                return False
+            self.archivo_trabajo = archivo_origen
             self.view.avance.finalizar("Archivo seleccionado")
 
-        xls = pd.ExcelFile(cArchivo)
+        try:
+            xls = pd.ExcelFile(self.archivo_trabajo)
+        except Exception as exc:
+            self.archivo_trabajo = None
+            self.view.avance.marcar_error("No se pudo leer el archivo preparado")
+            showAlert(
+                "Sistema",
+                "No se pudo leer el archivo preparado: {}".format(exc),
+            )
+            return False
+
         self.view.cbo_hoja.CargaDatos(list(xls.sheet_names))
         self.view.lbl_previa.setText(
             "Archivo preparado. Presione ‘Cargar vista previa’ para revisar los pedidos "
             "antes de grabarlos."
         )
+        return True
 
     @inicializar_y_capturar_excepciones
     def importar_pedidos(self, *args, **kwargs):
         """Carga una vista previa sin grabar aún hojas de ruta."""
         self.view.grid_datos.limpiarGrilla()
         self._actualizar_ayuda_proveedor()
-        if not self.view.txt_archivo.text():
+        archivo_visible = self.view.txt_archivo.text()
+        if not archivo_visible:
             showAlert("Sistema", "Debe seleccionar un archivo para importar")
             return
 
+        # Si antes falló el preprocesamiento (por ejemplo faltaba la API key),
+        # reintenta desde el archivo original. Nunca entrega un PDF a pandas.
+        if not self.archivo_trabajo:
+            self.archivo_origen = archivo_visible
+            if not self._preparar_archivo(archivo_visible):
+                return
+
         self.view.avance.iniciar("Leyendo archivo")
-        archivo = self.view.txt_archivo.text()
+        archivo = self.archivo_trabajo
         hoja = self.view.cbo_hoja.text()
         try:
             df = pd.read_excel(archivo, sheet_name=hoja, header=None)
