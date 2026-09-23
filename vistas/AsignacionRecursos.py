@@ -21,7 +21,7 @@ class AsignacionRecursosView(QWidget):
         titulo = QLabel("Asignar chofer y camión")
         titulo.setObjectName("asignacionRecursosTitulo")
         raiz.addWidget(titulo)
-        detalle = QLabel("Seleccione la fecha y la ruta. RND aplicará ambos recursos a todos los pedidos de esa hoja de ruta en una sola operación.")
+        detalle = QLabel("Seleccione la fecha y la ruta y cargue los datos de la hoja. Aquí verá pedidos, kilos, bultos y la asignación actual antes de elegir chofer y camión.")
         detalle.setWordWrap(True)
         raiz.addWidget(detalle)
 
@@ -35,7 +35,7 @@ class AsignacionRecursosView(QWidget):
         self.cbo_ruta = QComboBox()
         self.cbo_ruta.setMinimumWidth(260)
         filtros.addWidget(self.cbo_ruta)
-        self.btn_cargar = QPushButton("Cargar hoja")
+        self.btn_cargar = QPushButton("Cargar datos de hoja")
         filtros.addWidget(self.btn_cargar)
         filtros.addStretch(1)
         raiz.addLayout(filtros)
