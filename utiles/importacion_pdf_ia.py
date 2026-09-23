@@ -19,6 +19,7 @@ import base64
 import json
 import os
 import re
+import time
 import unicodedata
 import urllib.error
 import urllib.request
@@ -26,6 +27,10 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 import fitz
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 
 _EXT_IMAGEN = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
@@ -128,23 +133,30 @@ def _clave_nombre(nombre: str) -> str:
 
 
 def _configuracion() -> tuple[str, str, str, int]:
-    url = _texto(os.getenv("RND_PDF_AI_URL"))
-    api_key = _texto(os.getenv("RND_PDF_AI_API_KEY"))
-    model = _texto(os.getenv("RND_PDF_AI_MODEL"))
+    # RND permite sobreescribir proveedor/modelo, pero por defecto reutiliza
+    # la configuracion MiniMax-M3 que ya usamos en otros servicios Vogel.
+    url = (
+        _texto(os.getenv("RND_PDF_AI_URL"))
+        or _texto(os.getenv("GROUP_SUMMARY_AI_CHAT_URL"))
+        or "https://api.minimax.io/v1/chat/completions"
+    )
+    api_key = (
+        _texto(os.getenv("RND_PDF_AI_API_KEY"))
+        or _texto(os.getenv("MINIMAX_API_KEY"))
+        or _texto(os.getenv("GROUP_SUMMARY_AI_API_KEY"))
+    )
+    model = (
+        _texto(os.getenv("RND_PDF_AI_MODEL"))
+        or _texto(os.getenv("MINIMAX_MODEL"))
+        or _texto(os.getenv("GROUP_SUMMARY_AI_MODEL"))
+        or "MiniMax-M3"
+    )
     timeout_raw = _texto(os.getenv("RND_PDF_AI_TIMEOUT") or "120")
 
-    faltantes = []
-    if not url:
-        faltantes.append("RND_PDF_AI_URL")
     if not api_key:
-        faltantes.append("RND_PDF_AI_API_KEY")
-    if not model:
-        faltantes.append("RND_PDF_AI_MODEL")
-    if faltantes:
         raise ConfiguracionPdfIAError(
-            "Para importar PDF/imagen con IA falta configurar: {}. "
-            "Agregue esas variables al entorno de RND y vuelva a intentar."
-            .format(", ".join(faltantes))
+            "Para importar PDF/imagen con IA falta la API key. "
+            "Configure RND_PDF_AI_API_KEY o MINIMAX_API_KEY y vuelva a intentar."
         )
     try:
         timeout = max(15, int(timeout_raw))
@@ -157,6 +169,16 @@ def _extraer_json(texto: str) -> dict:
     contenido = _texto(texto)
     if not contenido:
         raise ExtraccionPdfIAError("La IA devolvio una respuesta vacia")
+
+    # MiniMax-M3 puede anteponer un bloque <think>...</think>. No forma parte
+    # del resultado estructurado y debe descartarse antes de buscar el JSON.
+    contenido = re.sub(
+        r"<think>.*?</think>",
+        "",
+        contenido,
+        flags=re.I | re.S,
+    ).strip()
+
     if contenido.startswith("```"):
         contenido = re.sub(r"^```(?:json)?\s*", "", contenido, flags=re.I)
         contenido = re.sub(r"\s*```$", "", contenido)
@@ -234,24 +256,41 @@ def _llamar_vision(
         },
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            raw = response.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        detalle = ""
+    raw = None
+    ultimo_error = None
+    for intento in range(1, 4):
         try:
-            detalle = exc.read().decode("utf-8", errors="replace")
-        except Exception:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                raw = response.read().decode("utf-8")
+            break
+        except urllib.error.HTTPError as exc:
+            ultimo_error = exc
             detalle = ""
-        detalle = detalle[:500]
+            try:
+                detalle = exc.read().decode("utf-8", errors="replace")
+            except Exception:
+                detalle = ""
+            detalle = detalle[:500]
+            if exc.code in {429, 500, 502, 503, 504} and intento < 3:
+                time.sleep(float(intento))
+                continue
+            raise ExtraccionPdfIAError(
+                "El servicio de IA rechazo la pagina (HTTP {}). {}"
+                .format(exc.code, detalle)
+            ) from exc
+        except urllib.error.URLError as exc:
+            ultimo_error = exc
+            if intento < 3:
+                time.sleep(float(intento))
+                continue
+            raise ExtraccionPdfIAError(
+                "No se pudo conectar con el servicio de IA: {}".format(exc.reason)
+            ) from exc
+
+    if raw is None:
         raise ExtraccionPdfIAError(
-            "El servicio de IA rechazo la pagina (HTTP {}). {}"
-            .format(exc.code, detalle)
-        ) from exc
-    except urllib.error.URLError as exc:
-        raise ExtraccionPdfIAError(
-            "No se pudo conectar con el servicio de IA: {}".format(exc.reason)
-        ) from exc
+            "No se obtuvo respuesta del servicio de IA: {}".format(ultimo_error)
+        )
 
     try:
         response_payload = json.loads(raw)
