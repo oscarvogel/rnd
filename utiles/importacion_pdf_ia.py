@@ -336,7 +336,8 @@ def _advertencias(*fuentes: Iterable[str]) -> list[str]:
     for fuente in fuentes:
         if not fuente:
             continue
-        for valor in fuente:
+        valores = [fuente] if isinstance(fuente, str) else fuente
+        for valor in valores:
             texto = _texto(valor)
             if texto and texto not in salida:
                 salida.append(texto)
@@ -410,6 +411,22 @@ def _normalizar_documento(data: dict, numero_pagina: int) -> list[dict]:
         if advertencias:
             observaciones.append(
                 "REVISAR IA: {}".format("; ".join(advertencias))
+            )
+
+        faltantes_criticos = []
+        if not cliente_nombre:
+            faltantes_criticos.append("cliente")
+        if not numero_documento:
+            faltantes_criticos.append("documento")
+        if not localidad:
+            faltantes_criticos.append("localidad")
+        if not descripcion and not codigo_producto:
+            faltantes_criticos.append("producto")
+        if cantidad in ("", None):
+            faltantes_criticos.append("cantidad")
+        if faltantes_criticos:
+            observaciones.append(
+                "REVISAR IA: faltan {}".format(", ".join(faltantes_criticos))
             )
 
         filas.append({
