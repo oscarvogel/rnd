@@ -93,7 +93,7 @@ def test_baja_confianza_queda_marcada_para_revision():
     }
 
     fila = _normalizar_documento(data, 5)[0]
-    assert "REVISAR IA" in fila["observaciones"]
+    assert "Advertencia IA" in fila["observaciones"]
     assert "sello sobre la tabla" in fila["observaciones"]
 
 
