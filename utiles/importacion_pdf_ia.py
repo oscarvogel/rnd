@@ -233,6 +233,9 @@ def _llamar_vision(
     )
     payload = {
         "model": model,
+        "thinking": {"type": "disabled"},
+        "temperature": 0.1,
+        "max_completion_tokens": 4096,
         "messages": [
             {"role": "system", "content": _SYSTEM_PROMPT},
             {
@@ -241,7 +244,10 @@ def _llamar_vision(
                     {"type": "text", "text": _USER_PROMPT},
                     {
                         "type": "image_url",
-                        "image_url": {"url": data_url},
+                        "image_url": {
+                            "url": data_url,
+                            "detail": "high",
+                        },
                     },
                 ],
             },
