@@ -148,15 +148,40 @@ def test_dashboard_se_recarga_al_recuperar_el_foco_principal():
     assert "dashboard.recargar()" in source
 
 
-def test_flujo_organizar_asignar_revisar_no_deja_ventanas_anteriores_abiertas():
+def test_flujo_asignar_revisar_permite_volver_a_asignacion():
     bandeja = (ROOT / "controladores/BandejaPedidos.py").read_text(encoding="utf-8")
     asignacion = (ROOT / "controladores/AsignacionRecursos.py").read_text(encoding="utf-8")
     revision = (ROOT / "controladores/VerHojaRuta.py").read_text(encoding="utf-8")
 
     assert "self.ventana_siguiente.run()\n        self.view.close()" in bandeja
-    assert "self.ventana_hoja.run()\n        # El flujo continúa" in asignacion
+    bloque_revision = asignacion.split("def ver_hoja_ruta", 1)[1].split("def ir_validacion", 1)[0]
+    assert "self.ventana_hoja.run()" in bloque_revision
+    assert "self.view.close()" not in bloque_revision
     assert "self.ventana_validacion.run()\n        self.view.close()" in revision
 
+
+
+def test_revisar_hoja_no_cierra_la_pantalla_de_asignacion():
+    from controladores.AsignacionRecursos import AsignacionRecursosController
+
+    controller = AsignacionRecursosController.__new__(AsignacionRecursosController)
+    controller.view = MagicMock()
+    controller.view.ruta_id.return_value = 4
+    controller.fecha_actual = MagicMock(return_value=date(2026, 9, 23))
+
+    destino = MagicMock()
+    with patch(
+        "controladores.VerHojaRuta.VerHojaRutaController",
+        return_value=destino,
+    ) as crear:
+        controller.ver_hoja_ruta()
+
+    crear.assert_called_once_with(
+        fecha_inicial=date(2026, 9, 23),
+        ruta_inicial=4,
+    )
+    destino.run.assert_called_once_with()
+    controller.view.close.assert_not_called()
 
 
 def test_asignacion_usa_combos_autocomplete_y_no_acepta_texto_invalido():
