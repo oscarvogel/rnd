@@ -412,11 +412,11 @@ def _normalizar_documento(data: dict, numero_pagina: int) -> list[dict]:
             confianza_num = None
         if confianza_num is not None and confianza_num < 0.80:
             observaciones.append(
-                "REVISAR IA: confianza {:.0f}%".format(confianza_num * 100)
+                "Advertencia IA: confianza {:.0f}%".format(confianza_num * 100)
             )
         if advertencias:
             observaciones.append(
-                "REVISAR IA: {}".format("; ".join(advertencias))
+                "Advertencia IA: {}".format("; ".join(advertencias))
             )
 
         faltantes_criticos = []
