@@ -19,6 +19,7 @@ import base64
 import json
 import os
 import re
+import sys
 import time
 import unicodedata
 import urllib.error
@@ -30,7 +31,21 @@ import fitz
 from dotenv import load_dotenv
 
 
-load_dotenv()
+def _cargar_entorno_ia():
+    """Carga .env desde la carpeta real de RND.
+
+    En desarrollo usa la raiz del repo. En el DEMO congelado usa la carpeta
+    donde vive RND Demo.exe, permitiendo que el instalador deje alli el .env
+    sin incrustarlo en el codigo Python.
+    """
+    if getattr(sys, "frozen", False):
+        raiz = Path(sys.executable).resolve().parent
+    else:
+        raiz = Path(__file__).resolve().parents[1]
+    load_dotenv(dotenv_path=raiz / ".env", override=False)
+
+
+_cargar_entorno_ia()
 
 
 _EXT_IMAGEN = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
