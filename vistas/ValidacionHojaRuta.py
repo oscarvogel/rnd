@@ -83,7 +83,10 @@ class ValidacionHojaRutaView(QWidget):
         self.btn_hoja = QPushButton("Ver / imprimir hoja")
         self.btn_hoja.setEnabled(False)
         acciones.addWidget(self.btn_hoja)
-        self.btn_despachar = QPushButton("Marcar DESPACHADA")
+        self.btn_despachar = QPushButton("Confirmar salida a reparto")
+        self.btn_despachar.setToolTip(
+            "Indica que el camión salió a reparto. No marca los pedidos como entregados."
+        )
         acciones.addWidget(self.btn_despachar)
         self.btn_cerrar = QPushButton("Cerrar")
         acciones.addWidget(self.btn_cerrar)
