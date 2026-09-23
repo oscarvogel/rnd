@@ -245,18 +245,10 @@ class ImportacionPedidosController(ControladorBase):
 
         xls = pd.ExcelFile(cArchivo)
         self.view.cbo_hoja.CargaDatos(list(xls.sheet_names))
-        extension_origen = str(cArchivo).lower().rsplit(".", 1)[-1]
-        if extension_origen == "xlsx":
-            mensaje_previa = (
-                "Archivo preparado. Presione ‘Cargar vista previa’ para revisar los pedidos "
-                "antes de grabarlos."
-            )
-        else:
-            mensaje_previa = (
-                "Archivo preparado. Presione ‘Cargar vista previa’ para revisar los pedidos "
-                "antes de grabarlos."
-            )
-        self.view.lbl_previa.setText(mensaje_previa)
+        self.view.lbl_previa.setText(
+            "Archivo preparado. Presione ‘Cargar vista previa’ para revisar los pedidos "
+            "antes de grabarlos."
+        )
 
     @inicializar_y_capturar_excepciones
     def importar_pedidos(self, *args, **kwargs):
