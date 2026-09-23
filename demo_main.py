@@ -10,16 +10,25 @@ import sys
 from pathlib import Path
 
 
-def _configurar_fuentes_qt_windows():
-    """Evita el fallback roto PyQt5/Qt5/lib/fonts en instalaciones modernas."""
+def _configurar_qt_windows():
+    """Fuerza el backend gráfico interactivo del demo en Windows.
+
+    Algunos tests/terminales dejan QT_QPA_PLATFORM=offscreen. En ese caso Qt
+    ejecuta la aplicación pero ninguna ventana aparece y sólo imprime warnings
+    como "This plugin does not support propagateSizeHints()".
+    """
     if os.name != "nt":
         return
+
+    if os.environ.get("QT_QPA_PLATFORM", "").strip().lower() == "offscreen":
+        os.environ.pop("QT_QPA_PLATFORM", None)
+
     windows_fonts = os.path.join(os.environ.get("WINDIR", r"C:\\Windows"), "Fonts")
     if os.path.isdir(windows_fonts):
         os.environ.setdefault("QT_QPA_FONTDIR", windows_fonts)
 
 
-_configurar_fuentes_qt_windows()
+_configurar_qt_windows()
 
 
 def _app_root() -> Path:
