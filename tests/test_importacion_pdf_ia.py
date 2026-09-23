@@ -17,9 +17,10 @@ from utiles.importacion_pdf_ia import (
 from utiles.importacion_proveedores_excel import normalizar_archivo_pedidos
 
 
-def test_extraer_json_acepta_bloque_markdown():
+def test_extraer_json_acepta_bloque_markdown_y_think():
     data = _extraer_json(
-        """```json
+        """<think>analisis interno del modelo</think>
+```json
 {"documento": {"tipo": "FACTURA"}, "items": []}
 ```"""
     )
@@ -96,14 +97,25 @@ def test_baja_confianza_queda_marcada_para_revision():
     assert "sello sobre la tabla" in fila["observaciones"]
 
 
-def test_configuracion_incompleta_muestra_variables_faltantes():
+def test_configuracion_por_defecto_reutiliza_minimax_y_solo_exige_api_key():
     with patch.dict(os.environ, {}, clear=True):
         with pytest.raises(ConfiguracionPdfIAError) as exc:
             _configuracion()
-    mensaje = str(exc.value)
-    assert "RND_PDF_AI_URL" in mensaje
-    assert "RND_PDF_AI_API_KEY" in mensaje
-    assert "RND_PDF_AI_MODEL" in mensaje
+    assert "RND_PDF_AI_API_KEY" in str(exc.value)
+    assert "MINIMAX_API_KEY" in str(exc.value)
+
+
+def test_configuracion_reutiliza_minimax_api_key():
+    with patch.dict(
+        os.environ,
+        {"MINIMAX_API_KEY": "secreto-test"},
+        clear=True,
+    ):
+        url, api_key, model, timeout = _configuracion()
+    assert url == "https://api.minimax.io/v1/chat/completions"
+    assert api_key == "secreto-test"
+    assert model == "MiniMax-M3"
+    assert timeout == 120
 
 
 def test_normalizador_general_enruta_pdf_a_ia():
