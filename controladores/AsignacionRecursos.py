@@ -208,9 +208,9 @@ class AsignacionRecursosController(ControladorBase):
             ruta_inicial=self.view.ruta_id(),
         )
         self.ventana_hoja.run()
-        # El flujo continúa en revisión; evitamos dejar dos ventanas operativas
-        # apiladas y, al finalizar, el usuario vuelve al dashboard principal.
-        self.view.close()
+        # La asignación queda abierta detrás de la revisión. Si el usuario
+        # cierra la hoja, vuelve exactamente al punto anterior para poder
+        # corregir fecha, ruta, chofer o camión sin reiniciar el circuito.
 
     def ir_validacion(self):
         from controladores.ValidacionHojaRuta import ValidacionHojaRutaController
