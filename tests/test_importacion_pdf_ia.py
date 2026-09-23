@@ -118,6 +118,34 @@ def test_configuracion_reutiliza_minimax_api_key():
     assert timeout == 120
 
 
+def test_advertencia_string_no_se_parte_en_caracteres_y_faltantes_desmarcables():
+    data = {
+        "documento": {
+            "tipo": "FACTURA",
+            "numero": "",
+            "cliente_codigo": "",
+            "cliente_nombre": "CLIENTE PRUEBA",
+            "localidad": "",
+            "confianza": 0.92,
+            "advertencias": "sello sobre el numero",
+        },
+        "items": [
+            {
+                "codigo": "311",
+                "descripcion": "Queso Cremoso",
+                "cantidad": None,
+                "kilos": 12.5,
+                "confianza": 0.92,
+                "advertencias": [],
+            }
+        ],
+    }
+
+    fila = _normalizar_documento(data, 1)[0]
+    assert "sello sobre el numero" in fila["observaciones"]
+    assert "REVISAR IA: faltan documento, localidad, cantidad" in fila["observaciones"]
+
+
 def test_normalizador_general_enruta_pdf_a_ia():
     fila = {
         "codigo_cliente": "1941",
