@@ -18,9 +18,10 @@ from vistas.AsignacionRecursos import AsignacionRecursosView
 
 
 class AsignacionRecursosController(ControladorBase):
-    def __init__(self, fecha_inicial=None, ruta_inicial=0):
+    def __init__(self, fecha_inicial=None, ruta_inicial=0, on_saved=None):
         super().__init__()
         self.view = AsignacionRecursosView()
+        self.on_saved = on_saved
         self.empleado_generico = int(ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23"))
         self.camion_generico = int(ParamSist.ObtenerParametro("CAMION_GENERICO", "1"))
         self.ruta_inicial = int(ruta_inicial or 0)
@@ -197,6 +198,8 @@ class AsignacionRecursosController(ControladorBase):
         equipo = self._nombre_equipo(equipo_id)
         self.cargar_hoja()
         self.view.mostrar_exito(fecha, ruta, responsable, equipo)
+        if callable(self.on_saved):
+            self.on_saved()
 
     def ver_hoja_ruta(self):
         from controladores.VerHojaRuta import VerHojaRutaController
