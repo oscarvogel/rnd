@@ -27,6 +27,7 @@ def test_asignacion_muestra_revision_como_siguiente_paso_y_oculta_atajo_validaci
 
     view = AsignacionRecursosView()
     try:
+        assert view.btn_cargar.text() == "Cargar datos de hoja"
         assert view.btn_ver_hoja.text() == "Revisar hoja de ruta"
         assert view.btn_siguiente.isHidden()
         view.mostrar_exito(
@@ -40,6 +41,14 @@ def test_asignacion_muestra_revision_como_siguiente_paso_y_oculta_atajo_validaci
         assert "Hoja lista para revisar" in view.lbl_exito.text()
     finally:
         view.deleteLater()
+
+
+def test_cargar_datos_explica_cuando_no_hay_pedidos():
+    source = (ROOT / "controladores" / "AsignacionRecursos.py").read_text(
+        encoding="utf-8"
+    )
+    assert "No se encontraron pedidos para la fecha y ruta seleccionadas" in source
+    assert "Datos cargados. Recursos completos" in source
 
 
 def test_revision_continua_a_validacion_con_misma_fecha_y_ruta():
