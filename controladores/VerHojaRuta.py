@@ -234,9 +234,11 @@ class VerHojaRutaController(ControladorBase):
         self.ventana_recursos = AsignacionRecursosController(
             fecha_inicial=self.view.fecha_reparto.valor(),
             ruta_inicial=ruta_id,
+            on_saved=self.on_click_btn_cargar,
         )
         self.ventana_recursos.run()
-        self.view.close()
+        # La revisión permanece abierta. Al guardar recursos se refresca
+        # automáticamente para poder seguir trabajando sobre la misma hoja.
     
     def ir_validacion(self):
         ruta_id = int(self.view.cbo_ruta_reparto.valor() or 0)
