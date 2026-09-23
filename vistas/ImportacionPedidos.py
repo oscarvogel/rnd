@@ -113,7 +113,7 @@ class ImportacionPedidosView(VistaBase):
         self.btn_examinar = Boton(
             texto="Seleccionar archivo",
             imagen=imagen("79354_excel_icon.png"),
-            tooltip="Seleccionar archivo de pedidos a importar"
+            tooltip="Seleccionar Excel, PDF o imagen de pedidos a importar"
         )
         self.btn_examinar.setProperty("role", "primary")
         fila_archivo.addWidget(self.btn_examinar)
@@ -137,7 +137,8 @@ class ImportacionPedidosView(VistaBase):
         layout_archivo.addLayout(fila_opciones)
 
         nota_opciones = QLabel(
-            "Normalmente no necesitás indicar filas: si las dejás vacías RND toma toda la hoja."
+            "Excel: podés indicar filas si hace falta. PDF/imagen: RND extrae los pedidos con IA "
+            "y luego usa esta misma vista previa para que los revises antes de grabar."
         )
         nota_opciones.setWordWrap(True)
         nota_opciones.setObjectName("importacionNotaTecnica")
