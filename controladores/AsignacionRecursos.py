@@ -97,11 +97,19 @@ class AsignacionRecursosController(ControladorBase):
         )
         self.view.btn_siguiente.setEnabled(completa)
         self.view.btn_ver_hoja.setEnabled(not self.resumen_actual.vacia)
-        self.view.lbl_estado.setText(
-            "Recursos completos. Revise la hoja de ruta y luego continúe con la validación."
-            if completa else
-            "Falta asignar un chofer y un camión válidos."
-        )
+        if self.resumen_actual.vacia:
+            self.view.lbl_estado.setText(
+                "No se encontraron pedidos para la fecha y ruta seleccionadas. "
+                "Revise ambos datos y vuelva a cargar."
+            )
+        elif completa:
+            self.view.lbl_estado.setText(
+                "Datos cargados. Recursos completos: puede revisar la hoja de ruta."
+            )
+        else:
+            self.view.lbl_estado.setText(
+                "Datos cargados. Falta asignar un chofer y un camión válidos."
+            )
 
     def _nombre_responsable(self, empleado_id):
         if not empleado_id or int(empleado_id) == self.empleado_generico:
