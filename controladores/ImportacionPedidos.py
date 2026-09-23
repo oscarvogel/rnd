@@ -71,6 +71,7 @@ class ImportacionPedidosController(ControladorBase):
         self.msg_box = None
         self.resumen_actual = ResumenImportacion()
         self.archivo_normalizado = False
+        self.origen_pdf_ia = False
         self.conectarWidgets()
 
     def run(self):
@@ -220,6 +221,8 @@ class ImportacionPedidosController(ControladorBase):
             return
 
         self.archivo_normalizado = False
+        extension_origen = str(cArchivo).lower().rsplit(".", 1)[-1] if "." in str(cArchivo) else ""
+        self.origen_pdf_ia = extension_origen in {"pdf", "png", "jpg", "jpeg"}
         self.view.avance.iniciar("Analizando archivo")
         self.view.txt_archivo.setText(cArchivo)
 
@@ -299,6 +302,12 @@ class ImportacionPedidosController(ControladorBase):
             valor_para_vista_previa(valor)
             for valor in df.iloc[fila_cabeceras].tolist()
         ]
+        if self.origen_pdf_ia:
+            # La IA propone; el operador puede corregir cualquier dato antes
+            # de grabar. Excel conserva el comportamiento historico.
+            self.view.grid_datos.columnasHabilitadas = list(range(len(cabeceras)))
+        else:
+            self.view.grid_datos.columnasHabilitadas = [0]
         inicio_datos = fila_cabeceras + 1
         df_datos = df.iloc[inicio_datos:].reset_index(drop=True)
         df_datos.columns = df.iloc[fila_cabeceras]
@@ -331,7 +340,12 @@ class ImportacionPedidosController(ControladorBase):
                 "Cargando vista previa {}/{}".format(avance, total_filas),
             )
             row = df_datos.iloc[i]
-            item = [True]
+            importa_por_defecto = True
+            if self.origen_pdf_ia:
+                observaciones_ia = str(row.get("observaciones", "") or "")
+                # Datos dudosos nunca quedan seleccionados automaticamente.
+                importa_por_defecto = "REVISAR IA" not in observaciones_ia.upper()
+            item = [importa_por_defecto]
             item.extend(valor_para_vista_previa(valor) for valor in row.tolist())
             self.view.grid_datos.AgregaItem(item)
 
@@ -342,9 +356,15 @@ class ImportacionPedidosController(ControladorBase):
         self.resumen_actual = ResumenImportacion(leidos=total_filas)
         self.view.mostrar_previa(total_filas)
         self.view.lbl_resultado_titulo.setText("Vista previa cargada")
-        self.view.lbl_resultado_detalle.setText(
-            "Revise los {} registros y presione ‘Grabar pedidos’ para incorporarlos al reparto.".format(total_filas)
-        )
+        if self.origen_pdf_ia:
+            self.view.lbl_resultado_detalle.setText(
+                "Revise los {} registros. Puede corregir las celdas; las filas marcadas "
+                "REVISAR IA quedan desmarcadas hasta que el operador las valide.".format(total_filas)
+            )
+        else:
+            self.view.lbl_resultado_detalle.setText(
+                "Revise los {} registros y presione ‘Grabar pedidos’ para incorporarlos al reparto.".format(total_filas)
+            )
 
     @inicializar_y_capturar_excepciones
     @reconnect_if_needed
