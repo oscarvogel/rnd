@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QMessageBox
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -106,9 +106,39 @@ def test_validacion_lista_habilita_ver_imprimir_y_despachar():
         view.mostrar(resultado, "LISTA")
         assert view.btn_hoja.isEnabled()
         assert view.btn_despachar.isEnabled()
+        assert view.btn_despachar.text() == "Confirmar salida a reparto"
+        assert "No marca los pedidos como entregados" in view.btn_despachar.toolTip()
         assert "Genere o revise el PDF" in view.lbl_mensaje.text()
     finally:
         view.deleteLater()
+
+
+def test_confirmar_salida_a_reparto_explica_y_despacha_solo_si_confirma():
+    from controladores.ValidacionHojaRuta import ValidacionHojaRutaController
+    from modelos.EstadoHojaRuta import EstadoHojaRuta
+
+    controller = ValidacionHojaRutaController.__new__(ValidacionHojaRutaController)
+    controller.view = MagicMock()
+    controller.cambiar_estado = MagicMock()
+
+    with patch(
+        "controladores.ValidacionHojaRuta.QMessageBox.question",
+        return_value=QMessageBox.No,
+    ) as preguntar:
+        controller.confirmar_despacho()
+
+    controller.cambiar_estado.assert_not_called()
+    texto = preguntar.call_args.args[2]
+    assert "salió a reparto" in texto
+    assert "No marca los pedidos como entregados" in texto
+
+    with patch(
+        "controladores.ValidacionHojaRuta.QMessageBox.question",
+        return_value=QMessageBox.Yes,
+    ):
+        controller.confirmar_despacho()
+
+    controller.cambiar_estado.assert_called_once_with(EstadoHojaRuta.DESPACHADA)
 
 
 def test_dashboard_se_recarga_al_recuperar_el_foco_principal():
@@ -170,13 +200,14 @@ def test_ver_hoja_muestra_recursos_solo_lectura_y_deriva_a_asignacion():
         view.deleteLater()
 
 
-def test_modificar_recursos_conserva_fecha_ruta_y_cierra_revision_actual():
+def test_modificar_recursos_conserva_revision_abierta_y_refresca_al_guardar():
     from controladores.VerHojaRuta import VerHojaRutaController
 
     controller = VerHojaRutaController.__new__(VerHojaRutaController)
     controller.view = MagicMock()
     controller.view.cbo_ruta_reparto.valor.return_value = 4
     controller.view.fecha_reparto.valor.return_value = date(2026, 9, 22)
+    controller.on_click_btn_cargar = MagicMock()
 
     destino = MagicMock()
     with patch(
@@ -188,9 +219,10 @@ def test_modificar_recursos_conserva_fecha_ruta_y_cierra_revision_actual():
     crear.assert_called_once_with(
         fecha_inicial=date(2026, 9, 22),
         ruta_inicial=4,
+        on_saved=controller.on_click_btn_cargar,
     )
     destino.run.assert_called_once_with()
-    controller.view.close.assert_called_once_with()
+    controller.view.close.assert_not_called()
 
 
 def test_hoja_lista_con_recursos_pendientes_se_marca_como_inconsistente():
