@@ -2,6 +2,7 @@
 from datetime import date, datetime
 
 from PyQt5.QtCore import QDate
+from PyQt5.QtWidgets import QMessageBox
 
 from modelos.Clientes import RutaReparto
 from modelos.EstadoHojaRuta import EstadoHojaRuta
@@ -36,7 +37,7 @@ class ValidacionHojaRutaController(ControladorBase):
         self.view.cbo_ruta.currentIndexChanged.connect(self.cargar)
         self.view.btn_lista.clicked.connect(lambda: self.cambiar_estado(EstadoHojaRuta.LISTA))
         self.view.btn_hoja.clicked.connect(self.ver_hoja_ruta)
-        self.view.btn_despachar.clicked.connect(lambda: self.cambiar_estado(EstadoHojaRuta.DESPACHADA))
+        self.view.btn_despachar.clicked.connect(self.confirmar_despacho)
         self.view.btn_asignar.clicked.connect(self.resolver_recursos)
         self.view.tabla.cellDoubleClicked.connect(self.resolver_pendiente)
         self.view.btn_cerrar.clicked.connect(self.view.close)
@@ -69,6 +70,22 @@ class ValidacionHojaRutaController(ControladorBase):
         )
         self.estado_actual = estado.estado if estado else EstadoHojaRuta.EN_PREPARACION
         self.view.mostrar(self.resultado_actual, self.estado_actual)
+
+    def confirmar_despacho(self):
+        respuesta = QMessageBox.question(
+            self.view,
+            "Confirmar salida a reparto",
+            (
+                "Esta acción indica que el camión salió a reparto con esta hoja de ruta.\n\n"
+                "No marca los pedidos como entregados.\n\n"
+                "¿Confirmar la salida a reparto?"
+            ),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if respuesta != QMessageBox.Yes:
+            return
+        self.cambiar_estado(EstadoHojaRuta.DESPACHADA)
 
     @reconnect_if_needed
     @inicializar_y_capturar_excepciones
