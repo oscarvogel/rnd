@@ -36,6 +36,42 @@ class ABMClientesController(ControladorBaseABM):
         self.view.btn_lugar_agregar.clicked.connect(self.on_click_lugar_agregar)
         self.view.btn_lugar_editar.clicked.connect(self.on_click_lugar_editar)
         self.view.btn_lugar_borrar.clicked.connect(self.on_click_lugar_borrar)
+
+    def _copiar_controles_al_modelo(self, dato, es_alta):
+        """Copia la ficha al modelo sin forzar el PK autoincremental en altas."""
+        for nombre, control in self.view.controles.items():
+            if (
+                es_alta
+                and self.view.autoincremental
+                and nombre == self.campoclave
+            ):
+                continue
+            dato.__data__[nombre] = control.valor()
+
+    @reconnect_if_needed
+    @inicializar_y_capturar_excepciones
+    def onClickBtnAceptar(self, *args, **kwargs):
+        """Guarda clientes respetando el AutoField también en SQLite/DEMO."""
+        if not self.model:
+            Ventanas.showAlert("Sistema", "Debes establecer un modelo a actualizar")
+            return
+        if self.campoclave is None:
+            Ventanas.showAlert("Sistema", "Debes establecer un campo clave a actualizar")
+            return
+
+        if self.onPreClickAceptar():
+            es_alta = self.view.tipo == 'A'
+            if es_alta:
+                dato = self.model()
+            else:
+                registro_id = self.view.idtabla or self.view.controles[self.campoclave].text()
+                dato = self.model.get_by_id(registro_id)
+
+            self._copiar_controles_al_modelo(dato, es_alta)
+            dato.save(force_insert=es_alta)
+            self.view.idtabla = dato.get_id()
+            self.view.btnAceptarClicked()
+        self.onPostClickAceptar()
         
     def on_click_btn_codigo(self):
         row = self.view.tableView.filaSeleccionada()
