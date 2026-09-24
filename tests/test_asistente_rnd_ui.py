@@ -66,10 +66,13 @@ def test_panel_se_mantiene_visible_sobre_abm_sin_robar_foco():
     source = Path("vistas/AsistenteRndPanel.py").read_text(encoding="utf-8")
 
     assert "QTimer" in source
-    assert "setInterval(450)" in source
+    assert "setInterval(300)" in source
     assert "timeout.connect(self._keep_visible_above_rnd)" in source
-    assert "def _keep_visible_above_rnd(self):" in source
-    assert "self.raise_()" in source
+    assert "def _set_native_topmost(self, enabled):" in source
+    assert "user32.SetWindowPos" in source
+    assert "SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE | SWP_SHOWWINDOW" in source
+    assert "self._set_native_topmost(True)" in source
+    assert "self._set_native_topmost(False)" in source
 
     keep_block = source.split("def _keep_visible_above_rnd(self):", 1)[1].split(
         "def show_panel(self):", 1
