@@ -10,6 +10,7 @@ runtime_datas = [
     ("../assets", "assets"),
     ("../imagenes", "imagenes"),
     ("../temas", "temas"),
+    ("../docs/asistente_rnd_conocimiento_tecnico.md", "docs"),
     ("../sistema.demo.ini", "."),
     ("../rnd.ini", "."),
 ]
