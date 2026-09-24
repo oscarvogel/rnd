@@ -114,6 +114,37 @@ QLabel#encabezadoUsuario {
     font-weight: 600;
 }
 
+QPushButton#encabezadoBotonAsistente {
+    background-color: rgba(255,255,255,28);
+    color: #F2F8FC;
+    border: 1px solid #7DD3FC;
+    border-radius: 14px;
+    padding: 5px 14px;
+    min-height: 28px;
+    font-weight: 600;
+}
+
+QPushButton#encabezadoBotonAsistente:hover {
+    background-color: rgba(255,255,255,46);
+    border-color: #F5C518;
+    color: #FFFFFF;
+}
+
+QPushButton#encabezadoBotonAsistente:pressed {
+    background-color: #07529F;
+}
+
+QPushButton#encabezadoBotonAsistente:focus {
+    border: 2px solid #F5C518;
+    padding: 4px 13px;
+}
+
+QPushButton#encabezadoBotonAsistente:disabled {
+    background-color: transparent;
+    color: #94A3B8;
+    border-color: #64748B;
+}
+
 QPushButton#encabezadoBotonSalir {
     background-color: #0A84D8;
     color: #FFFFFF;
