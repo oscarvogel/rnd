@@ -111,6 +111,9 @@ class LugarEntrega(ModeloBase):
 
     class Meta:
         db_table = 'lugares_entrega'
+        indexes = (
+            (('cliente', 'nombre', 'direccion'), True),
+        )
 
     def __str__(self):
         return self.nombre
