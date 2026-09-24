@@ -1,5 +1,6 @@
 # coding=utf-8
 import json
+from pathlib import Path
 
 from utiles.asistente_rnd_conocimiento import knowledge_for_prompt, suggestions
 from utiles.asistente_rnd_servicio import OUT_OF_SCOPE, UNRESOLVED, answer_message
@@ -101,3 +102,20 @@ def test_sugerencias_son_genericas_y_no_rutean_intenciones():
     values = suggestions()
     assert "¿Qué puedo hacer desde esta pantalla?" in values
     assert "¿Cuál es el siguiente paso?" in values
+
+
+def test_asistente_es_flotante_y_always_on_top():
+    source = Path("vistas/AsistenteRnd.py").read_text(encoding="utf-8")
+    assert "class AsistenteRndFlotante(QWidget)" in source
+    assert "Qt.WindowStaysOnTopHint" in source
+    assert "Qt.Tool" in source
+    assert "BUBBLE_SIZE = 62" in source
+    assert "PANEL_WIDTH = 410" in source
+
+
+def test_shell_no_depende_de_boton_asistente():
+    header = Path("vistas/shell/Encabezado.py").read_text(encoding="utf-8")
+    main = Path("controladores/Main.py").read_text(encoding="utf-8")
+    assert "boton_asistente" not in header
+    assert "AsistenteRndFlotante" in main
+    assert "_mostrar_asistente_flotante()" in main
