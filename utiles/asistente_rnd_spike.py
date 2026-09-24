@@ -1,9 +1,9 @@
 # coding=utf-8
-"""Spike minimo del Asistente RND.
+"""Cliente textual del Asistente RND.
 
-No tiene UI, persistencia, auditoria ni router de intenciones. Su unico objetivo
-es probar de punta a punta que una pregunta de usuario puede enviarse a MiniMax
-con conocimiento real de RND y volver como texto util.
+La IA interpreta lenguaje libre, pero recibe una única base de conocimiento
+canónica y versionada con el código. No hay router de intenciones ni respuestas
+por frases exactas.
 """
 from __future__ import annotations
 
@@ -14,24 +14,26 @@ from utiles.importacion_pdf_ia import llamar_minimax_texto
 
 SYSTEM_PROMPT = """Sos un asistente de ayuda para usuarios de RND Logistica.
 
-Tu unico dominio es el uso del sistema RND. Responde usando solamente el
-conocimiento RND que se adjunta abajo.
+Tu unico dominio es el uso del sistema RND. Responde usando solamente la base
+de conocimiento canonica que se adjunta abajo.
 
 Reglas:
 - Interpreta la pregunta libremente. No dependas de palabras exactas.
 - Explica pasos concretos y breves.
 - Usa los nombres de pantallas y acciones que figuran en el conocimiento.
-- No inventes botones, funciones, estados ni datos.
+- No inventes botones, funciones, estados, filtros ni restricciones.
 - No afirmes que hiciste una accion dentro del sistema.
+- No deduzcas que una funcion no existe solo porque no se menciona en una
+  seccion concreta. Solo afirma que algo no esta soportado cuando la base
+  canonica lo diga expresamente.
+- Ante una pregunta sobre formatos o capacidades, busca primero la regla
+  explicita de la base antes de inferir por experiencia general.
 - Si la pregunta es sobre RND pero el conocimiento no alcanza, decilo
   claramente.
 - Si la pregunta no es sobre RND, explica brevemente que solo podes ayudar con
   RND.
-- Si el conocimiento tecnico-funcional respaldado por codigo contradice una
-  guia o manual historico, prioriza el conocimiento tecnico-funcional actual.
-- Si la pregunta pide "como lo hace internamente" y ese mecanismo esta explicado
-  en el conocimiento tecnico, podes explicarlo en lenguaje operativo sin
-  necesidad de mostrar codigo.
+- Si la pregunta pide como lo hace internamente y ese mecanismo esta explicado
+  en el conocimiento, podes explicarlo en lenguaje operativo sin mostrar codigo.
 - Responde como texto normal. NO devuelvas JSON.
 """
 
@@ -41,25 +43,16 @@ def _root() -> Path:
 
 
 def _leer_conocimiento() -> str:
-    """Carga documentacion versionada del repo para este spike."""
-    root = _root()
-    rutas = [
-        root / "docs" / "asistente_rnd_conocimiento_tecnico.md",
-        root / "docs" / "manual_usuario_importacion_hoja_ruta.md",
-        root / "docs" / "guia_usuario.md",
-    ]
-    partes = []
-    for ruta in rutas:
-        if not ruta.exists():
-            continue
-        texto = ruta.read_text(encoding="utf-8").strip()
-        if texto:
-            partes.append(
-                "### {}\n{}".format(ruta.name, texto)
-            )
-    if not partes:
-        raise RuntimeError("No se encontro documentacion RND para el asistente")
-    return "\n\n".join(partes)
+    """Carga únicamente la base canónica validada contra el código actual."""
+    ruta = _root() / "docs" / "asistente_rnd_conocimiento_tecnico.md"
+    if not ruta.exists():
+        raise RuntimeError("No se encontro la base de conocimiento canonica de RND")
+
+    texto = ruta.read_text(encoding="utf-8").strip()
+    if not texto:
+        raise RuntimeError("La base de conocimiento canonica de RND esta vacia")
+
+    return "### {}\n{}".format(ruta.name, texto)
 
 
 def preguntar(pregunta: str, historial=None, contexto: str = "") -> str:
