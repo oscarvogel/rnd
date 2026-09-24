@@ -29,7 +29,7 @@ class MainController(ControladorBase):
         super().__init__()
         self.view = MainView()
         self._update_coordinator = None
-        self._assistant_dialog = None
+        self._assistant_float = None
         self._assistant_shortcut = None
         self.view.ArmaToolBarContable()
         self.view.ArmaToolBarVentas()
@@ -50,9 +50,6 @@ class MainController(ControladorBase):
                 versionexe = "DEMO"
                 servidor = "LOCAL"
                 basedatos = "SQLite Demo"
-                # Las consultas del dashboard corren en QThreadPool por defecto.
-                # En el demo SQLite eso corrompe el heap (peewee + hilos Qt +
-                # hilos de fondo de pymongo), asi que las corremos sincrono.
                 from vistas.dashboard.ejecutor import EjecutorConsultasSincrono
                 ejecutor = EjecutorConsultasSincrono()
             else:
@@ -69,24 +66,37 @@ class MainController(ControladorBase):
             self.view.cargar_menu_lateral(usu_id)
             self._inicializar_dashboard(usu_id, ejecutor=ejecutor)
             self.ArmaMenu()
+            self._mostrar_asistente_flotante()
             if not demo_mode:
                 self._programar_actualizaciones()
         return lRetVal
 
     def _configurar_asistente(self):
-        self.view.encabezado.boton_asistente.clicked.connect(
-            self.abrir_asistente
-        )
         self._assistant_shortcut = QShortcut(QKeySequence("F1"), self.view)
         self._assistant_shortcut.setContext(Qt.ApplicationShortcut)
-        self._assistant_shortcut.activated.connect(self.abrir_asistente)
+        self._assistant_shortcut.activated.connect(self._toggle_asistente)
+
+    def _mostrar_asistente_flotante(self):
+        from vistas.AsistenteRnd import AsistenteRndFlotante
+
+        if self._assistant_float is None:
+            self._assistant_float = AsistenteRndFlotante(
+                context_provider=self._contexto_asistente,
+            )
+        self._assistant_float.show_bubble()
+
+    def _toggle_asistente(self):
+        if self._assistant_float is None:
+            self._mostrar_asistente_flotante()
+        else:
+            self._assistant_float.toggle()
 
     def _contexto_asistente(self):
         activa = QApplication.activeWindow()
         if (
             activa is not None
             and activa is not self.view
-            and activa is not self._assistant_dialog
+            and activa is not self._assistant_float
         ):
             titulo = str(activa.windowTitle() or "").strip()
             clase = activa.__class__.__name__
@@ -104,22 +114,6 @@ class MainController(ControladorBase):
             return "{} | {}".format(clase, titulo) if titulo else clase
 
         return "Dashboard principal"
-
-    def abrir_asistente(self):
-        from vistas.AsistenteRnd import AsistenteRndDialog
-
-        contexto = self._contexto_asistente()
-        if self._assistant_dialog is None:
-            self._assistant_dialog = AsistenteRndDialog(
-                context=contexto,
-                parent=self.view,
-            )
-        else:
-            self._assistant_dialog.set_context(contexto)
-
-        self._assistant_dialog.show()
-        self._assistant_dialog.raise_()
-        self._assistant_dialog.activateWindow()
 
     def _ejecutar_migraciones_con_feedback(self):
         migracion = MigracionBaseDatos()
@@ -148,7 +142,6 @@ class MainController(ControladorBase):
             self._update_coordinator = UpdateCoordinator(self.view, BUILD_VERSION)
             QTimer.singleShot(1500, self._update_coordinator.start)
         except Exception:
-            # El updater nunca debe impedir el uso normal del sistema.
             self._update_coordinator = None
 
     def _inicializar_dashboard(self, usu_id, ejecutor=None):
