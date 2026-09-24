@@ -1,250 +1,486 @@
-# Conocimiento técnico-funcional para el Asistente RND
+# Base de conocimiento canónica del Asistente RND
 
-Este documento describe comportamiento real del código actual de RND. Su objetivo
-es permitir que MiniMax responda preguntas de operación y diagnóstico sin inventar
-mecanismos internos.
+**Revisión funcional:** 24/09/2026
 
-No es un router de intenciones ni una lista de palabras clave. Es contexto
-funcional versionado junto con el sistema.
+Este documento es la fuente de verdad operativa del Asistente RND. Describe el
+comportamiento que está implementado actualmente en el código. El asistente no
+debe completar huecos con suposiciones ni tomar la ausencia de una función en un
+manual antiguo como prueba de que esa función no existe.
 
-## 1. Cómo identifica al cliente durante la importación
+Cuando una respuesta contradiga este documento, debe prevalecer este documento.
 
-Al grabar cada línea importada, RND intenta resolver el cliente de esta manera:
+## 0. Reglas de respuesta del asistente
 
-1. Busca en `codigos_clientes_proveedores` una relación entre:
-   - código informado por el proveedor;
-   - proveedor seleccionado;
-   - cliente interno.
-2. Si existe esa relación y el cliente asociado no es el cliente genérico ID 1,
-   utiliza ese cliente.
-3. Si no existe una relación válida, intenta una coincidencia exacta, sin
-   distinguir mayúsculas/minúsculas, entre el nombre recibido y
-   `Cliente.razon_social`.
-4. Si tampoco encuentra cliente, la línea queda sin cliente resuelto y se
-   considera pendiente de corrección.
+- Ayudar solamente con el uso y diagnóstico de RND.
+- Explicar pasos concretos con los nombres actuales de pantallas y botones.
+- No inventar botones, filtros, estados ni restricciones.
+- No afirmar que una función no existe salvo que esta base lo indique.
+- No afirmar que realizó acciones dentro del sistema.
+- Si el conocimiento no alcanza para responder una pregunta concreta de RND,
+  decirlo claramente.
+- Distinguir entre **Importación de pedidos**, **Pedidos para organizar**,
+  **Asignar chofer y camión**, **Ver Hoja de Ruta** y
+  **Validar hoja de ruta**. Son etapas distintas.
 
-Por lo tanto, el sistema no hace una búsqueda difusa por nombre en esta etapa.
-La relación proveedor+código es la forma más precisa de identificación.
+## 1. Flujo operativo actual
 
-## 2. Cómo resuelve el lugar de entrega
+El camino normal para preparar un reparto es:
+
+**Importar pedidos → revisar vista previa → grabar → revisar/organizar facturas →
+asignar chofer y camión → revisar hoja de ruta → validar → imprimir/despachar
+según corresponda.**
+
+No todos los pasos cambian de ventana automáticamente. Por ejemplo,
+**Cargar hoja** en Asignar chofer y camión recarga la combinación fecha+ruta en
+esa misma pantalla.
+
+## 2. Formatos que RND puede importar
+
+La pantalla **Importar pedidos** acepta actualmente:
+
+- Excel: `.xlsx` y `.xls`.
+- PDF: `.pdf`.
+- Imágenes: `.png`, `.jpg` y `.jpeg`.
+
+Es incorrecto responder que RND sólo acepta Excel o que un PDF debe convertirse
+manualmente a Excel antes de importarlo.
+
+### PDF e imágenes
+
+Cuando el operador selecciona un PDF o una imagen:
+
+1. RND lo procesa con IA.
+2. Extrae los pedidos.
+3. Los normaliza internamente a una tabla compatible con el importador.
+4. Muestra la misma vista previa que se utiliza antes de grabar.
+5. Recién al presionar **Grabar pedidos** se escriben datos operativos.
+
+El PDF original no se abre directamente con pandas ni se obliga al usuario a
+convertirlo manualmente.
+
+Para usar PDF/imagen debe estar disponible la configuración de IA. Si falta la
+API key, RND informa el problema y no graba pedidos. También puede fallar si el
+archivo no contiene pedidos reconocibles o si la calidad impide una extracción
+confiable.
+
+### Revisión especial de PDF/imagen
+
+La extracción por IA es una propuesta para el operador:
+
+- en la vista previa se pueden corregir las celdas;
+- las filas cuya observación contiene **REVISAR IA** quedan desmarcadas por
+  defecto;
+- esas filas sólo deben importarse después de que el operador las revise.
+
+En Excel se conserva el comportamiento histórico: normalmente sólo se marca o
+desmarca la columna **Importa**.
+
+## 3. Selección de proveedor y método de importación
+
+Antes de seleccionar el archivo debe elegirse el **Proveedor / origen** y la
+**Fecha de reparto**.
+
+RND usa el método configurado en el proveedor para validar o normalizar archivos
+Excel. Entre los métodos actuales están:
+
+- `COLUMNAS`;
+- `TREMBLAY`;
+- `TIO_PUJIO`;
+- `DETALLE_VENTAS`.
+
+Para PDF e imágenes se utiliza el procesamiento por IA y luego el contrato de
+columnas normalizadas de RND.
+
+Según el Excel, el operador puede elegir hoja y, opcionalmente, fila de inicio y
+fila final. Si esos campos quedan vacíos, RND usa el rango disponible.
+
+## 4. Vista previa y resultado de importación
+
+**Cargar vista previa** lee y prepara el archivo, pero todavía no graba pedidos.
+
+Después de grabar, RND informa:
+
+- registros leídos;
+- pedidos importados;
+- registros ya existentes/reimportados;
+- omitidos;
+- pendientes;
+- errores.
+
+Según el resultado, el botón final puede indicar:
+
+- **Continuar con el reparto**;
+- **Revisar pendientes**;
+- **Corregir importación**.
+
+Si hubo un error total, no corresponde avanzar como si la importación hubiera
+sido correcta.
+
+## 5. Cómo identifica al cliente al grabar
+
+Para cada línea importada RND intenta resolver el cliente así:
+
+1. Busca la relación entre **código informado por el proveedor + proveedor +
+   cliente interno**.
+2. Si existe y no apunta al cliente genérico ID 1, usa ese cliente.
+3. Si no existe una relación válida, intenta una coincidencia exacta de razón
+   social, sin distinguir mayúsculas/minúsculas.
+4. Si tampoco encuentra cliente, la línea puede grabarse pendiente, sin cliente
+   resuelto.
+
+No hace una búsqueda difusa por nombre en este punto.
+
+## 6. Cómo resuelve el lugar de entrega
 
 Una vez resuelto el cliente:
 
-1. Busca primero un lugar de entrega marcado como **principal** y **activo** para
-   ese cliente.
-2. Si existe, ése es el lugar usado automáticamente.
-3. Si no hay principal, obtiene todos los lugares activos del cliente.
-4. Si hay exactamente un lugar activo, utiliza ese único lugar.
-5. Si hay cero lugares activos o hay más de uno sin un principal definido, no
-   elige arbitrariamente: el lugar queda sin resolver.
+1. busca el lugar de entrega principal configurado para ese cliente;
+2. si no hay principal, obtiene los lugares activos;
+3. si existe exactamente un lugar activo, usa ese lugar;
+4. si hay varios lugares activos sin principal o no hay ninguno, no elige uno
+   arbitrariamente y el lugar queda pendiente.
 
-Cuando el lugar queda sin resolver, la importación puede igualmente crear la
-línea operativa, pero queda marcada como pendiente para que el operador la
-corrija antes de finalizar el reparto.
+Un cliente puede tener varios lugares de entrega. No se debe duplicar el cliente
+sólo porque tenga más de un destino.
 
-Esto significa que, si un cliente tiene varios destinos, conviene definir uno
-como principal cuando realmente exista un destino habitual. Si no corresponde
-tener un principal, el operador deberá elegir el lugar correcto en la bandeja.
+## 7. Cómo determina la ruta durante la importación
 
-## 3. Cómo se determina la ruta al importar
+Si existe lugar de entrega resuelto:
 
-Si el lugar de entrega quedó resuelto:
+1. usa la ruta configurada en el lugar;
+2. si el lugar no tiene ruta, usa como respaldo la ruta del cliente.
 
-1. RND usa la ruta configurada en el lugar de entrega.
-2. Si ese lugar no tiene ruta propia, usa como respaldo la ruta configurada en
-   el cliente.
+Si no hay lugar de entrega resuelto, la línea queda sin ruta y debe corregirse
+durante la organización.
 
-Si el lugar de entrega no quedó resuelto, la línea se guarda sin ruta.
+## 8. Reimportación y duplicados
 
-En la Bandeja de pedidos el operador puede editar la factura completa, elegir
-cliente, lugar y ruta. Al seleccionar un lugar que tiene ruta, la pantalla
-propone esa ruta. Si al guardar no se eligió una ruta explícita, vuelve a usar
-como respaldo la ruta del lugar y luego la ruta del cliente.
+RND mantiene la identidad del documento y de sus líneas.
 
-## 4. Qué pasa si falta cliente o lugar de entrega
+Cuando existe factura/comprobante, la identidad del documento considera
+proveedor y número normalizado. Cuando no hay factura se utiliza una identidad
+alternativa basada en proveedor, cliente, fecha y el indicador de documento sin
+factura.
 
-La importación no descarta automáticamente la línea.
+Cada línea se identifica con una huella formada por producto, cantidad, kilos,
+bultos y observaciones. Si dentro del mismo documento existen líneas idénticas,
+RND incorpora una ocurrencia para distinguirlas.
 
-La hoja de ruta se crea con los datos disponibles. Si falta cliente o lugar:
-
-- incrementa el contador de pendientes;
-- puede quedar sin ruta;
-- debe corregirse antes de considerar la hoja lista.
-
-Desde **Bandeja de pedidos / Organizar pedidos**, la edición de factura permite:
-
-- elegir un cliente;
-- elegir uno de sus lugares activos;
-- elegir la ruta;
-- abrir **Crear / editar clientes y lugares** si hace falta mantener esos datos.
-
-## 5. Cómo evita duplicados al reimportar
-
-RND separa el documento original de sus líneas.
-
-### Identidad del documento
-
-Cuando hay número de factura/comprobante, la clave del documento usa:
-
-- proveedor;
-- número de factura normalizado.
-
-Cuando no hay factura, usa:
-
-- proveedor;
-- cliente;
-- fecha;
-- indicador SIN_FACTURA.
-
-### Identidad de cada línea
-
-La identidad de una línea utiliza una huella construida con:
-
-- producto;
-- cantidad;
-- kilos;
-- bultos;
-- observaciones.
-
-Si dentro del mismo documento hay dos líneas idénticas, RND agrega un número de
-ocurrencia para distinguir la primera, segunda, etc.
-
-### Reimportación
-
-Antes de crear otra hoja de ruta, RND verifica si esa línea del documento ya está
-vinculada a una hoja de ruta para la misma fecha.
-
-Si ya existe el vínculo:
+Antes de crear otra línea operativa, comprueba si el detalle ya está vinculado a
+una hoja de ruta para la misma fecha. Si ya existe:
 
 - no crea otra línea operativa;
-- cuenta la fila como reimportada;
-- conserva la hoja de ruta existente.
+- la cuenta como ya existente/reimportada;
+- conserva la hoja de ruta previa.
 
-Por eso, ante una importación que se cortó o genera dudas, no es recomendable
-repetirla a ciegas: primero conviene revisar el resumen de importación y los
-pedidos existentes.
+Si una importación se interrumpe por conexión, RND detiene las escrituras para
+no repetir una operación cuyo resultado pueda ser incierto. El operador debe
+revisar el resumen y los pedidos existentes antes de volver a intentar.
 
-## 6. Cómo funciona Organizar pedidos
+## 9. Pedidos para organizar / Bandeja de pedidos
 
-La bandeja carga todas las hojas de ruta de la fecha seleccionada y agrupa las
-líneas por factura/documento para trabajar a nivel de factura.
+La pantalla **Pedidos para organizar** trabaja principalmente a nivel de
+factura/documento. Una fila representa una factura completa, aunque internamente
+pueda contener varias líneas de producto.
+
+Funciones actuales:
+
+- seleccionar fecha;
+- **Priorizar pendientes**;
+- actualizar;
+- buscar por factura;
+- editar datos generales de la factura;
+- revisar productos;
+- seleccionar una o varias facturas;
+- elegir ruta destino;
+- **Organizar seleccionados**;
+- continuar a **Asignar chofer y camión**.
+
+Con **Priorizar pendientes** activado no se muestran como prioridad las facturas
+ya completamente organizadas.
+
+### Estados de la bandeja
+
+Una factura puede verse como observada, pendiente u organizada.
+
+Se considera observada, entre otros casos, cuando faltan cliente, lugar o ruta,
+hay observaciones operativas o existe cantidad pendiente. Los recursos genéricos
+representan una asignación pendiente.
+
+## 10. Editar una factura en la bandeja
+
+El botón **Editar** permite trabajar con datos de la factura completa:
+
+- cliente;
+- lugar de entrega;
+- ruta;
+- remito;
+- observación general.
+
+El cliente tiene búsqueda/autocompletado. Al cambiar el cliente se recargan sus
+lugares activos. Cuando se elige un lugar con ruta configurada, esa ruta se
+propone en la pantalla.
+
+Si no existe todavía el cliente o el destino correcto, desde ese mismo diálogo
+se puede abrir **Crear / editar clientes y lugares** y luego volver a la factura
+sin tener que cerrar todo el flujo.
+
+Si al guardar no se eligió una ruta explícita, RND intenta usar la ruta del lugar
+y luego la ruta del cliente.
+
+## 11. Productos de una factura
+
+El botón **Productos** abre la factura a nivel de líneas.
+
+Actualmente la única columna editable en este flujo es
+**Cantidad a entregar**.
+
+Son informativos/no editables en esta pantalla:
+
+- Producto.
+- Cantidad factura.
+- Pendiente.
+- KG.
+- Bultos.
+- Observaciones.
+
+La cantidad a entregar:
+
+- no puede ser negativa;
+- no puede superar la cantidad original de la factura;
+- recalcula el pendiente;
+- modifica cuánto se asigna a este reparto, sin alterar producto, KG, bultos ni
+  observaciones importadas.
+
+## 12. Organizar facturas en una ruta
 
 Para organizar:
 
-1. Se selecciona una o más facturas.
-2. Se selecciona una ruta destino.
-3. RND actualiza la ruta en las líneas seleccionadas.
-4. Antes de informar éxito vuelve a consultar la base y verifica que todas las
-   líneas hayan quedado realmente grabadas con esa ruta.
-5. Sólo después habilita continuar a asignación de chofer y camión.
+1. seleccionar una o más facturas;
+2. seleccionar **Ruta destino**;
+3. presionar **Organizar seleccionados**.
 
-El botón Siguiente abre Asignación de recursos con la misma fecha y con la última
-ruta que efectivamente se organizó.
+RND aplica la ruta a todas las líneas de las facturas seleccionadas y después
+vuelve a consultar la base para comprobar que todas hayan quedado realmente con
+esa ruta.
 
-## 7. Cómo funciona Asignar chofer y camión
+Sólo si esa verificación es correcta habilita **Asignar chofer y camión**.
 
-La pantalla de asignación carga registros cuya combinación coincide exactamente
-con:
+La siguiente pantalla recibe la misma fecha y la última ruta que efectivamente
+se organizó.
 
-- fecha seleccionada;
-- ruta seleccionada.
+## 13. Asignar chofer y camión
 
-**Importante:** esta pantalla NO filtra por chofer ni por camión. Esos filtros
-pertenecen a **Ver Hoja de Ruta**, no a **Asignar chofer y camión**.
-
-Si no existe ningún registro para esa combinación fecha+ruta, muestra
-**Sin pedidos**. Las causas a revisar son concretamente:
-
-- fecha distinta de la usada al organizar;
-- ruta distinta de la usada al organizar;
-- pedidos todavía sin organizar en esa ruta;
-- inexistencia real de registros para esa combinación.
-
-No atribuir "Sin pedidos" en esta pantalla a filtros de chofer/camión, porque no
-forman parte de su consulta.
-
-Los valores genéricos configurados para empleado y camión representan
-"pendiente", no una asignación válida.
-
-Al guardar una asignación:
-
-1. valida que existan pedidos;
-2. valida un chofer real;
-3. valida un camión real;
-4. actualiza **todos los pedidos de esa fecha+ruta** con el mismo chofer y camión;
-5. consulta otra vez la base y comprueba que no hayan quedado líneas con recursos
-   distintos.
-
-El botón para continuar a validación sólo se habilita cuando los recursos están
-completos.
-
-## 8. Por qué Ver Hoja de Ruta puede aparecer vacía
-
-La consulta base de Ver Hoja de Ruta filtra por:
+La pantalla **Asignar chofer y camión** trabaja con la combinación exacta:
 
 - fecha;
 - ruta.
 
-Además, si el operador tiene cargado un camión o un empleado en los filtros, la
-consulta agrega esos filtros.
+**No filtra por chofer ni por camión.** Esos filtros pertenecen a
+**Ver Hoja de Ruta**.
 
-Por eso una hoja puede verse vacía aunque existan pedidos si:
+### Qué hace “Cargar hoja”
 
-- se seleccionó otra fecha;
-- se seleccionó otra ruta;
-- hay un filtro de camión que no coincide;
-- hay un filtro de empleado que no coincide;
-- los pedidos todavía no fueron organizados en esa ruta.
+**Cargar hoja** no navega a otra pantalla. Recarga en la misma pantalla los
+pedidos de la fecha+ruta seleccionadas y muestra el resumen de pedidos, KG,
+bultos y asignación actual.
 
-Cuando no hay registros, la propia pantalla indica revisar fecha, ruta,
-asignación de chofer/camión y existencia de pedidos organizados.
+Si muestra **Sin pedidos**, revisar:
 
-## 9. Recursos genéricos en Ver Hoja de Ruta
+- fecha;
+- ruta;
+- que los pedidos hayan sido organizados en esa ruta;
+- que realmente existan registros para esa combinación.
 
-Los IDs configurados como empleado genérico y camión genérico significan
-"pendiente".
+No atribuir **Sin pedidos** de esta pantalla a filtros de chofer/camión porque
+aquí esos filtros no existen.
 
-Al cargar la hoja:
+### Guardar asignación
 
-- no se muestran como si fueran recursos válidos;
-- los campos quedan visualmente vacíos;
-- las filas con recursos genéricos no se consideran seleccionadas como una
-  asignación terminada.
+El operador selecciona un chofer real y un camión real. Los recursos genéricos
+significan pendiente y no son válidos como asignación terminada.
 
-## 10. Requisitos para imprimir la Hoja de Ruta
+Al guardar:
 
-El botón Imprimir se habilita cuando la consulta cargada tiene al menos un
-registro. Al intentar imprimir, la pantalla exige:
+1. valida que existan pedidos;
+2. valida chofer;
+3. valida camión;
+4. actualiza todos los pedidos de esa fecha+ruta con los mismos recursos;
+5. vuelve a comprobar la base para confirmar que no hayan quedado asignaciones
+   diferentes.
+
+Cuando los recursos están completos se habilita **Validar hoja de ruta**.
+
+**Ver hoja de ruta ahora** abre la pantalla de revisión con la misma fecha y
+ruta.
+
+## 14. Ver Hoja de Ruta
+
+La consulta base de **Ver Hoja de Ruta** usa:
+
+- fecha;
+- ruta.
+
+Además puede aplicar filtros opcionales de:
+
+- camión/equipo;
+- chofer/empleado.
+
+Por eso una hoja puede aparecer vacía aunque existan pedidos si hay un filtro de
+chofer o camión que no coincide.
+
+Cuando no hay datos, revisar:
+
+- fecha;
+- ruta;
+- filtros opcionales;
+- asignación de recursos;
+- existencia de pedidos organizados.
+
+Los IDs configurados como empleado o camión genérico representan
+**pendiente**. Al cargar la hoja no deben presentarse como recursos válidos.
+
+La pantalla también permite acciones operativas legacy como Agregar, Modificar,
+Grabar y Borrar sobre líneas, además de imprimir el PDF.
+
+## 15. Imprimir PDF de la hoja de ruta
+
+**Imprimir PDF** exige:
 
 - fecha;
 - ruta;
 - responsable/chofer;
-- equipo/camión.
+- equipo/camión;
+- al menos un registro para fecha+ruta.
 
-Además debe existir al menos una hoja de ruta para esa combinación de fecha y
-ruta.
+Poder imprimir no significa automáticamente que la hoja esté en estado LISTA.
+Impresión y validación de estado son controles distintos.
 
-Esto es distinto de la validación para estado LISTA: poder intentar imprimir no
-significa por sí solo que la hoja cumpla todo el checklist operativo de LISTA.
+## 16. Validar hoja de ruta
 
-## 11. Validación operativa de una hoja
+La pantalla **Validar hoja de ruta** trabaja por fecha+ruta y controla:
 
-La validación considera correcta una hoja solamente si cumple todos estos
-requisitos:
+- que exista al menos un pedido;
+- fecha;
+- ruta;
+- un único chofer real en todos los pedidos;
+- un único camión real en todos los pedidos;
+- cliente y lugar de entrega en cada pedido;
+- comprobante en cada pedido;
+- cantidad mayor que cero en cada pedido.
 
-- tiene al menos un pedido;
-- tiene fecha;
-- tiene ruta;
-- todos los registros tienen un único chofer real y no genérico;
-- todos los registros tienen un único camión real y no genérico;
-- ningún pedido carece de cliente;
-- ningún pedido carece de lugar de entrega;
-- ningún pedido carece de comprobante;
-- todas las cantidades son mayores que cero.
+Estados actuales:
 
-Una hoja incompleta no puede pasar a estado LISTA.
+- **EN_PREPARACION**;
+- **LISTA**;
+- **DESPACHADA**.
 
-Para pasar a DESPACHADA primero debe estar LISTA y seguir cumpliendo las
+Una hoja incompleta no puede marcarse LISTA.
+
+Para marcarla DESPACHADA debe estar previamente LISTA y seguir cumpliendo las
 validaciones.
 
-Una hoja DESPACHADA no retrocede automáticamente de estado.
+Una hoja DESPACHADA no retrocede automáticamente.
+
+Si faltan chofer o camión, la validación permite volver a
+**Resolver chofer / camión**.
+
+## 17. Clientes, códigos de proveedor y lugares de entrega
+
+En **Clientes** se administran los datos del cliente y sus relaciones.
+
+Un cliente puede tener uno o varios lugares de entrega. Cada lugar puede tener:
+
+- nombre/referencia;
+- dirección;
+- localidad;
+- ruta de reparto;
+- indicador de lugar principal;
+- estado activo;
+- observaciones.
+
+Para agregar lugares a un cliente nuevo primero debe guardarse el cliente.
+
+El botón de códigos permite mantener la relación entre el código usado por cada
+proveedor y el cliente interno de RND.
+
+Existe también **Consolidar clientes** para resolver duplicados: primero se
+simula la operación; después, si se confirma, se reasignan históricos, códigos y
+lugares dentro de una transacción y los clientes origen quedan inactivos, no
+borrados.
+
+## 18. Proveedores y datos maestros
+
+Los proveedores deben existir y estar activos para operar normalmente. El método
+de importación configurado en el proveedor determina cómo RND interpreta y
+valida Excel.
+
+También deben mantenerse los datos maestros necesarios para el reparto:
+
+- clientes;
+- lugares de entrega;
+- rutas;
+- empleados/choferes;
+- equipos/camiones;
+- tablas auxiliares según el caso.
+
+## 19. Diagnóstico rápido
+
+### “No puedo importar un PDF”
+
+No responder que RND no soporta PDF. Verificar primero:
+
+- que el proveedor y la fecha estén seleccionados;
+- que el archivo sea PDF/PNG/JPG/JPEG válido;
+- que la configuración de IA esté disponible;
+- que el documento tenga pedidos legibles;
+- el mensaje de error mostrado durante **Procesando PDF/imagen con IA**.
+
+### “La IA leyó algo mal del PDF”
+
+Usar la vista previa. En PDF/imagen las celdas son corregibles antes de grabar.
+Las filas **REVISAR IA** quedan desmarcadas hasta que el operador decida
+validarlas.
+
+### “Asignar chofer y camión dice Sin pedidos”
+
+Revisar fecha+ruta y que la organización anterior haya guardado esa ruta. No
+buscar filtros de chofer/camión en esa pantalla porque no existen.
+
+### “Ver Hoja de Ruta está vacía”
+
+Además de fecha+ruta, limpiar o revisar los filtros de chofer y camión.
+
+### “No puedo imprimir”
+
+Completar fecha, ruta, chofer y camión y confirmar que existan pedidos para esa
+combinación.
+
+### “No puedo marcar LISTA”
+
+Abrir la validación y revisar el checklist: pedidos, fecha, ruta, recursos,
+cliente/lugar, comprobante y cantidades.
+
+## 20. Asistente RND
+
+El panel lateral se abre/cierra con **F1**. También puede cerrarse con **Esc** o
+con la **X** del panel.
+
+El asistente recibe el contexto de la pantalla actual para orientar la respuesta,
+pero ese contexto no reemplaza las reglas funcionales de esta base.
+
+## 21. Afirmaciones que el asistente no debe hacer
+
+No decir:
+
+- “RND sólo importa Excel”.
+- “El PDF no se puede procesar directamente”.
+- “Tenés que pasar el PDF manualmente a Excel”.
+- “En Asignar chofer y camión puede haber un filtro de chofer/camión”.
+- “Cargar hoja abre otra pantalla”.
+- “En Productos se puede modificar producto, KG, bultos u observaciones”.
+- “Hay que crear un cliente distinto para cada lugar de entrega”.
+- “Si se puede imprimir, la hoja ya está LISTA”.
+
+Si una guía histórica contradice cualquiera de estas reglas, la guía histórica
+está desactualizada.
