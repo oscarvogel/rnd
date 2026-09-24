@@ -13,9 +13,7 @@ from PyQt5.QtWidgets import (
     QTextEdit, QVBoxLayout, QWidget,
 )
 
-from utiles.asistente_rnd_conocimiento import (
-    list_articles, save_article, suggestions_for_context,
-)
+from utiles.asistente_rnd_conocimiento import list_articles, save_article, suggestions
 from utiles.asistente_rnd_servicio import answer_message
 from utiles.asistente_rnd_store import list_unresolved
 
@@ -52,7 +50,7 @@ class KnowledgeDialog(QDialog):
         left_layout = QVBoxLayout(left)
         self.list_widget = QListWidget()
         self.new_button = QPushButton("Nuevo artículo")
-        left_layout.addWidget(QLabel("Procedimientos disponibles"))
+        left_layout.addWidget(QLabel("Conocimiento disponible para MiniMax"))
         left_layout.addWidget(self.list_widget, 1)
         left_layout.addWidget(self.new_button)
         splitter.addWidget(left)
@@ -60,16 +58,20 @@ class KnowledgeDialog(QDialog):
         right = QWidget()
         form = QVBoxLayout(right)
         self.title_edit = QLineEdit()
-        self.aliases_edit = QLineEdit()
-        self.answer_edit = QTextEdit()
+        self.context_edit = QLineEdit()
+        self.content_edit = QTextEdit()
         self.save_button = QPushButton("Guardar")
         self.save_button.setProperty("role", "primary")
         form.addWidget(QLabel("Título"))
         form.addWidget(self.title_edit)
-        form.addWidget(QLabel("Frases o palabras para encontrarlo (separadas por coma)"))
-        form.addWidget(self.aliases_edit)
-        form.addWidget(QLabel("Respuesta / procedimiento"))
-        form.addWidget(self.answer_edit, 1)
+        form.addWidget(QLabel("Contexto orientativo (no es una regla)"))
+        form.addWidget(self.context_edit)
+        form.addWidget(QLabel("Conocimiento / procedimiento"))
+        form.addWidget(self.content_edit, 1)
+        form.addWidget(QLabel(
+            "MiniMax decide cuándo y cómo usar este contenido. "
+            "No se configuran palabras clave ni condiciones."
+        ))
         form.addWidget(self.save_button)
         splitter.addWidget(right)
         splitter.setSizes([300, 600])
@@ -84,7 +86,9 @@ class KnowledgeDialog(QDialog):
         self.list_widget.clear()
         index = 0
         for i, article in enumerate(self._articles):
-            self.list_widget.addItem(article.get("title") or article.get("id") or "(sin título)")
+            self.list_widget.addItem(
+                article.get("title") or article.get("id") or "(sin título)"
+            )
             if select_id and article.get("id") == select_id:
                 index = i
         if self._articles:
@@ -96,40 +100,45 @@ class KnowledgeDialog(QDialog):
         article = self._articles[row]
         self.title_edit.setProperty("article_id", article.get("id"))
         self.title_edit.setText(article.get("title", ""))
-        self.aliases_edit.setText(", ".join(article.get("aliases") or []))
-        self.answer_edit.setPlainText(article.get("answer", ""))
+        self.context_edit.setText(article.get("context_hint", ""))
+        self.content_edit.setPlainText(article.get("content", ""))
 
     def _new_article(self):
         self.list_widget.clearSelection()
         self.title_edit.setProperty("article_id", None)
         self.title_edit.clear()
-        self.aliases_edit.clear()
-        self.answer_edit.clear()
+        self.context_edit.clear()
+        self.content_edit.clear()
         self.title_edit.setFocus()
 
     def _save(self):
         title = self.title_edit.text().strip()
-        answer = self.answer_edit.toPlainText().strip()
-        if not title or not answer:
-            QMessageBox.warning(self, "Base de conocimiento", "Completá título y respuesta.")
+        content = self.content_edit.toPlainText().strip()
+        if not title or not content:
+            QMessageBox.warning(
+                self, "Base de conocimiento", "Completá título y contenido."
+            )
             return
+
         article_id = self.title_edit.property("article_id")
         if not article_id:
             slug = re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_")
-            article_id = "custom_{}_{}".format(slug[:32] or "article", uuid.uuid4().hex[:6])
-        aliases = [x.strip() for x in self.aliases_edit.text().split(",") if x.strip()]
-        previous = next((a for a in self._articles if a.get("id") == article_id), {})
+            article_id = "custom_{}_{}".format(
+                slug[:32] or "article", uuid.uuid4().hex[:6]
+            )
+
         article = {
             "id": article_id,
             "title": title,
-            "aliases": aliases,
-            "answer": answer,
-            "contexts": previous.get("contexts") or [],
+            "context_hint": self.context_edit.text().strip(),
+            "content": content,
             "enabled": True,
         }
         save_article(article)
         self._reload(select_id=article_id)
-        QMessageBox.information(self, "Base de conocimiento", "Artículo guardado.")
+        QMessageBox.information(
+            self, "Base de conocimiento", "Conocimiento guardado."
+        )
 
 
 class UnresolvedDialog(QDialog):
@@ -139,10 +148,12 @@ class UnresolvedDialog(QDialog):
         self.resize(920, 500)
         root = QVBoxLayout(self)
         root.addWidget(QLabel(
-            "Estas preguntas ayudan a detectar documentación faltante o pantallas confusas."
+            "MiniMax marcó estas consultas como no resolubles con el conocimiento actual."
         ))
         self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["Fecha", "Pantalla", "Pregunta", "Origen"])
+        self.table.setHorizontalHeaderLabels(
+            ["Fecha", "Pantalla", "Pregunta", "Origen"]
+        )
         self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setStretchLastSection(True)
         root.addWidget(self.table, 1)
@@ -159,26 +170,28 @@ class UnresolvedDialog(QDialog):
                 row.get("source", ""),
             ]
             for col, value in enumerate(values):
-                self.table.setItem(row_index, col, QTableWidgetItem(str(value)))
+                self.table.setItem(
+                    row_index, col, QTableWidgetItem(str(value))
+                )
         self.table.resizeColumnsToContents()
 
 
 class AsistenteRndDialog(QDialog):
-    def __init__(self, context="Dashboard", parent=None):
+    def __init__(self, context="Dashboard principal", parent=None):
         super().__init__(parent)
-        self.context = context or "Dashboard"
+        self.context = context or "Dashboard principal"
         self.history = []
         self.worker = None
         self.setWindowTitle("Asistente RND")
-        self.resize(760, 650)
+        self.resize(780, 660)
         self.setModal(False)
 
         root = QVBoxLayout(self)
 
         header = QHBoxLayout()
-        title = QLabel("Asistente RND · Ayuda de funcionamiento")
+        title = QLabel("Asistente RND · IA-first")
         title.setStyleSheet("font-size: 14pt; font-weight: 600;")
-        self.context_label = QLabel("Pantalla: {}".format(self.context))
+        self.context_label = QLabel("Contexto: {}".format(self.context))
         header.addWidget(title)
         header.addStretch(1)
         header.addWidget(self.context_label)
@@ -188,12 +201,21 @@ class AsistenteRndDialog(QDialog):
         self.chat.setOpenExternalLinks(False)
         root.addWidget(self.chat, 1)
 
-        self.suggestions_layout = QHBoxLayout()
-        root.addLayout(self.suggestions_layout)
+        suggestions_layout = QHBoxLayout()
+        for suggestion in suggestions():
+            button = QPushButton(suggestion)
+            button.setProperty("role", "secondary")
+            button.clicked.connect(
+                lambda _checked=False, text=suggestion: self.ask(text)
+            )
+            suggestions_layout.addWidget(button)
+        root.addLayout(suggestions_layout)
 
         send_row = QHBoxLayout()
         self.input = QLineEdit()
-        self.input.setPlaceholderText("Preguntá cómo hacer algo en RND...")
+        self.input.setPlaceholderText(
+            "Preguntá con tus palabras cómo hacer algo en RND..."
+        )
         self.send_button = QPushButton("Enviar")
         self.send_button.setProperty("role", "primary")
         send_row.addWidget(self.input, 1)
@@ -206,7 +228,7 @@ class AsistenteRndDialog(QDialog):
         footer.addWidget(self.knowledge_button)
         footer.addWidget(self.unresolved_button)
         footer.addStretch(1)
-        footer.addWidget(QLabel("F1 abre este asistente desde cualquier pantalla"))
+        footer.addWidget(QLabel("F1 abre el asistente"))
         root.addLayout(footer)
 
         self.send_button.clicked.connect(self.send)
@@ -214,16 +236,16 @@ class AsistenteRndDialog(QDialog):
         self.knowledge_button.clicked.connect(self.open_knowledge)
         self.unresolved_button.clicked.connect(self.open_unresolved)
 
-        self._render_welcome()
-        self._render_suggestions()
+        self._append(
+            "assistant",
+            "Preguntame con tus palabras. MiniMax interpreta la consulta usando "
+            "la pantalla actual, el historial y la base de conocimiento de RND. "
+            "No modifico datos: te explico el procedimiento.",
+        )
 
     def set_context(self, context):
-        context = context or "Dashboard"
-        if context == self.context:
-            return
-        self.context = context
-        self.context_label.setText("Pantalla: {}".format(context))
-        self._render_suggestions()
+        self.context = context or "Dashboard principal"
+        self.context_label.setText("Contexto: {}".format(self.context))
 
     def _append(self, role, text):
         label = "Vos" if role == "user" else "Asistente RND"
@@ -236,29 +258,9 @@ class AsistenteRndDialog(QDialog):
                 html.escape(text).replace("\n", "<br>"),
             )
         )
-        self.chat.verticalScrollBar().setValue(self.chat.verticalScrollBar().maximum())
-
-    def _render_welcome(self):
-        self._append(
-            "assistant",
-            "Preguntame cómo usar RND, qué hacer después en el flujo o cómo resolver una situación operativa. "
-            "No modifico datos: te indico el procedimiento.",
+        self.chat.verticalScrollBar().setValue(
+            self.chat.verticalScrollBar().maximum()
         )
-
-    def _clear_suggestions(self):
-        while self.suggestions_layout.count():
-            item = self.suggestions_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-
-    def _render_suggestions(self):
-        self._clear_suggestions()
-        for suggestion in suggestions_for_context(self.context):
-            button = QPushButton(suggestion)
-            button.setProperty("role", "secondary")
-            button.clicked.connect(lambda _checked=False, text=suggestion: self.ask(text))
-            self.suggestions_layout.addWidget(button)
 
     def ask(self, text):
         self.input.setText(text)
@@ -268,14 +270,17 @@ class AsistenteRndDialog(QDialog):
         question = self.input.text().strip()
         if not question or self.worker is not None:
             return
+
         self.input.clear()
         self._append("user", question)
         self.history.append({"role": "user", "content": question})
         self.input.setEnabled(False)
         self.send_button.setEnabled(False)
-        self.send_button.setText("Consultando…")
+        self.send_button.setText("Consultando MiniMax…")
 
-        self.worker = _AnswerThread(question, self.context, self.history[:-1], self)
+        self.worker = _AnswerThread(
+            question, self.context, self.history[:-1], self
+        )
         self.worker.ready.connect(self._answer_ready)
         self.worker.finished.connect(self._worker_finished)
         self.worker.start()
