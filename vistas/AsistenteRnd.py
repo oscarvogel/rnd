@@ -257,6 +257,11 @@ class AsistenteRndFlotante(QWidget):
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_QuitOnClose, False)
+        self.setAttribute(Qt.WA_ShowWithoutActivating, True)
+
+        app = QApplication.instance()
+        if app is not None:
+            app.applicationStateChanged.connect(self._application_state_changed)
 
         self._build_ui()
         self._set_collapsed(initial=True)
@@ -398,6 +403,7 @@ class AsistenteRndFlotante(QWidget):
         )
 
     def _set_collapsed(self, initial=False):
+        self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.expanded = False
         self.panel.hide()
         self.bubble_button.show()
@@ -408,6 +414,7 @@ class AsistenteRndFlotante(QWidget):
             self.raise_()
 
     def expand(self):
+        self.setAttribute(Qt.WA_ShowWithoutActivating, False)
         self.context = self._current_context()
         short_context = self.context.split("|", 1)[-1].strip()
         self.context_label.setText(short_context[:34])
@@ -442,9 +449,19 @@ class AsistenteRndFlotante(QWidget):
         self.raise_()
 
     def _keep_visible(self):
-        if not self.isVisible():
+        app = QApplication.instance()
+        if app is not None and app.applicationState() != Qt.ApplicationActive:
             return
+        if not self.isVisible():
+            self.show()
         self.raise_()
+
+    def _application_state_changed(self, state):
+        if state == Qt.ApplicationActive:
+            self.show()
+            self.raise_()
+        else:
+            self.hide()
 
     def ask(self, text):
         self.input.setText(text)
