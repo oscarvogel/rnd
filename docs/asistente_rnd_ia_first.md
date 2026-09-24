@@ -23,19 +23,10 @@ No debe existir un router previo basado en:
 - expresiones regulares usadas para decidir qué procedimiento contestar;
 - árboles de decisión funcionales.
 
-La aplicación entrega a MiniMax:
-
-1. la pregunta del usuario;
-2. la pantalla/ventana activa;
-3. el historial reciente de conversación;
-4. la base de conocimiento vigente.
-
-MiniMax decide:
-
-- qué conocimiento es pertinente;
-- si debe combinar varios procedimientos;
-- si puede responder con seguridad;
-- si la pregunta está fuera del dominio RND.
+La aplicación entrega a MiniMax la pregunta, la pantalla activa, el historial
+reciente y la base de conocimiento vigente. MiniMax decide qué conocimiento es
+pertinente, si debe combinar varios procedimientos, si puede responder con
+seguridad y si la pregunta está fuera del dominio RND.
 
 Python sólo valida el contrato técnico de la respuesta y aplica el resultado
 estructurado del modelo.
@@ -55,68 +46,58 @@ Las consultas `unresolved` se registran para revisión.
 
 ## Base de conocimiento
 
-La base contiene **conocimiento**, no reglas de enrutamiento.
+La base contiene **conocimiento, no reglas de enrutamiento**. Cada artículo tiene
+ID estable, título, contexto orientativo y contenido/procedimiento. El contexto es
+una pista semántica para MiniMax, nunca una condición de código.
 
-Cada artículo tiene:
+Los artículos base viajan versionados con RND. Los cambios creados desde la
+interfaz administrativa se guardan en la base compartida
+`asistente_conocimiento`, por lo que todas las PCs conectadas a la misma base
+usan el mismo conocimiento.
 
-- ID estable;
-- título;
-- contexto orientativo;
-- contenido/procedimiento.
+En DEMO, tests o ante una indisponibilidad de la DB existe un fallback local en
+`%LOCALAPPDATA%\RND\asistente\knowledge.json`.
 
-El contexto es una pista semántica para MiniMax, nunca una condición de código.
-
-Los artículos base viajan con RND. Los cambios hechos desde la interfaz se
-guardan en:
-
-`%LOCALAPPDATA%\RND\asistente\knowledge.json`
-
-Eso permite ampliar procedimientos sin tocar la base de negocio y preserva los
-cambios entre actualizaciones.
+Sólo los usuarios administradores de RND pueden abrir la edición de conocimiento.
 
 ## Consultas no resueltas
 
-Cuando MiniMax determina que la pregunta pertenece a RND pero no puede
-responderla con seguridad, RND registra:
+Cuando MiniMax determina que una pregunta pertenece a RND pero no puede
+responderla con seguridad, RND registra en
+`asistente_consulta_no_resuelta`:
 
 - fecha/hora;
+- usuario;
 - pantalla activa;
 - pregunta;
 - origen;
 - estado.
 
-Archivo local:
+Esto permite revisar desde una PC administrativa qué están preguntando los
+usuarios. Sólo administradores pueden abrir la auditoría global.
 
-`%LOCALAPPDATA%\RND\asistente\unresolved.jsonl`
-
-La interfaz **Consultas no resueltas** permite revisar esas dudas y convertirlas
-en nuevo conocimiento o detectar una pantalla/proceso que deba mejorarse.
+En DEMO, tests o caída de DB se conserva un fallback local en
+`%LOCALAPPDATA%\RND\asistente\unresolved.jsonl`.
 
 ## Contexto de pantalla
 
-El botón **Asistente IA** y la tecla **F1** capturan la ventana activa.
-
-Ese dato se envía a MiniMax para resolver preguntas naturales como:
-
-- “¿qué hago ahora?”;
-- “¿qué sigue?”;
-- “¿por qué no me deja?”;
-- “¿qué tengo que revisar acá?”.
-
-La decisión sigue siendo de la IA.
+El botón **Asistente IA** y la tecla **F1** capturan la ventana activa. Ese dato
+se envía a MiniMax para resolver preguntas naturales como “¿qué hago ahora?”,
+“¿qué sigue?”, “¿por qué no me deja?” o “¿qué tengo que revisar acá?”. La
+decisión sigue siendo de la IA.
 
 ## Configuración MiniMax
 
 El asistente reutiliza la configuración ya disponible para importación PDF.
 
-Prioridad de configuración:
+Prioridad:
 
 1. `RND_ASSISTANT_AI_*`;
 2. `RND_PDF_AI_*`;
 3. `MINIMAX_*`;
 4. defaults de MiniMax.
 
-De esta forma no es necesario mantener dos credenciales para RND.
+No es necesario mantener dos credenciales para RND.
 
 ## Límites
 
