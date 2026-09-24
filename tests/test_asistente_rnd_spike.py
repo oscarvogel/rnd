@@ -25,6 +25,9 @@ def test_spike_envia_manual_y_pregunta_a_minimax(monkeypatch):
     system = capturado["messages"][0]["content"]
     assert "Manual de usuario" in system
     assert "Importar pedidos" in system
+    assert "Conocimiento técnico-funcional" in system
+    assert "Busca primero un lugar de entrega marcado como **principal**" in system
+    assert "Si ya existe el vínculo" in system
     assert capturado["messages"][-1] == {
         "role": "user",
         "content": "Ya importe los pedidos, que hago ahora?",
@@ -95,3 +98,37 @@ def test_cliente_texto_reutiliza_configuracion_pdf_y_reintenta(monkeypatch):
 
     assert intentos["cantidad"] == 2
     assert respuesta == "Respuesta de prueba"
+
+
+
+def test_conocimiento_tecnico_explica_lugar_duplicados_y_hoja_vacia(monkeypatch):
+    capturado = {}
+
+    def fake_call(messages, **_kwargs):
+        capturado["system"] = messages[0]["content"]
+        return "ok"
+
+    monkeypatch.setattr(
+        "utiles.asistente_rnd_spike.llamar_minimax_texto",
+        fake_call,
+    )
+
+    preguntar("Como detecta los lugares de entrega?")
+
+    system = capturado["system"]
+    assert "código informado por el proveedor" in system
+    assert "exactamente un lugar activo" in system
+    assert "no crea otra línea operativa" in system
+    assert "filtro de camión" in system
+    assert "todos los pedidos de esa fecha+ruta" in system
+
+
+def test_spike_no_contiene_router_de_intenciones():
+    from pathlib import Path
+
+    source = Path("utiles/asistente_rnd_spike.py").read_text(encoding="utf-8")
+
+    assert "match_article" not in source
+    assert "aliases" not in source
+    assert "SequenceMatcher" not in source
+    assert "keyword" not in source.lower()
