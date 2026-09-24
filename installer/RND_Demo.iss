@@ -25,9 +25,19 @@ Uninstallable=yes
 ArchitecturesAllowed=x64compatible
 SetupIconFile=..\imagenes\vogel_consultoria_oficial.ico
 UninstallDisplayIcon={app}\RND Demo.exe
+CloseApplications=yes
+RestartApplications=no
 
 [Languages]
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
+
+; El DEMO siempre se instala como una base limpia.
+; Esto evita reutilizar una SQLite de una version anterior con seeds incompatibles.
+[InstallDelete]
+Type: files; Name: "{app}\sistema.db"
+Type: files; Name: "{app}\sistema.db-wal"
+Type: files; Name: "{app}\sistema.db-shm"
+Type: files; Name: "{app}\sistema.db-journal"
 
 [Files]
 Source: "..\dist\RND Demo\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -45,4 +55,7 @@ Filename: "{app}\RND Demo.exe"; Description: "Abrir RND DEMO"; Flags: postinstal
 
 [UninstallDelete]
 Type: files; Name: "{app}\sistema.db"
+Type: files; Name: "{app}\sistema.db-wal"
+Type: files; Name: "{app}\sistema.db-shm"
+Type: files; Name: "{app}\sistema.db-journal"
 Type: files; Name: "{app}\rnd_crash.log"
