@@ -103,8 +103,11 @@ def test_asistente_es_flotante_y_always_on_top():
     assert "class AsistenteRndFlotante(QWidget)" in source
     assert "Qt.WindowStaysOnTopHint" in source
     assert "Qt.Tool" in source
-    assert "BUBBLE_SIZE = 62" in source
+    assert "BUBBLE_SIZE = 70" in source
     assert "PANEL_WIDTH = 380" in source
+    assert "class AssistantBubbleButton(QPushButton)" in source
+    assert "QLinearGradient" in source
+    assert "#F5C518" in source
 
 
 def test_shell_no_depende_de_boton_asistente():
