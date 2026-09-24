@@ -3,7 +3,9 @@ import os
 
 from controladores.Login import LoginController
 from controladores.Migraciones import MigracionBaseDatos
-from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QKeySequence
+from PyQt5.QtWidgets import QApplication, QShortcut
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.pyqt5libs import Constantes
 from pyqt5libs.pyqt5libs.Menu import GeneraMenu
@@ -27,11 +29,14 @@ class MainController(ControladorBase):
         super().__init__()
         self.view = MainView()
         self._update_coordinator = None
+        self._assistant_dialog = None
+        self._assistant_shortcut = None
         self.view.ArmaToolBarContable()
         self.view.ArmaToolBarVentas()
         self.view.ArmaToolBarCompras()
         self.view.ArmaToolBarSalir()
         self.conectarWidgets()
+        self._configurar_asistente()
 
     @inicializar_y_capturar_excepciones
     def login(self, *args, **kwargs):
@@ -67,6 +72,54 @@ class MainController(ControladorBase):
             if not demo_mode:
                 self._programar_actualizaciones()
         return lRetVal
+
+    def _configurar_asistente(self):
+        self.view.encabezado.boton_asistente.clicked.connect(
+            self.abrir_asistente
+        )
+        self._assistant_shortcut = QShortcut(QKeySequence("F1"), self.view)
+        self._assistant_shortcut.setContext(Qt.ApplicationShortcut)
+        self._assistant_shortcut.activated.connect(self.abrir_asistente)
+
+    def _contexto_asistente(self):
+        activa = QApplication.activeWindow()
+        if (
+            activa is not None
+            and activa is not self.view
+            and activa is not self._assistant_dialog
+        ):
+            titulo = str(activa.windowTitle() or "").strip()
+            clase = activa.__class__.__name__
+            return "{} | {}".format(clase, titulo) if titulo else clase
+
+        controlador = getattr(self.view, "ventana_menu_lateral", None)
+        vista = getattr(controlador, "view", None)
+        objeto = vista or controlador
+        if objeto is not None:
+            titulo = ""
+            window_title = getattr(objeto, "windowTitle", None)
+            if callable(window_title):
+                titulo = str(window_title() or "").strip()
+            clase = objeto.__class__.__name__
+            return "{} | {}".format(clase, titulo) if titulo else clase
+
+        return "Dashboard principal"
+
+    def abrir_asistente(self):
+        from vistas.AsistenteRnd import AsistenteRndDialog
+
+        contexto = self._contexto_asistente()
+        if self._assistant_dialog is None:
+            self._assistant_dialog = AsistenteRndDialog(
+                context=contexto,
+                parent=self.view,
+            )
+        else:
+            self._assistant_dialog.set_context(contexto)
+
+        self._assistant_dialog.show()
+        self._assistant_dialog.raise_()
+        self._assistant_dialog.activateWindow()
 
     def _ejecutar_migraciones_con_feedback(self):
         migracion = MigracionBaseDatos()
