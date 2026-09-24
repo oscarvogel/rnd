@@ -106,8 +106,8 @@ def ayuda_proveedor(metodo_importacion):
         )
     if metodo == "COLUMNAS":
         return (
-            "Seleccione el archivo Excel entregado por este proveedor. "
-            "RND usará el mapeo de columnas configurado para ese origen."
+            "Seleccione el archivo recibido del proveedor. Puede ser Excel y, si corresponde, "
+            "PDF o imagen escaneada. RND lo preparará antes de mostrar la vista previa."
         )
     if metodo:
         return "El proveedor tiene configurado el método de importación: {}.".format(metodo)

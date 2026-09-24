@@ -357,6 +357,16 @@ def normalizar_archivo_pedidos(archivo_entrada, progreso=None, metodo=None):
     if not archivo_entrada or not os.path.exists(archivo_entrada):
         return None
 
+    extension = os.path.splitext(str(archivo_entrada))[1].lower()
+    if extension in {".pdf", ".png", ".jpg", ".jpeg"}:
+        from utiles.importacion_pdf_ia import extraer_pedidos_pdf_ia
+
+        filas = extraer_pedidos_pdf_ia(
+            archivo_entrada,
+            progreso=progreso,
+        )
+        return _guardar_temporal(filas)
+
     metodo = (metodo or "").strip().upper()
     if metodo == METODO_COLUMNAS:
         return None

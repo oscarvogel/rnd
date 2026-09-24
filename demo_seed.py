@@ -226,6 +226,11 @@ def prepare_demo_database() -> None:
 
     _generar_archivos_importacion_demo()
 
+    # Caso real de prueba para el importador PDF/imagen con IA (#124).
+    # Se mantiene en un modulo separado para poder ejecutarlo también a demanda.
+    from utiles.seed_estancia_oro import seed_estancia_oro
+    seed_estancia_oro()
+
     def lugar(cliente, nombre, direccion, localidad, ruta, principal=False):
         obj, _ = LugarEntrega.get_or_create(
             cliente=cliente,
