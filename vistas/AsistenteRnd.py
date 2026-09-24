@@ -18,6 +18,17 @@ from utiles.asistente_rnd_servicio import answer_message
 from utiles.asistente_rnd_store import list_unresolved
 
 
+def _is_admin():
+    try:
+        from modelos.Usuarios import Usuario
+        from pyqt5libs.pyqt5libs.utiles import LeerConf
+
+        usu_id = int(LeerConf("idUsuario") or 0)
+        return bool(usu_id and Usuario().IsAdmin(usu_id))
+    except Exception:
+        return False
+
+
 class _AnswerThread(QThread):
     ready = pyqtSignal(dict)
 
@@ -50,7 +61,7 @@ class KnowledgeDialog(QDialog):
         left_layout = QVBoxLayout(left)
         self.list_widget = QListWidget()
         self.new_button = QPushButton("Nuevo artículo")
-        left_layout.addWidget(QLabel("Conocimiento disponible para MiniMax"))
+        left_layout.addWidget(QLabel("Conocimiento compartido disponible para MiniMax"))
         left_layout.addWidget(self.list_widget, 1)
         left_layout.addWidget(self.new_button)
         splitter.addWidget(left)
@@ -145,14 +156,14 @@ class UnresolvedDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Asistente IA - Consultas no resueltas")
-        self.resize(920, 500)
+        self.resize(1040, 520)
         root = QVBoxLayout(self)
         root.addWidget(QLabel(
             "MiniMax marcó estas consultas como no resolubles con el conocimiento actual."
         ))
-        self.table = QTableWidget(0, 4)
+        self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(
-            ["Fecha", "Pantalla", "Pregunta", "Origen"]
+            ["Fecha", "Usuario", "Pantalla", "Pregunta", "Origen"]
         )
         self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setStretchLastSection(True)
@@ -162,9 +173,10 @@ class UnresolvedDialog(QDialog):
     def _load(self):
         rows = list_unresolved()
         self.table.setRowCount(len(rows))
-        for row_index, row in enumerate(reversed(rows)):
+        for row_index, row in enumerate(rows):
             values = [
                 row.get("timestamp", ""),
+                row.get("user", ""),
                 row.get("context", ""),
                 row.get("question", ""),
                 row.get("source", ""),
@@ -223,18 +235,19 @@ class AsistenteRndDialog(QDialog):
         root.addLayout(send_row)
 
         footer = QHBoxLayout()
-        self.knowledge_button = QPushButton("Base de conocimiento")
-        self.unresolved_button = QPushButton("Consultas no resueltas")
-        footer.addWidget(self.knowledge_button)
-        footer.addWidget(self.unresolved_button)
+        if _is_admin():
+            self.knowledge_button = QPushButton("Base de conocimiento")
+            self.unresolved_button = QPushButton("Consultas no resueltas")
+            self.knowledge_button.clicked.connect(self.open_knowledge)
+            self.unresolved_button.clicked.connect(self.open_unresolved)
+            footer.addWidget(self.knowledge_button)
+            footer.addWidget(self.unresolved_button)
         footer.addStretch(1)
         footer.addWidget(QLabel("F1 abre el asistente"))
         root.addLayout(footer)
 
         self.send_button.clicked.connect(self.send)
         self.input.returnPressed.connect(self.send)
-        self.knowledge_button.clicked.connect(self.open_knowledge)
-        self.unresolved_button.clicked.connect(self.open_unresolved)
 
         self._append(
             "assistant",
@@ -300,7 +313,9 @@ class AsistenteRndDialog(QDialog):
         self.input.setFocus()
 
     def open_knowledge(self):
-        KnowledgeDialog(self).exec_()
+        if _is_admin():
+            KnowledgeDialog(self).exec_()
 
     def open_unresolved(self):
-        UnresolvedDialog(self).exec_()
+        if _is_admin():
+            UnresolvedDialog(self).exec_()
