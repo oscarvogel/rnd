@@ -1,9 +1,9 @@
 # coding=utf-8
-"""Persistencia local del Asistente RND.
+"""Persistencia del Asistente RND.
 
-Se usa LOCALAPPDATA para que el conocimiento editable y las consultas no
-resueltas sobrevivan a upgrades/reinstalaciones del ejecutable. En tests puede
-sobreescribirse con RND_ASSISTANT_DATA_DIR.
+En producción usa la base compartida de RND para que el conocimiento y las
+consultas no resueltas sean visibles desde todas las PCs. En DEMO, tests o si
+la DB no está disponible, usa un fallback local seguro.
 """
 from __future__ import annotations
 
@@ -27,6 +27,14 @@ def data_dir() -> Path:
     return root
 
 
+def _force_local() -> bool:
+    return bool(
+        (os.getenv("RND_ASSISTANT_DATA_DIR") or "").strip()
+        or os.getenv("RND_DEMO_MODE") == "1"
+        or os.getenv("RND_ASSISTANT_FORCE_LOCAL") == "1"
+    )
+
+
 def _knowledge_path() -> Path:
     return data_dir() / "knowledge.json"
 
@@ -35,7 +43,7 @@ def _unresolved_path() -> Path:
     return data_dir() / "unresolved.jsonl"
 
 
-def load_knowledge_overrides() -> dict:
+def _load_local_knowledge() -> dict:
     path = _knowledge_path()
     if not path.exists():
         return {}
@@ -49,11 +57,9 @@ def load_knowledge_overrides() -> dict:
     return articles if isinstance(articles, dict) else {}
 
 
-def save_knowledge_override(article: dict) -> None:
+def _save_local_knowledge(article: dict) -> None:
     article_id = str(article.get("id") or "").strip()
-    if not article_id:
-        raise ValueError("El articulo necesita un id")
-    overrides = load_knowledge_overrides()
+    overrides = _load_local_knowledge()
     overrides[article_id] = article
     payload = {"version": 1, "articles": overrides}
     path = _knowledge_path()
@@ -65,13 +71,71 @@ def save_knowledge_override(article: dict) -> None:
     tmp.replace(path)
 
 
-def record_unresolved(question: str, context: str = "", source: str = "assistant") -> None:
-    question = (question or "").strip()
-    if not question:
-        return
+def load_knowledge_overrides() -> dict:
+    if not _force_local():
+        try:
+            from modelos.AsistenteRnd import AsistenteConocimiento
+
+            rows = AsistenteConocimiento.select().where(
+                AsistenteConocimiento.activo == True  # noqa: E712
+            )
+            return {
+                row.clave: {
+                    "id": row.clave,
+                    "title": row.titulo,
+                    "context_hint": row.contexto or "",
+                    "content": row.contenido,
+                    "enabled": bool(row.activo),
+                }
+                for row in rows
+            }
+        except Exception:
+            # El asistente no debe dejar de funcionar por una caída de DB o
+            # porque el DEMO todavía no tenga las tablas compartidas.
+            pass
+    return _load_local_knowledge()
+
+
+def save_knowledge_override(article: dict) -> None:
+    article_id = str(article.get("id") or "").strip()
+    if not article_id:
+        raise ValueError("El artículo necesita un id")
+
+    if not _force_local():
+        try:
+            from modelos.AsistenteRnd import AsistenteConocimiento
+
+            row, created = AsistenteConocimiento.get_or_create(
+                clave=article_id,
+                defaults={
+                    "titulo": str(article.get("title") or ""),
+                    "contexto": str(article.get("context_hint") or ""),
+                    "contenido": str(article.get("content") or ""),
+                    "activo": bool(article.get("enabled", True)),
+                    "actualizado": datetime.now(),
+                },
+            )
+            if not created:
+                row.titulo = str(article.get("title") or "")
+                row.contexto = str(article.get("context_hint") or "")
+                row.contenido = str(article.get("content") or "")
+                row.activo = bool(article.get("enabled", True))
+                row.actualizado = datetime.now()
+                row.save()
+            return
+        except Exception:
+            pass
+
+    _save_local_knowledge(article)
+
+
+def _record_unresolved_local(
+    question: str, context: str, source: str, usuario: str
+) -> None:
     row = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
-        "context": (context or "").strip(),
+        "user": usuario,
+        "context": context,
         "question": question,
         "source": source,
         "status": "pending",
@@ -80,7 +144,42 @@ def record_unresolved(question: str, context: str = "", source: str = "assistant
         fh.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def list_unresolved(limit: int = 500) -> list:
+def record_unresolved(
+    question: str, context: str = "", source: str = "assistant"
+) -> None:
+    question = (question or "").strip()
+    if not question:
+        return
+
+    context = (context or "").strip()
+    source = (source or "assistant").strip()
+    usuario = ""
+
+    try:
+        from pyqt5libs.pyqt5libs.utiles import LeerConf
+        usuario = str(LeerConf("usuario") or "").strip()
+    except Exception:
+        usuario = ""
+
+    if not _force_local():
+        try:
+            from modelos.AsistenteRnd import AsistenteConsultaNoResuelta
+
+            AsistenteConsultaNoResuelta.create(
+                usuario=usuario,
+                pantalla=context,
+                pregunta=question,
+                origen=source,
+                estado="pending",
+            )
+            return
+        except Exception:
+            pass
+
+    _record_unresolved_local(question, context, source, usuario)
+
+
+def _list_unresolved_local(limit: int) -> list:
     path = _unresolved_path()
     if not path.exists():
         return []
@@ -99,4 +198,34 @@ def list_unresolved(limit: int = 500) -> list:
                     rows.append(row)
     except OSError:
         return []
-    return rows[-max(1, int(limit)):]
+    return rows[-limit:]
+
+
+def list_unresolved(limit: int = 500) -> list:
+    limit = max(1, int(limit))
+
+    if not _force_local():
+        try:
+            from modelos.AsistenteRnd import AsistenteConsultaNoResuelta
+
+            rows = (
+                AsistenteConsultaNoResuelta.select()
+                .order_by(AsistenteConsultaNoResuelta.fecha.desc())
+                .limit(limit)
+            )
+            return [
+                {
+                    "timestamp": row.fecha.isoformat(timespec="seconds")
+                    if row.fecha else "",
+                    "user": row.usuario or "",
+                    "context": row.pantalla or "",
+                    "question": row.pregunta or "",
+                    "source": row.origen or "",
+                    "status": row.estado or "",
+                }
+                for row in rows
+            ]
+        except Exception:
+            pass
+
+    return _list_unresolved_local(limit)
