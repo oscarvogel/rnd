@@ -219,3 +219,25 @@ def test_conocimiento_distingue_imprimir_de_estado_lista(monkeypatch):
     system = " ".join(capturado["system"].split())
     assert "poder intentar imprimir no significa" in system
     assert "checklist operativo de LISTA" in system
+
+
+
+def test_spike_entrega_contexto_de_pantalla_a_minimax(monkeypatch):
+    capturado = {}
+
+    def fake_call(messages, **_kwargs):
+        capturado["system"] = messages[0]["content"]
+        return "ok"
+
+    monkeypatch.setattr(
+        "utiles.asistente_rnd_spike.llamar_minimax_texto",
+        fake_call,
+    )
+
+    preguntar(
+        "Que puedo hacer aca?",
+        contexto="Bandeja de pedidos (BandejaPedidosView)",
+    )
+
+    assert "PANTALLA / CONTEXTO ACTUAL:" in capturado["system"]
+    assert "Bandeja de pedidos (BandejaPedidosView)" in capturado["system"]
