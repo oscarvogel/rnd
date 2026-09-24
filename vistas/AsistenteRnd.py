@@ -11,7 +11,7 @@ import html
 import re
 import uuid
 
-from PyQt5.QtCore import QPoint, Qt, QThread, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication,
     QDialog,
@@ -32,7 +32,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from utiles.asistente_rnd_conocimiento import list_articles, save_article, suggestions
+from utiles.asistente_rnd_conocimiento import list_articles, save_article
 from utiles.asistente_rnd_servicio import answer_message
 from utiles.asistente_rnd_store import list_unresolved
 
@@ -328,24 +328,20 @@ class AsistenteRndFlotante(QWidget):
         )
         panel_layout.addWidget(self.chat, 1)
 
-        suggestion_grid = QGridLayout()
-        suggestion_grid.setSpacing(6)
-        for index, suggestion in enumerate(suggestions()):
-            button = QPushButton(suggestion)
-            button.setProperty("role", "secondary")
-            button.setMinimumHeight(30)
-            button.clicked.connect(
-                lambda _checked=False, text=suggestion: self.ask(text)
-            )
-            suggestion_grid.addWidget(button, index // 2, index % 2)
-        panel_layout.addLayout(suggestion_grid)
+        hint = QLabel(
+            "Podés preguntar, por ejemplo: “¿qué hago ahora?” o "
+            "“¿por qué no me deja continuar?”"
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color:#64748B;font-size:8pt;")
+        panel_layout.addWidget(hint)
 
         send_row = QHBoxLayout()
         self.input = QLineEdit()
         self.input.setPlaceholderText("Preguntá con tus palabras…")
         self.send_button = QPushButton("Enviar")
         self.send_button.setProperty("role", "primary")
-        self.send_button.setFixedWidth(78)
+        self.send_button.setFixedWidth(72)
         send_row.addWidget(self.input, 1)
         send_row.addWidget(self.send_button)
         panel_layout.addLayout(send_row)
