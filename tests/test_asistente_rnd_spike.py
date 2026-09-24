@@ -199,4 +199,23 @@ def test_conocimiento_no_mezcla_filtros_de_asignacion_y_ver_hoja(monkeypatch):
     system = capturado["system"]
     assert "esta pantalla NO filtra por chofer ni por camión" in system
     assert "pertenecen a **Ver Hoja de Ruta**" in system
+    assert "No atribuir \"Sin pedidos\" en esta pantalla a filtros de chofer/camión" in system
+
+
+def test_conocimiento_distingue_imprimir_de_estado_lista(monkeypatch):
+    capturado = {}
+
+    def fake_call(messages, **_kwargs):
+        capturado["system"] = messages[0]["content"]
+        return "ok"
+
+    monkeypatch.setattr(
+        "utiles.asistente_rnd_spike.llamar_minimax_texto",
+        fake_call,
+    )
+
+    preguntar("Si puedo imprimir, la hoja ya esta LISTA?")
+
+    system = " ".join(capturado["system"].split())
     assert "poder intentar imprimir no significa" in system
+    assert "checklist operativo de LISTA" in system
