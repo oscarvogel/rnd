@@ -1,4 +1,5 @@
 # coding=utf-8
+import http.client
 import json
 import urllib.error
 
@@ -132,3 +133,70 @@ def test_spike_no_contiene_router_de_intenciones():
     assert "aliases" not in source
     assert "SequenceMatcher" not in source
     assert "keyword" not in source.lower()
+
+
+
+def test_cliente_texto_reintenta_remote_disconnected(monkeypatch):
+    monkeypatch.setattr(
+        "utiles.importacion_pdf_ia._configuracion",
+        lambda: (
+            "https://example.test/v1/chat/completions",
+            "test-key",
+            "MiniMax-M3",
+            120,
+        ),
+    )
+    monkeypatch.setattr("time.sleep", lambda *_args: None)
+
+    intentos = {"cantidad": 0}
+
+    class OkResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps({
+                "choices": [{
+                    "message": {"content": "Respuesta recuperada"}
+                }]
+            }).encode("utf-8")
+
+    def fake_urlopen(_request, **_kwargs):
+        intentos["cantidad"] += 1
+        if intentos["cantidad"] == 1:
+            raise http.client.RemoteDisconnected(
+                "Remote end closed connection without response"
+            )
+        return OkResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    respuesta = llamar_minimax_texto([
+        {"role": "user", "content": "hola"}
+    ])
+
+    assert intentos["cantidad"] == 2
+    assert respuesta == "Respuesta recuperada"
+
+
+def test_conocimiento_no_mezcla_filtros_de_asignacion_y_ver_hoja(monkeypatch):
+    capturado = {}
+
+    def fake_call(messages, **_kwargs):
+        capturado["system"] = messages[0]["content"]
+        return "ok"
+
+    monkeypatch.setattr(
+        "utiles.asistente_rnd_spike.llamar_minimax_texto",
+        fake_call,
+    )
+
+    preguntar("Por que Asignar chofer y camion dice Sin pedidos?")
+
+    system = capturado["system"]
+    assert "esta pantalla NO filtra por chofer ni por camión" in system
+    assert "pertenecen a **Ver Hoja de Ruta**" in system
+    assert "poder intentar imprimir no significa" in system
