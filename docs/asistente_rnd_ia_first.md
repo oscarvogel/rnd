@@ -81,7 +81,7 @@ En DEMO, tests o caída de DB se conserva un fallback local en
 
 ## Contexto de pantalla
 
-El botón **Asistente IA** y la tecla **F1** capturan la ventana activa. Ese dato
+La **burbuja flotante** y la tecla **F1** capturan la ventana activa. La burbuja permanece por encima de las ventanas de RND, se expande a un panel compacto y vuelve a minimizarse sin perder la conversación. Ese dato
 se envía a MiniMax para resolver preguntas naturales como “¿qué hago ahora?”,
 “¿qué sigue?”, “¿por qué no me deja?” o “¿qué tengo que revisar acá?”. La
 decisión sigue siendo de la IA.
