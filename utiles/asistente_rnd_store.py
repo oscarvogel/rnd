@@ -198,7 +198,7 @@ def _list_unresolved_local(limit: int) -> list:
                     rows.append(row)
     except OSError:
         return []
-    return rows[-limit:]
+    return list(reversed(rows[-limit:]))
 
 
 def list_unresolved(limit: int = 500) -> list:
