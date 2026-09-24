@@ -64,6 +64,7 @@ def prepare_demo_database() -> None:
     ]
     db.create_tables(tables, safe=True)
 
+    _asegurar_lugares_entrega_multi_direccion(db)
     _asegurar_columna_metodo_importacion(db)
 
     admin, _ = Usuario.get_or_create(
@@ -444,6 +445,48 @@ def _seed_menu(Formula, MenuLateral) -> None:
     for padre, menu_parent, nombre, archivo, valid, orden, imag in opciones:
         f = formula(nombre, orden, archivo, valid, pare=padre.for_id, imag=imag)
         MenuLateral.get_or_create(nombre=nombre, for_id=f, for_pare=menu_parent)
+
+def _asegurar_lugares_entrega_multi_direccion(db) -> None:
+    """Elimina el índice legacy UNIQUE(cliente_id, nombre) en SQLite DEMO.
+
+    El modelo actual permite repetir una referencia cuando la dirección es
+    distinta. Demos ya creados conservan índices viejos aunque create_tables
+    use el modelo nuevo, por eso hay que retirarlo explícitamente.
+    """
+    try:
+        indices = list(db.execute_sql(
+            "PRAGMA index_list('lugares_entrega')"
+        ).fetchall())
+    except Exception:
+        return
+
+    for indice in indices:
+        if len(indice) < 3 or not indice[2]:
+            continue
+        nombre_indice = indice[1]
+        try:
+            columnas = [
+                fila[2]
+                for fila in db.execute_sql(
+                    'PRAGMA index_info("{}")'.format(
+                        str(nombre_indice).replace('"', '""')
+                    )
+                ).fetchall()
+            ]
+        except Exception:
+            continue
+        if columnas != ["cliente_id", "nombre"]:
+            continue
+        if str(nombre_indice).startswith("sqlite_autoindex"):
+            # Peewee crea este índice como CREATE UNIQUE INDEX, pero dejamos
+            # este guard por seguridad ante esquemas manuales.
+            continue
+        db.execute_sql(
+            'DROP INDEX IF EXISTS "{}"'.format(
+                str(nombre_indice).replace('"', '""')
+            )
+        )
+
 
 def _asegurar_columna_metodo_importacion(db) -> None:
     """Agrega la columna nueva también sobre demos SQLite ya existentes."""
