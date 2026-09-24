@@ -233,6 +233,91 @@ def _contenido_respuesta(payload: dict) -> str:
     return str(contenido or "")
 
 
+def llamar_minimax_texto(
+    messages: list[dict],
+    *,
+    max_completion_tokens: int = 1600,
+    temperature: float = 0.1,
+) -> str:
+    """Llama a MiniMax en modo texto reutilizando exactamente la config del PDF.
+
+    Este helper existe para que otras funciones de RND usen la misma credencial,
+    endpoint, modelo, timeout y politica de reintentos ya probados por la
+    importacion PDF. No impone JSON ni interpreta intenciones.
+    """
+    url, api_key, model, timeout = _configuracion()
+    payload = {
+        "model": model,
+        "thinking": {"type": "disabled"},
+        "temperature": temperature,
+        "max_completion_tokens": max_completion_tokens,
+        "messages": messages,
+    }
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": "Bearer {}".format(api_key),
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    raw = None
+    ultimo_error = None
+    for intento in range(1, 4):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                raw = response.read().decode("utf-8")
+            break
+        except urllib.error.HTTPError as exc:
+            ultimo_error = exc
+            detalle = ""
+            try:
+                detalle = exc.read().decode("utf-8", errors="replace")
+            except Exception:
+                detalle = ""
+            detalle = detalle[:500]
+            if exc.code in {429, 500, 502, 503, 504} and intento < 3:
+                time.sleep(float(intento))
+                continue
+            raise ExtraccionPdfIAError(
+                "El servicio de IA rechazo la consulta (HTTP {}). {}"
+                .format(exc.code, detalle)
+            ) from exc
+        except urllib.error.URLError as exc:
+            ultimo_error = exc
+            if intento < 3:
+                time.sleep(float(intento))
+                continue
+            raise ExtraccionPdfIAError(
+                "No se pudo conectar con el servicio de IA: {}".format(exc.reason)
+            ) from exc
+
+    if raw is None:
+        raise ExtraccionPdfIAError(
+            "No se obtuvo respuesta del servicio de IA: {}".format(ultimo_error)
+        )
+
+    try:
+        response_payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ExtraccionPdfIAError(
+            "El servicio de IA devolvio una respuesta no JSON"
+        ) from exc
+
+    contenido = _contenido_respuesta(response_payload)
+    contenido = re.sub(
+        r"<think>.*?</think>",
+        "",
+        contenido,
+        flags=re.I | re.S,
+    ).strip()
+    if not contenido:
+        raise ExtraccionPdfIAError("La IA devolvio una respuesta vacia")
+    return contenido
+
+
 def _llamar_vision(
     imagen_bytes: bytes,
     mime_type: str,
