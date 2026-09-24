@@ -59,3 +59,29 @@ def test_boton_asistente_usa_identidad_visual_vogel():
     assert "stop:1 #0866C8" in theme
     assert "#F5C518" in theme
     assert "border-radius: 16px" in theme
+
+
+
+def test_panel_se_mantiene_visible_sobre_abm_sin_robar_foco():
+    source = Path("vistas/AsistenteRndPanel.py").read_text(encoding="utf-8")
+
+    assert "QTimer" in source
+    assert "setInterval(450)" in source
+    assert "timeout.connect(self._keep_visible_above_rnd)" in source
+    assert "def _keep_visible_above_rnd(self):" in source
+    assert "self.raise_()" in source
+
+    keep_block = source.split("def _keep_visible_above_rnd(self):", 1)[1].split(
+        "def show_panel(self):", 1
+    )[0]
+    assert "activateWindow()" not in keep_block
+
+
+def test_panel_se_ancla_al_borde_derecho_de_la_pantalla():
+    source = Path("vistas/AsistenteRndPanel.py").read_text(encoding="utf-8")
+
+    dock_block = source.split("def _dock_right(self):", 1)[1].split(
+        "def _keep_visible_above_rnd(self):", 1
+    )[0]
+    assert "available.right() - self.width() - PANEL_MARGIN + 1" in dock_block
+    assert "reference.right()" not in dock_block
