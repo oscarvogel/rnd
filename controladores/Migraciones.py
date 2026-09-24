@@ -4,6 +4,7 @@ import traceback
 import threading
 import peewee
 
+from modelos.AsistenteRnd import AsistenteConocimiento, AsistenteConsultaNoResuelta
 from modelos.Clientes import CodigoClienteProveedor, LugarEntrega, Cliente
 from modelos.Empleados import ConceptoLiquidacion
 from modelos.EstadoHojaRuta import EstadoHojaRuta
@@ -51,6 +52,8 @@ class MigracionBaseDatos:
             (ProcesoLista, "ProcesoLista"),
             (ConceptoLiquidacion, "ConceptoLiquidacion"),
             (EstadoHojaRuta, "EstadoHojaRuta"),
+            (AsistenteConocimiento, "AsistenteConocimiento"),
+            (AsistenteConsultaNoResuelta, "AsistenteConsultaNoResuelta"),
         ]
         for modelo, nombre in modelos:
             try:
