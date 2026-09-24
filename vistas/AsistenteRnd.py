@@ -11,17 +11,18 @@ import html
 import re
 import uuid
 
-from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal
+from PyQt5.QtCore import QPointF, QRectF, Qt, QThread, QTimer, pyqtSignal
+from PyQt5.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen
 from PyQt5.QtWidgets import (
     QApplication,
     QDialog,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
     QMessageBox,
+    QGraphicsDropShadowEffect,
     QPushButton,
     QSplitter,
     QTableWidget,
@@ -37,9 +38,9 @@ from utiles.asistente_rnd_servicio import answer_message
 from utiles.asistente_rnd_store import list_unresolved
 
 
-BUBBLE_SIZE = 62
-PANEL_WIDTH = 410
-PANEL_HEIGHT = 610
+BUBBLE_SIZE = 70
+PANEL_WIDTH = 380
+PANEL_HEIGHT = 540
 SCREEN_MARGIN = 22
 
 
@@ -52,6 +53,87 @@ def _is_admin():
         return bool(usu_id and Usuario().IsAdmin(usu_id))
     except Exception:
         return False
+
+
+class AssistantBubbleButton(QPushButton):
+    """Burbuja visual del asistente, dibujada en vector para verse bien a cualquier DPI."""
+
+    def __init__(self, parent=None):
+        super().__init__("", parent)
+        self.setObjectName("asistenteBubble")
+        self.setFixedSize(BUBBLE_SIZE, BUBBLE_SIZE)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFlat(True)
+        self.setStyleSheet(
+            "QPushButton#asistenteBubble {background: transparent; border: none;}"
+        )
+
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(24)
+        shadow.setOffset(0, 5)
+        shadow.setColor(QColor(8, 59, 109, 115))
+        self.setGraphicsEffect(shadow)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        circle = QRectF(7, 5, self.width() - 14, self.height() - 14)
+
+        gradient = QLinearGradient(circle.topLeft(), circle.bottomRight())
+        if self.isDown():
+            gradient.setColorAt(0.0, QColor("#0866C8"))
+            gradient.setColorAt(1.0, QColor("#083B6D"))
+        elif self.underMouse():
+            gradient.setColorAt(0.0, QColor("#2CC8F0"))
+            gradient.setColorAt(1.0, QColor("#0A84D8"))
+        else:
+            gradient.setColorAt(0.0, QColor("#19B9E7"))
+            gradient.setColorAt(0.55, QColor("#0A84D8"))
+            gradient.setColorAt(1.0, QColor("#0866C8"))
+
+        painter.setBrush(gradient)
+        painter.setPen(QPen(QColor("#FFFFFF"), 2.2))
+        painter.drawEllipse(circle)
+
+        # Aro interior muy sutil para dar profundidad sin parecer un botón legacy.
+        inner = circle.adjusted(4.5, 4.5, -4.5, -4.5)
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(QColor(255, 255, 255, 55), 1.0))
+        painter.drawEllipse(inner)
+
+        # Globo de conversación blanco.
+        bubble = QPainterPath()
+        bubble.addRoundedRect(QRectF(20, 21, 30, 22), 7, 7)
+        tail = QPainterPath()
+        tail.moveTo(26, 41)
+        tail.lineTo(23, 49)
+        tail.lineTo(33, 43)
+        tail.closeSubpath()
+
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("#FFFFFF"))
+        painter.drawPath(bubble)
+        painter.drawPath(tail)
+
+        # Tres puntos: conversación activa / asistente.
+        painter.setBrush(QColor("#0A84D8"))
+        for x in (29, 35, 41):
+            painter.drawEllipse(QPointF(x, 32), 1.8, 1.8)
+
+        # Destello amarillo de la identidad Vogel.
+        sparkle = QPainterPath()
+        sparkle.moveTo(51, 14)
+        sparkle.lineTo(53, 19)
+        sparkle.lineTo(58, 21)
+        sparkle.lineTo(53, 23)
+        sparkle.lineTo(51, 28)
+        sparkle.lineTo(49, 23)
+        sparkle.lineTo(44, 21)
+        sparkle.lineTo(49, 19)
+        sparkle.closeSubpath()
+        painter.setBrush(QColor("#F5C518"))
+        painter.drawPath(sparkle)
 
 
 class _AnswerThread(QThread):
@@ -276,18 +358,9 @@ class AsistenteRndFlotante(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        self.bubble_button = QPushButton("IA")
-        self.bubble_button.setObjectName("asistenteBubble")
-        self.bubble_button.setToolTip("Asistente RND · clic para abrir")
-        self.bubble_button.setFixedSize(BUBBLE_SIZE, BUBBLE_SIZE)
+        self.bubble_button = AssistantBubbleButton()
+        self.bubble_button.setToolTip("Asistente RND · clic para abrir · F1")
         self.bubble_button.clicked.connect(self.expand)
-        self.bubble_button.setStyleSheet(
-            "QPushButton#asistenteBubble {"
-            "background-color:#0A84D8;color:white;border:3px solid white;"
-            "border-radius:31px;font-size:15pt;font-weight:700;"
-            "}"
-            "QPushButton#asistenteBubble:hover {background-color:#0866C8;}"
-        )
         root.addWidget(self.bubble_button, 0, Qt.AlignRight | Qt.AlignBottom)
 
         self.panel = QFrame()
