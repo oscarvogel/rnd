@@ -10,7 +10,7 @@ from __future__ import annotations
 import html
 import re
 
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QApplication,
@@ -93,6 +93,15 @@ class AsistenteRndPanel(QWidget):
         app = QApplication.instance()
         if app is not None:
             app.applicationStateChanged.connect(self._on_application_state)
+
+        # En Windows, algunos ABM legacy son ventanas top-level independientes
+        # y pueden quedar por encima de un Qt.Tool abierto previamente. Mientras
+        # el usuario haya dejado el asistente abierto, lo volvemos a elevar sin
+        # activar la ventana ni robar el foco del formulario de trabajo.
+        self._keep_on_top_timer = QTimer(self)
+        self._keep_on_top_timer.setInterval(450)
+        self._keep_on_top_timer.timeout.connect(self._keep_visible_above_rnd)
+        self._keep_on_top_timer.start()
 
     def _build_ui(self):
         outer = QVBoxLayout(self)
@@ -404,24 +413,31 @@ class AsistenteRndPanel(QWidget):
         return screen.availableGeometry(), active
 
     def _dock_right(self):
-        available, active = self._available_geometry()
+        available, _active = self._available_geometry()
         height = min(PANEL_MAX_HEIGHT, max(420, available.height() - PANEL_MARGIN * 2))
         self.resize(PANEL_WIDTH, height)
 
-        reference = active.geometry() if active is not None else (
-            self.anchor.geometry() if self.anchor is not None else available
-        )
-
-        x = reference.right() - self.width() - PANEL_MARGIN
-        y = reference.top() + PANEL_MARGIN
-
-        x = max(available.left() + PANEL_MARGIN, min(
-            x, available.right() - self.width() - PANEL_MARGIN
-        ))
-        y = max(available.top() + PANEL_MARGIN, min(
-            y, available.bottom() - self.height() - PANEL_MARGIN
-        ))
+        # Posicion estable: borde derecho de la pantalla de RND. No depende del
+        # tamaño/posición del ABM activo, así abrir una ventana centrada no mueve
+        # ni tapa el asistente.
+        x = available.right() - self.width() - PANEL_MARGIN + 1
+        y = available.top() + PANEL_MARGIN
         self.move(x, y)
+
+    def _keep_visible_above_rnd(self):
+        if not self._wanted_visible:
+            return
+
+        app = QApplication.instance()
+        if app is None or app.applicationState() != Qt.ApplicationActive:
+            return
+
+        if not self.isVisible():
+            self.show()
+
+        # raise_() no cambia el foco: el operador puede seguir escribiendo en el
+        # ABM mientras el asistente permanece visible encima de las ventanas RND.
+        self.raise_()
 
     def show_panel(self):
         self._wanted_visible = True
