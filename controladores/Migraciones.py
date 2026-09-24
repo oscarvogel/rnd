@@ -114,7 +114,7 @@ class MigracionBaseDatos:
         self._crear_lugares_iniciales()
 
     def _quitar_unicidad_nombre_lugar_entrega(self):
-        """Migra instalaciones MySQL con UNIQUE(cliente_id, nombre) legacy."""
+        """Migra índices de lugares: misma referencia puede tener otra dirección."""
         try:
             filas = list(db.execute_sql("SHOW INDEX FROM lugares_entrega").fetchall())
         except Exception:
@@ -134,17 +134,32 @@ class MigracionBaseDatos:
                 continue
             indices.setdefault(key_name, []).append((seq, column_name))
 
+        tiene_indice_actual = False
         for key_name, columnas in indices.items():
             ordenadas = [
                 nombre for _seq, nombre in sorted(columnas, key=lambda item: item[0])
             ]
+            if ordenadas == ["cliente_id", "nombre", "direccion"]:
+                tiene_indice_actual = True
+                continue
             if ordenadas != ["cliente_id", "nombre"]:
                 continue
+
             seguro = key_name.replace("`", "``")
             db.execute_sql(
                 "ALTER TABLE lugares_entrega DROP INDEX `{}`".format(seguro)
             )
             logging.info("Eliminado índice legacy %s de lugares_entrega", key_name)
+
+        if not tiene_indice_actual:
+            db.execute_sql(
+                "ALTER TABLE lugares_entrega ADD UNIQUE INDEX "
+                "uq_lugares_entrega_cliente_nombre_direccion "
+                "(cliente_id, nombre, direccion)"
+            )
+            logging.info(
+                "Creado índice por cliente+nombre+dirección en lugares_entrega"
+            )
 
     def _crear_lugares_iniciales(self):
         """Preserva dirección/ruta actuales creando un destino principal inicial.
