@@ -10,7 +10,8 @@ desde el QSS global (issue #5); aqui solo se define la estructura y
 los objectName estables.
 """
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QSize, Qt
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -51,10 +52,16 @@ class EncabezadoView(QFrame):
             layout.addWidget(etiqueta)
             self._info_labels[clave] = etiqueta
 
-        self.boton_asistente = QPushButton("Asistente")
+        self.boton_asistente = QPushButton("Vogel IA")
         self.boton_asistente.setObjectName("encabezadoBotonAsistente")
         self.boton_asistente.setCursor(Qt.PointingHandCursor)
-        self.boton_asistente.setToolTip("Abrir o cerrar el Asistente RND · F1")
+        self.boton_asistente.setToolTip(
+            "Asistente inteligente de Vogel Consultoría · Abrir/cerrar con F1"
+        )
+        self.boton_asistente.setIcon(
+            QIcon("imagenes/logo_oscar_sin_fondo.png")
+        )
+        self.boton_asistente.setIconSize(QSize(20, 20))
         self.boton_asistente.setEnabled(False)
         layout.addWidget(self.boton_asistente)
 
