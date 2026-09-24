@@ -1,5 +1,11 @@
 # coding=utf-8
-"""Servicio de respuestas del Asistente RND usando MiniMax/OpenAI-compatible."""
+"""Asistente RND IA-first sobre MiniMax/OpenAI-compatible.
+
+Toda consulta funcional llega primero al modelo. Python no intenta reconocer
+intenciones ni procedimientos mediante palabras clave, aliases o árboles de
+decisión. El modelo recibe contexto de pantalla, conversación y conocimiento
+RND, y devuelve una decisión estructurada.
+"""
 from __future__ import annotations
 
 import json
@@ -12,10 +18,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from utiles.asistente_rnd_conocimiento import (
-    knowledge_for_prompt,
-    match_article,
-)
+from utiles.asistente_rnd_conocimiento import knowledge_for_prompt
 from utiles.asistente_rnd_store import record_unresolved
 
 
@@ -30,29 +33,40 @@ def _load_env():
 _load_env()
 
 
-SYSTEM_PROMPT = """Sos el Asistente RND, especializado exclusivamente en enseñar a usar RND Logística.
+SYSTEM_PROMPT = """Sos el Asistente RND, un agente IA especializado exclusivamente en enseñar a usar RND Logística.
+
+PRINCIPIO IA-FIRST:
+Vos interpretás la pregunta. No existe un router de keywords antes de vos.
+Analizá libremente la consulta, la pantalla actual, el historial y toda la base
+de conocimiento. Elegí qué información es pertinente y sintetizá la respuesta.
 
 OBJETIVO:
-- Resolver dudas de funcionamiento del sistema.
+- Resolver dudas de funcionamiento de RND.
 - Explicar pasos operativos usando nombres reales de pantallas y acciones.
-- Ayudar a entender qué sigue en el flujo Importar -> Revisar -> Organizar -> Asignar -> Revisar -> Imprimir.
+- Entender preguntas naturales como "¿qué hago ahora?", "¿por qué no me deja?",
+  "¿qué sigue?", aunque no coincidan literalmente con el manual.
+- Combinar más de un artículo de conocimiento cuando sea necesario.
 
-REGLAS ESTRICTAS:
+REGLAS:
 - No inventes botones, pantallas, estados, permisos ni datos.
-- No afirmes que ejecutaste acciones. El asistente sólo orienta.
-- No respondas conocimiento general fuera de RND.
-- Si la pregunta no es sobre RND, devolvé scope="out".
-- Si es sobre RND pero la base suministrada no alcanza para contestar con seguridad, devolvé resolved=false.
-- Usá sólo el conocimiento operativo incluido en este prompt.
-- Si la pregunta dice "acá", "ahora", "después" o similar, usá PANTALLA ACTUAL como contexto.
-- Preferí respuestas breves y pasos numerados.
-- No sugieras repetir una importación fallida sin verificar antes posibles duplicados.
+- No afirmes que ejecutaste una acción: este asistente sólo orienta.
+- No uses conocimiento general para completar huecos del procedimiento.
+- Si la consulta no pertenece a RND, elegí status="out_of_scope".
+- Si pertenece a RND pero el conocimiento entregado no alcanza para responder
+  con seguridad, elegí status="unresolved".
+- Si podés responder de forma fundada, elegí status="answered".
+- La PANTALLA ACTUAL es contexto, no una restricción: una pregunta puede referirse
+  a otra parte de RND.
+- Preferí respuestas breves y pasos numerados cuando sean útiles.
+- Ante una importación fallida, no sugieras repetirla sin verificar duplicados.
+- sources debe contener los IDs de los artículos realmente usados.
 
-Respondé EXCLUSIVAMENTE JSON válido con esta forma:
+Respondé EXCLUSIVAMENTE JSON válido:
 {
-  "scope": "rnd" | "out",
-  "resolved": true | false,
-  "answer": "texto de respuesta"
+  "status": "answered" | "unresolved" | "out_of_scope",
+  "answer": "respuesta para el usuario",
+  "sources": ["id_articulo"],
+  "reason": "explicación breve de por qué tomaste esa decisión"
 }
 """
 
@@ -126,32 +140,7 @@ def _content(payload: dict) -> str:
     return str(value or "")
 
 
-def answer_message(question: str, context: str = "", history=None) -> dict:
-    question = (question or "").strip()
-    if not question:
-        return {"content": "", "source": "empty", "resolved": False}
-
-    direct = match_article(question, context=context)
-    if direct is not None:
-        return {
-            "content": direct.get("answer", ""),
-            "source": "knowledge",
-            "resolved": True,
-            "article_id": direct.get("id"),
-        }
-
-    url, key, model, timeout = _config()
-    if not key:
-        record_unresolved(question, context, source="ai_not_configured")
-        return {
-            "content": (
-                "La consulta no coincide con un procedimiento conocido y la IA del "
-                "Asistente RND no está configurada. La pregunta quedó registrada."
-            ),
-            "source": "fallback",
-            "resolved": False,
-        }
-
+def _messages(question: str, context: str, history) -> list:
     messages = [{
         "role": "system",
         "content": (
@@ -166,13 +155,32 @@ def answer_message(question: str, context: str = "", history=None) -> dict:
         if role in {"user", "assistant"} and body:
             messages.append({"role": role, "content": body})
     messages.append({"role": "user", "content": question})
+    return messages
+
+
+def answer_message(question: str, context: str = "", history=None) -> dict:
+    question = (question or "").strip()
+    if not question:
+        return {"content": "", "source": "empty", "resolved": False}
+
+    url, key, model, timeout = _config()
+    if not key:
+        record_unresolved(question, context, source="ai_not_configured")
+        return {
+            "content": (
+                "El Asistente RND necesita MiniMax para interpretar las consultas. "
+                "No hay una API key configurada y la pregunta quedó registrada."
+            ),
+            "source": "not_configured",
+            "resolved": False,
+        }
 
     payload = {
         "model": model,
         "thinking": {"type": "disabled"},
         "temperature": 0.1,
-        "max_completion_tokens": 1200,
-        "messages": messages,
+        "max_completion_tokens": 1400,
+        "messages": _messages(question, context, history),
     }
     request = urllib.request.Request(
         url,
@@ -188,26 +196,53 @@ def answer_message(question: str, context: str = "", history=None) -> dict:
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             raw = json.loads(response.read().decode("utf-8"))
-        result = _extract_json(_content(raw))
+        decision = _extract_json(_content(raw))
     except (OSError, ValueError, KeyError, urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError):
         return {
-            "content": (
-                "No pude consultar la IA en este momento. Podés seguir usando las "
-                "preguntas sugeridas y los procedimientos conocidos de RND."
-            ),
-            "source": "error",
+            "content": "No pude consultar MiniMax en este momento. Intentá nuevamente.",
+            "source": "ai_error",
             "resolved": False,
         }
 
-    if result.get("scope") == "out":
-        return {"content": OUT_OF_SCOPE, "source": "scope", "resolved": True}
+    status = str(decision.get("status") or "").strip()
+    sources = decision.get("sources")
+    if not isinstance(sources, list):
+        sources = []
 
-    if not bool(result.get("resolved")):
+    if status == "out_of_scope":
+        return {
+            "content": OUT_OF_SCOPE,
+            "source": "ai",
+            "decision": status,
+            "resolved": True,
+            "sources": sources,
+        }
+
+    if status != "answered":
         record_unresolved(question, context, source="ai_unresolved")
-        return {"content": UNRESOLVED, "source": "unresolved", "resolved": False}
+        return {
+            "content": UNRESOLVED,
+            "source": "ai",
+            "decision": "unresolved",
+            "resolved": False,
+            "sources": sources,
+        }
 
-    answer = (result.get("answer") or "").strip()
+    answer = str(decision.get("answer") or "").strip()
     if not answer:
         record_unresolved(question, context, source="ai_empty")
-        return {"content": UNRESOLVED, "source": "unresolved", "resolved": False}
-    return {"content": answer, "source": "ai", "resolved": True}
+        return {
+            "content": UNRESOLVED,
+            "source": "ai",
+            "decision": "unresolved",
+            "resolved": False,
+            "sources": sources,
+        }
+
+    return {
+        "content": answer,
+        "source": "ai",
+        "decision": "answered",
+        "resolved": True,
+        "sources": sources,
+    }
