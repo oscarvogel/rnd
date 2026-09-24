@@ -1,350 +1,336 @@
 # Manual de usuario — Importación de pedidos y generación de hoja de ruta
 
-## Objetivo
+**Actualizado:** 24/09/2026
 
-Este documento explica el flujo operativo para un usuario nuevo de RND Logística, desde la importación de pedidos hasta la generación de la hoja de ruta.
+Este manual describe el flujo operativo actual de RND desde la recepción del
+archivo del proveedor hasta la preparación de la hoja de ruta.
 
-Flujo general:
+Flujo recomendado:
 
-**Importar pedidos → revisar → organizar → asignar chofer y camión → revisar hoja de ruta → imprimir**
+**Importar → revisar vista previa → grabar → organizar facturas → asignar chofer
+y camión → revisar hoja → validar → imprimir / despachar**
 
 ---
 
 ## 1. Antes de empezar
 
-Verifique que:
+Verifique que estén disponibles:
 
-- El proveedor/origen de los pedidos exista en el sistema.
-- El proveedor tenga configurado su método de importación.
-- Los clientes estén cargados.
-- Los clientes que tengan más de un destino tengan sus lugares de entrega correctamente definidos.
-- Las rutas de reparto estén disponibles.
-- Los empleados/choferes estén cargados.
-- Los equipos/camiones estén cargados.
-- Conozca la fecha de reparto correspondiente a los pedidos.
+- proveedor/origen;
+- fecha de reparto;
+- clientes;
+- lugares de entrega;
+- rutas;
+- choferes/empleados;
+- equipos/camiones.
 
-> **Importante:** cliente y lugar de entrega son conceptos distintos. El cliente identifica a quién se vende y el lugar de entrega indica dónde se entrega. No se debe duplicar un cliente solamente porque tenga más de un destino.
+Un cliente puede tener varios lugares de entrega. No duplique clientes sólo por
+tener distintos destinos.
 
 ---
 
-# 2. Importación de pedidos
+## 2. Importar pedidos
 
-## Paso 1 — Abrir Importación de pedidos
+Abra **Importar pedidos**.
 
-Desde el menú principal ingrese a **Importación de pedidos**.
-
-La ventana se abre maximizada para facilitar la revisión de los datos.
-
-## Paso 2 — Seleccionar proveedor y fecha
+### Paso 1 — Elegir proveedor y fecha
 
 Seleccione:
 
 - **Proveedor / origen**
-- **Fecha de reparto**
+- **Fecha reparto**
 
-El proveedor es importante porque RND utiliza su configuración para interpretar correctamente el archivo importado.
+RND usa la configuración del proveedor para preparar el archivo.
 
-## Paso 3 — Seleccionar el archivo
+### Paso 2 — Seleccionar archivo
 
-Presione **Examinar** y seleccione el archivo Excel recibido.
+Presione **Seleccionar archivo**.
 
-RND analiza el archivo y, cuando corresponde, lo normaliza utilizando el método de importación configurado para ese proveedor.
+RND acepta:
 
-## Paso 4 — Seleccionar hoja y rango
+- Excel: `.xlsx`, `.xls`;
+- PDF: `.pdf`;
+- imágenes: `.png`, `.jpg`, `.jpeg`.
 
-Si el Excel contiene varias hojas:
+### Si el archivo es Excel
 
-1. Seleccione la hoja correcta.
-2. Revise la fila donde se encuentran los encabezados.
-3. Si corresponde, indique la fila final del rango a importar.
+RND usa el método configurado para ese proveedor. Según el formato puede
+normalizarlo antes de mostrarlo.
 
-## Paso 5 — Cargar vista previa
+Puede seleccionar hoja y, si hace falta, indicar fila de inicio y fila final.
+
+### Si el archivo es PDF o imagen
+
+RND procesa el documento con IA, extrae los pedidos y los convierte
+internamente al formato de la vista previa.
+
+**No es necesario convertir el PDF manualmente a Excel.**
+
+Si falta la configuración de IA o el archivo no contiene pedidos reconocibles,
+RND muestra el error y no graba nada.
+
+---
+
+## 3. Revisar la vista previa
 
 Presione **Cargar vista previa**.
 
-En este momento **todavía no se graban pedidos**.
+En este momento todavía no se graban pedidos.
 
-Revise especialmente:
+Controle:
 
-- Cliente
-- Comprobante / factura
-- Producto
-- Cantidad
-- Kilos
-- Bultos
-- Observaciones
+- cliente;
+- comprobante/factura;
+- producto;
+- cantidad;
+- KG;
+- bultos;
+- observaciones.
 
-Las filas que no deban importarse pueden desmarcarse.
+### PDF / imagen
 
-### Antes de continuar verifique
+Cuando el origen es PDF o imagen:
 
-- [ ] Proveedor correcto
-- [ ] Fecha de reparto correcta
-- [ ] Comprobante o factura visible
-- [ ] Producto correcto
-- [ ] Cantidad correcta
-- [ ] Cliente identificable
-- [ ] No hay filas de títulos, subtotales o datos basura
+- las celdas pueden corregirse antes de grabar;
+- las filas marcadas **REVISAR IA** quedan desmarcadas por defecto;
+- el operador decide si las corrige y habilita.
 
----
+### Excel
 
-# 3. Grabar los pedidos
-
-## Paso 6 — Grabar pedidos
-
-Cuando la vista previa sea correcta, presione **Grabar pedidos**.
-
-RND procesa únicamente las filas seleccionadas.
-
-Durante este proceso pueden ocurrir distintas situaciones.
-
-### Cliente reconocido
-
-El pedido se incorpora normalmente y queda disponible para organizarlo en el reparto.
-
-### Cliente pendiente de identificar
-
-Si el código del proveedor todavía no está asociado a un cliente interno, RND puede solicitar que se busque o asocie el cliente.
-
-Si no se logra resolver correctamente, el pedido no debe considerarse listo para despacho.
-
-### Error de conexión o formato
-
-Si RND informa una interrupción o error durante la importación, no repita la operación automáticamente.
-
-Primero revise el mensaje para evitar importar dos veces los mismos pedidos.
+En el flujo Excel se mantiene el comportamiento histórico: normalmente se
+marca o desmarca la columna **Importa**.
 
 ---
 
-# 4. Organizar pedidos
+## 4. Grabar pedidos
 
-## Paso 7 — Abrir Bandeja de pedidos
+Cuando la vista previa sea correcta presione **Grabar pedidos**.
 
-Después de importar, ingrese a **Bandeja de pedidos** / **Organizar pedidos**.
+RND muestra un resumen con:
 
-Seleccione la misma fecha utilizada durante la importación.
+- registros leídos;
+- importados;
+- ya existentes;
+- omitidos;
+- pendientes;
+- errores.
 
-## Paso 8 — Buscar y seleccionar pedidos
+Según el resultado aparecerá una acción como:
 
-Utilice los filtros disponibles para encontrar los pedidos.
+- **Continuar con el reparto**;
+- **Revisar pendientes**;
+- **Corregir importación**.
 
-Cuando corresponda, puede buscar por **factura/comprobante** y seleccionar todos los renglones pertenecientes a la misma factura.
-
-Esto evita organizar producto por producto cuando toda la factura debe viajar junta.
-
-## Paso 9 — Revisar cliente y lugar de entrega
-
-Antes de asignar una ruta verifique:
-
-- Cliente correcto
-- Lugar de entrega correcto
-- Factura/comprobante correcto
-- Productos incluidos
-- Cantidades correctas
-
-Ejemplo:
-
-Un mismo cliente puede tener:
-
-- Puerto Rico
-- San Vicente
-
-En ese caso debe existir **un solo cliente con dos lugares de entrega**, no dos clientes duplicados.
-
-## Paso 10 — Seleccionar ruta de reparto
-
-Seleccione los pedidos que viajarán juntos.
-
-Luego seleccione la ruta destino, por ejemplo:
-
-- Centro
-- Norte
-- Sur
-- Otra ruta configurada
-
-Presione **Organizar selección**.
-
-RND verifica que la ruta haya quedado realmente grabada antes de permitir continuar.
+Si la conexión se interrumpe durante una escritura, RND detiene la importación.
+Revise el resumen y los pedidos existentes antes de repetir la operación.
 
 ---
 
-# 5. Asignar chofer y camión
+## 5. Cómo resuelve cliente, lugar y ruta
 
-## Paso 11 — Continuar a asignación
+Al grabar, RND intenta primero identificar al cliente por el código que usa el
+proveedor. Si no existe esa relación, intenta coincidencia exacta por razón
+social.
 
-Después de organizar los pedidos en una ruta, presione **Siguiente**.
+Para el lugar de entrega:
 
-RND abre la asignación correspondiente a:
+1. usa el lugar principal si existe;
+2. si no hay principal y existe un solo lugar activo, usa ese;
+3. si hay varios lugares sin principal, deja el lugar pendiente.
 
-- La misma fecha
-- La ruta recién organizada
+Para la ruta:
 
-## Paso 12 — Seleccionar responsable / chofer
+1. usa la ruta del lugar;
+2. si el lugar no tiene ruta, usa la ruta del cliente.
 
-Seleccione el empleado responsable del viaje.
-
-No deje el empleado genérico cuando la hoja de ruta ya vaya a utilizarse operativamente.
-
-## Paso 13 — Seleccionar equipo / camión
-
-Seleccione el camión o equipo que realizará el reparto.
-
-No deje el equipo genérico cuando el viaje ya esté definido.
-
-## Paso 14 — Guardar
-
-Grabe la asignación.
-
-Verifique que todos los pedidos correspondientes a la ruta hayan quedado asociados al chofer y al camión correctos.
+Los casos pendientes se corrigen en la bandeja antes de finalizar el reparto.
 
 ---
 
-# 6. Revisar la hoja de ruta
+## 6. Pedidos para organizar
 
-## Paso 15 — Abrir Ver Hoja de Ruta
+Abra **Pedidos para organizar**.
 
-Ingrese a **Ver Hoja de Ruta**.
+La pantalla trabaja a nivel de factura/documento: una fila puede representar
+varias líneas de producto.
+
+Puede:
+
+- cambiar la fecha;
+- activar/desactivar **Priorizar pendientes**;
+- buscar por factura;
+- **Editar** una factura;
+- abrir **Productos**;
+- seleccionar facturas;
+- elegir **Ruta destino**;
+- presionar **Organizar seleccionados**.
+
+### Editar factura
+
+Permite modificar:
+
+- cliente;
+- lugar de entrega;
+- ruta;
+- remito;
+- observación general.
+
+Si falta el cliente o el destino, use **Crear / editar clientes y lugares**.
+
+### Productos
+
+Muestra:
+
+- producto;
+- cantidad factura;
+- cantidad a entregar;
+- pendiente;
+- KG;
+- bultos;
+- observaciones.
+
+En esta pantalla **sólo se modifica Cantidad a entregar**.
+
+La cantidad no puede ser negativa ni superar la cantidad original de la factura.
+
+---
+
+## 7. Organizar en una ruta
+
+Seleccione una o más facturas, elija **Ruta destino** y presione
+**Organizar seleccionados**.
+
+RND verifica contra la base que todas las líneas hayan quedado con esa ruta.
+Sólo entonces habilita **Asignar chofer y camión**.
+
+---
+
+## 8. Asignar chofer y camión
+
+La pantalla trabaja por:
+
+- fecha;
+- ruta.
+
+### Cargar hoja
+
+**Cargar hoja** recarga los pedidos de la fecha+ruta en la misma pantalla. No
+abre otra ventana.
+
+Si aparece **Sin pedidos**, revise fecha, ruta y que las facturas se hayan
+organizado en esa ruta.
+
+Esta pantalla no usa filtros de chofer o camión.
+
+### Guardar asignación
 
 Seleccione:
 
-- Fecha
-- Ruta
+- chofer/responsable;
+- camión/equipo.
 
-## Paso 16 — Cargar y controlar
+Presione **Guardar asignación**.
 
-Revise la grilla completa.
+RND aplica los mismos recursos a todos los pedidos de esa fecha+ruta y luego
+verifica que no hayan quedado asignaciones mezcladas.
 
-Verifique:
-
-- Cliente
-- Factura / comprobante
-- Producto
-- Cantidad
-- Kilos
-- Bultos
-- Observaciones
-- Chofer
-- Camión
-
-## Paso 17 — Corregir antes de imprimir
-
-Si detecta un error, corríjalo antes de generar el documento final.
-
-Según el caso puede utilizar:
-
-- **Modificar**
-- **Agregar**
-- **Borrar**
-
-No entregue una hoja de ruta con datos incorrectos para corregirla después.
+Puede usar **Ver hoja de ruta ahora** para revisar el resultado o
+**Validar hoja de ruta** para continuar con el checklist.
 
 ---
 
-# 7. Generar la hoja de ruta
+## 9. Ver Hoja de Ruta
 
-## Paso 18 — Imprimir
+Seleccione fecha y ruta y presione **Actualizar**.
 
-Cuando estén completos:
+En esta pantalla sí existen filtros opcionales de:
 
-- Fecha
-- Ruta
-- Responsable / chofer
-- Equipo / camión
+- camión;
+- chofer.
 
-presione **Imprimir**.
+Si la hoja aparece vacía, revise también esos filtros.
 
-RND genera el PDF de la hoja de ruta con los pedidos correspondientes.
-
----
-
-# 8. Checklist final
-
-Antes de entregar la hoja de ruta confirme:
-
-- [ ] La fecha es correcta.
-- [ ] Todos los pedidos que deben viajar están incluidos.
-- [ ] Todas las líneas correspondientes a una factura están incluidas.
-- [ ] Cada pedido tiene el cliente correcto.
-- [ ] Cada pedido tiene el lugar de entrega correcto.
-- [ ] La ruta es correcta.
-- [ ] El chofer es correcto.
-- [ ] El camión/equipo es correcto.
-- [ ] Las cantidades son correctas.
-- [ ] Los kilos son correctos.
-- [ ] Los bultos son correctos.
-- [ ] Las observaciones necesarias están visibles.
-- [ ] El PDF corresponde a la fecha y ruta revisadas.
+Los recursos genéricos significan pendiente y no deben considerarse una
+asignación terminada.
 
 ---
 
-# 9. Problemas frecuentes
+## 10. Validar hoja de ruta
 
-## Elegí el archivo pero no aparecen los datos
+La validación exige:
 
-Revise:
+- al menos un pedido;
+- fecha;
+- ruta;
+- un único chofer real;
+- un único camión real;
+- cliente y lugar de entrega;
+- comprobante;
+- cantidades mayores que cero.
 
-- Proveedor seleccionado
-- Hoja del Excel
-- Fila de encabezados
-- Formato del archivo
+Estados:
 
-## El producto aparece vacío
+- **EN_PREPARACION**
+- **LISTA**
+- **DESPACHADA**
 
-No continúe con la organización.
-
-Puede existir una diferencia entre el formato recibido y el método de importación configurado para ese proveedor.
-
-## El cliente no coincide
-
-Resuelva la asociación del cliente antes de cerrar el reparto.
-
-## Falta el lugar de entrega
-
-Asigne o cree el lugar de entrega correspondiente antes de finalizar la hoja de ruta.
-
-## Organicé una factura pero no aparece donde esperaba
-
-Verifique:
-
-- Fecha
-- Ruta seleccionada
-- Pedidos seleccionados
-- Que se haya incluido toda la factura
-
-Luego actualice la bandeja.
-
-## No puedo imprimir la hoja de ruta
-
-Verifique que estén completos:
-
-- Fecha
-- Ruta
-- Responsable
-- Equipo
-
-y que existan pedidos para esa combinación.
+Una hoja sólo puede pasar a LISTA si cumple el checklist. Para pasar a
+DESPACHADA debe estar LISTA y seguir siendo válida.
 
 ---
 
-# Flujo resumido
+## 11. Imprimir PDF
 
-| Paso | Acción | Resultado esperado |
-|---|---|---|
-| 1 | Seleccionar proveedor, fecha y archivo | Archivo listo para procesar |
-| 2 | Cargar vista previa | Pedidos visibles para revisar |
-| 3 | Grabar pedidos | Pedidos incorporados |
-| 4 | Revisar cliente y lugar de entrega | Destinos definidos |
-| 5 | Seleccionar pedidos/factura y organizar | Pedidos asignados a una ruta |
-| 6 | Asignar chofer y camión | Recursos del viaje definidos |
-| 7 | Ver Hoja de Ruta | Revisión final |
-| 8 | Imprimir | PDF operativo generado |
+En **Ver Hoja de Ruta**, **Imprimir PDF** exige:
+
+- fecha;
+- ruta;
+- chofer;
+- camión;
+- pedidos para esa combinación.
+
+Poder imprimir no significa por sí mismo que la hoja esté marcada LISTA.
 
 ---
 
-## Regla recomendada para usuarios nuevos
+## 12. Problemas frecuentes
 
-Trabajar siempre en este orden:
+### “El PDF no importa”
 
-**Importar → Revisar → Organizar → Asignar → Revisar nuevamente → Imprimir**
+RND sí soporta PDF. Revise:
 
-Esto reduce errores y evita que una hoja de ruta llegue a operación con pedidos, destinos o recursos incorrectos.
+- proveedor;
+- fecha;
+- configuración de IA;
+- calidad/legibilidad del documento;
+- mensaje mostrado durante el procesamiento.
+
+### “La IA leyó mal una fila”
+
+Corrija la vista previa antes de grabar. Las filas **REVISAR IA** quedan
+desmarcadas hasta su revisión.
+
+### “Asignar chofer y camión dice Sin pedidos”
+
+Revise fecha+ruta y que la organización anterior haya guardado esa ruta.
+
+### “Ver Hoja de Ruta no muestra nada”
+
+Revise fecha, ruta y también los filtros opcionales de chofer/camión.
+
+### “No puedo marcar LISTA”
+
+Use el checklist de Validar hoja de ruta para identificar el dato faltante.
+
+### “No puedo imprimir”
+
+Complete fecha, ruta, chofer y camión y confirme que existan pedidos.
+
+---
+
+## 13. Asistente RND
+
+El Asistente RND puede abrirse/cerrarse con **F1**. También puede cerrarse con
+**Esc** o con la **X**.
+
+Puede preguntarle por el paso siguiente o por un error de la pantalla actual.
