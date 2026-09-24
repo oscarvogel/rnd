@@ -487,6 +487,12 @@ def _asegurar_lugares_entrega_multi_direccion(db) -> None:
             )
         )
 
+    db.execute_sql(
+        "CREATE UNIQUE INDEX IF NOT EXISTS "
+        "uq_lugares_entrega_cliente_nombre_direccion "
+        "ON lugares_entrega(cliente_id, nombre, direccion)"
+    )
+
 
 def _asegurar_columna_metodo_importacion(db) -> None:
     """Agrega la columna nueva también sobre demos SQLite ya existentes."""
