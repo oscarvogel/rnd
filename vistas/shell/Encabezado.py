@@ -51,6 +51,13 @@ class EncabezadoView(QFrame):
             layout.addWidget(etiqueta)
             self._info_labels[clave] = etiqueta
 
+        self.boton_asistente = QPushButton("Asistente")
+        self.boton_asistente.setObjectName("encabezadoBotonAsistente")
+        self.boton_asistente.setCursor(Qt.PointingHandCursor)
+        self.boton_asistente.setToolTip("Abrir o cerrar el Asistente RND · F1")
+        self.boton_asistente.setEnabled(False)
+        layout.addWidget(self.boton_asistente)
+
         self.boton_salir = QPushButton("Salir")
         self.boton_salir.setObjectName("encabezadoBotonSalir")
         self.boton_salir.setCursor(Qt.PointingHandCursor)
