@@ -58,6 +58,8 @@ class MigracionBaseDatos:
             except peewee.OperationalError:
                 logging.debug("Tabla %s ya existe, no se crea de nuevo", nombre)
 
+        self._quitar_unicidad_nombre_lugar_entrega()
+
         # El FK se agrega después de crear lugares_entrega para instalaciones existentes.
         migraciones_lugares = [
             migrator.add_column(
@@ -110,6 +112,39 @@ class MigracionBaseDatos:
         self.RealizaMigraciones()
 
         self._crear_lugares_iniciales()
+
+    def _quitar_unicidad_nombre_lugar_entrega(self):
+        """Migra instalaciones MySQL con UNIQUE(cliente_id, nombre) legacy."""
+        try:
+            filas = list(db.execute_sql("SHOW INDEX FROM lugares_entrega").fetchall())
+        except Exception:
+            logging.exception("No se pudieron inspeccionar índices de lugares_entrega")
+            return
+
+        indices = {}
+        for fila in filas:
+            try:
+                non_unique = int(fila[1])
+                key_name = str(fila[2])
+                seq = int(fila[3])
+                column_name = str(fila[4])
+            except (IndexError, TypeError, ValueError):
+                continue
+            if non_unique != 0 or key_name.upper() == "PRIMARY":
+                continue
+            indices.setdefault(key_name, []).append((seq, column_name))
+
+        for key_name, columnas in indices.items():
+            ordenadas = [
+                nombre for _seq, nombre in sorted(columnas, key=lambda item: item[0])
+            ]
+            if ordenadas != ["cliente_id", "nombre"]:
+                continue
+            seguro = key_name.replace("`", "``")
+            db.execute_sql(
+                "ALTER TABLE lugares_entrega DROP INDEX `{}`".format(seguro)
+            )
+            logging.info("Eliminado índice legacy %s de lugares_entrega", key_name)
 
     def _crear_lugares_iniciales(self):
         """Preserva dirección/ruta actuales creando un destino principal inicial.
