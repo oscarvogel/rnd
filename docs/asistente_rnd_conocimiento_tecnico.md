@@ -143,6 +143,10 @@ Una vez resuelto el cliente:
 Un cliente puede tener varios lugares de entrega. No se debe duplicar el cliente
 sólo porque tenga más de un destino.
 
+La misma **Nombre / Referencia** puede repetirse para un cliente cuando la
+**dirección es distinta**. RND sólo considera duplicado exacto el mismo cliente
+con la misma referencia y la misma dirección.
+
 ## 7. Cómo determina la ruta durante la importación
 
 Si existe lugar de entrega resuelto:
