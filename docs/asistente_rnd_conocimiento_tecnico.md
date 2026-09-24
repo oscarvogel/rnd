@@ -149,7 +149,19 @@ con:
 - fecha seleccionada;
 - ruta seleccionada.
 
-Si no existe ningún registro para esa combinación, muestra **Sin pedidos**.
+**Importante:** esta pantalla NO filtra por chofer ni por camión. Esos filtros
+pertenecen a **Ver Hoja de Ruta**, no a **Asignar chofer y camión**.
+
+Si no existe ningún registro para esa combinación fecha+ruta, muestra
+**Sin pedidos**. Las causas a revisar son concretamente:
+
+- fecha distinta de la usada al organizar;
+- ruta distinta de la usada al organizar;
+- pedidos todavía sin organizar en esa ruta;
+- inexistencia real de registros para esa combinación.
+
+No atribuir "Sin pedidos" en esta pantalla a filtros de chofer/camión, porque no
+forman parte de su consulta.
 
 Los valores genéricos configurados para empleado y camión representan
 "pendiente", no una asignación válida.
@@ -201,7 +213,8 @@ Al cargar la hoja:
 
 ## 10. Requisitos para imprimir la Hoja de Ruta
 
-Antes de imprimir, la pantalla exige:
+El botón Imprimir se habilita cuando la consulta cargada tiene al menos un
+registro. Al intentar imprimir, la pantalla exige:
 
 - fecha;
 - ruta;
@@ -210,6 +223,9 @@ Antes de imprimir, la pantalla exige:
 
 Además debe existir al menos una hoja de ruta para esa combinación de fecha y
 ruta.
+
+Esto es distinto de la validación para estado LISTA: poder intentar imprimir no
+significa por sí solo que la hoja cumpla todo el checklist operativo de LISTA.
 
 ## 11. Validación operativa de una hoja
 
