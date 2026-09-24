@@ -2,12 +2,29 @@
 import http.client
 import json
 import urllib.error
+from pathlib import Path
 
 from utiles.asistente_rnd_spike import preguntar
 from utiles.importacion_pdf_ia import llamar_minimax_texto
 
 
-def test_spike_envia_manual_y_pregunta_a_minimax(monkeypatch):
+def _capturar_system(monkeypatch, pregunta):
+    capturado = {}
+
+    def fake_call(messages, **kwargs):
+        capturado["messages"] = messages
+        capturado["kwargs"] = kwargs
+        return "ok"
+
+    monkeypatch.setattr(
+        "utiles.asistente_rnd_spike.llamar_minimax_texto",
+        fake_call,
+    )
+    preguntar(pregunta)
+    return capturado
+
+
+def test_spike_envia_base_canonica_y_pregunta_a_minimax(monkeypatch):
     capturado = {}
 
     def fake_call(messages, **kwargs):
@@ -24,16 +41,72 @@ def test_spike_envia_manual_y_pregunta_a_minimax(monkeypatch):
 
     assert respuesta.startswith("Primero organiza")
     system = capturado["messages"][0]["content"]
-    assert "Manual de usuario" in system
+    assert "Base de conocimiento canónica del Asistente RND" in system
     assert "Importar pedidos" in system
-    assert "Conocimiento técnico-funcional" in system
-    assert "Busca primero un lugar de entrega marcado como **principal**" in system
-    assert "Si ya existe el vínculo" in system
+    assert "PDF" in system
+    assert "Pedidos para organizar" in system
+    assert "Asignar chofer y camión" in system
     assert capturado["messages"][-1] == {
         "role": "user",
         "content": "Ya importe los pedidos, que hago ahora?",
     }
     assert capturado["kwargs"]["max_completion_tokens"] == 1400
+
+
+def test_spike_carga_solo_la_base_canonica():
+    source = Path("utiles/asistente_rnd_spike.py").read_text(encoding="utf-8")
+
+    assert "asistente_rnd_conocimiento_tecnico.md" in source
+    assert "manual_usuario_importacion_hoja_ruta.md" not in source
+    assert "guia_usuario.md" not in source
+
+
+def test_conocimiento_pdf_ia_no_vuelve_a_negar_pdf(monkeypatch):
+    capturado = _capturar_system(monkeypatch, "Puedo importar un PDF?")
+
+    system = capturado["messages"][0]["content"]
+    assert "Excel: `.xlsx` y `.xls`" in system
+    assert "PDF: `.pdf`" in system
+    assert "Imágenes: `.png`, `.jpg` y `.jpeg`" in system
+    assert "Es incorrecto responder que RND sólo acepta Excel" in system
+    assert "convertirlo manualmente" in system
+    assert "REVISAR IA" in system
+    assert "se pueden corregir las celdas" in system
+
+
+def test_conocimiento_documenta_cargar_hoja_y_productos(monkeypatch):
+    capturado = _capturar_system(
+        monkeypatch,
+        "Que hace Cargar hoja y que puedo editar en Productos?",
+    )
+
+    system = capturado["messages"][0]["content"]
+    assert "Cargar hoja** no navega a otra pantalla" in system
+    assert "única columna editable" in system
+    assert "**Cantidad a entregar**" in system
+    assert "Producto." in system
+    assert "KG." in system
+    assert "Bultos." in system
+
+
+def test_conocimiento_tecnico_explica_lugar_duplicados_y_hoja_vacia(monkeypatch):
+    capturado = _capturar_system(monkeypatch, "Como detecta los lugares de entrega?")
+
+    system = capturado["messages"][0]["content"]
+    assert "código informado por el proveedor" in system
+    assert "exactamente un lugar activo" in system
+    assert "no crea otra línea operativa" in system
+    assert "filtros opcionales" in system
+    assert "todos los pedidos de esa fecha+ruta" in system
+
+
+def test_spike_no_contiene_router_de_intenciones():
+    source = Path("utiles/asistente_rnd_spike.py").read_text(encoding="utf-8")
+
+    assert "match_article" not in source
+    assert "aliases" not in source
+    assert "SequenceMatcher" not in source
+    assert "keyword" not in source.lower()
 
 
 def test_spike_acepta_texto_normal_sin_json(monkeypatch):
@@ -101,41 +174,6 @@ def test_cliente_texto_reutiliza_configuracion_pdf_y_reintenta(monkeypatch):
     assert respuesta == "Respuesta de prueba"
 
 
-
-def test_conocimiento_tecnico_explica_lugar_duplicados_y_hoja_vacia(monkeypatch):
-    capturado = {}
-
-    def fake_call(messages, **_kwargs):
-        capturado["system"] = messages[0]["content"]
-        return "ok"
-
-    monkeypatch.setattr(
-        "utiles.asistente_rnd_spike.llamar_minimax_texto",
-        fake_call,
-    )
-
-    preguntar("Como detecta los lugares de entrega?")
-
-    system = capturado["system"]
-    assert "código informado por el proveedor" in system
-    assert "exactamente un lugar activo" in system
-    assert "no crea otra línea operativa" in system
-    assert "filtro de camión" in system
-    assert "todos los pedidos de esa fecha+ruta" in system
-
-
-def test_spike_no_contiene_router_de_intenciones():
-    from pathlib import Path
-
-    source = Path("utiles/asistente_rnd_spike.py").read_text(encoding="utf-8")
-
-    assert "match_article" not in source
-    assert "aliases" not in source
-    assert "SequenceMatcher" not in source
-    assert "keyword" not in source.lower()
-
-
-
 def test_cliente_texto_reintenta_remote_disconnected(monkeypatch):
     monkeypatch.setattr(
         "utiles.importacion_pdf_ia._configuracion",
@@ -183,43 +221,23 @@ def test_cliente_texto_reintenta_remote_disconnected(monkeypatch):
 
 
 def test_conocimiento_no_mezcla_filtros_de_asignacion_y_ver_hoja(monkeypatch):
-    capturado = {}
-
-    def fake_call(messages, **_kwargs):
-        capturado["system"] = messages[0]["content"]
-        return "ok"
-
-    monkeypatch.setattr(
-        "utiles.asistente_rnd_spike.llamar_minimax_texto",
-        fake_call,
+    capturado = _capturar_system(
+        monkeypatch,
+        "Por que Asignar chofer y camion dice Sin pedidos?",
     )
 
-    preguntar("Por que Asignar chofer y camion dice Sin pedidos?")
-
-    system = capturado["system"]
-    assert "esta pantalla NO filtra por chofer ni por camión" in system
-    assert "pertenecen a **Ver Hoja de Ruta**" in system
-    assert "No atribuir \"Sin pedidos\" en esta pantalla a filtros de chofer/camión" in system
+    system = capturado["messages"][0]["content"]
+    assert "**No filtra por chofer ni por camión.**" in system
+    assert "Esos filtros pertenecen a" in system
+    assert "No atribuir **Sin pedidos**" in system
 
 
 def test_conocimiento_distingue_imprimir_de_estado_lista(monkeypatch):
-    capturado = {}
+    capturado = _capturar_system(monkeypatch, "Si puedo imprimir, la hoja ya esta LISTA?")
 
-    def fake_call(messages, **_kwargs):
-        capturado["system"] = messages[0]["content"]
-        return "ok"
-
-    monkeypatch.setattr(
-        "utiles.asistente_rnd_spike.llamar_minimax_texto",
-        fake_call,
-    )
-
-    preguntar("Si puedo imprimir, la hoja ya esta LISTA?")
-
-    system = " ".join(capturado["system"].split())
-    assert "poder intentar imprimir no significa" in system
-    assert "checklist operativo de LISTA" in system
-
+    system = " ".join(capturado["messages"][0]["content"].split())
+    assert "Poder imprimir no significa automáticamente que la hoja esté en estado LISTA" in system
+    assert "Impresión y validación de estado son controles distintos" in system
 
 
 def test_spike_entrega_contexto_de_pantalla_a_minimax(monkeypatch):
@@ -241,3 +259,15 @@ def test_spike_entrega_contexto_de_pantalla_a_minimax(monkeypatch):
 
     assert "PANTALLA / CONTEXTO ACTUAL:" in capturado["system"]
     assert "Bandeja de pedidos (BandejaPedidosView)" in capturado["system"]
+
+
+def test_manuales_humanos_quedaron_alineados_con_pdf_ia():
+    manual = Path("docs/manual_usuario_importacion_hoja_ruta.md").read_text(
+        encoding="utf-8"
+    )
+    guia = Path("docs/guia_usuario.md").read_text(encoding="utf-8")
+
+    assert "RND acepta:" in manual
+    assert "No es necesario convertir el PDF manualmente a Excel." in manual
+    assert "PDF e imágenes se procesan con IA" in guia
+    assert "No hace falta convertirlos manualmente a Excel." in guia
