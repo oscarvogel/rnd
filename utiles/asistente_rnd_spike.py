@@ -62,7 +62,7 @@ def _leer_conocimiento() -> str:
     return "\n\n".join(partes)
 
 
-def preguntar(pregunta: str, historial=None) -> str:
+def preguntar(pregunta: str, historial=None, contexto: str = "") -> str:
     """Pregunta a MiniMax y devuelve texto plano.
 
     No interpreta la intencion en Python y no exige un contrato JSON.
@@ -76,6 +76,8 @@ def preguntar(pregunta: str, historial=None) -> str:
         "role": "system",
         "content": (
             SYSTEM_PROMPT
+            + "\n\nPANTALLA / CONTEXTO ACTUAL:\n"
+            + (str(contexto or "").strip() or "No identificado")
             + "\n\nCONOCIMIENTO RND DISPONIBLE:\n"
             + conocimiento
         ),
