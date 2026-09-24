@@ -7,8 +7,10 @@ llamada asincronica al servicio ya validado.
 """
 from __future__ import annotations
 
+import ctypes
 import html
 import re
+import sys
 
 from PyQt5.QtCore import Qt, QThread, QTimer, pyqtSignal
 from PyQt5.QtGui import QKeySequence
@@ -94,12 +96,12 @@ class AsistenteRndPanel(QWidget):
         if app is not None:
             app.applicationStateChanged.connect(self._on_application_state)
 
-        # En Windows, algunos ABM legacy son ventanas top-level independientes
-        # y pueden quedar por encima de un Qt.Tool abierto previamente. Mientras
-        # el usuario haya dejado el asistente abierto, lo volvemos a elevar sin
-        # activar la ventana ni robar el foco del formulario de trabajo.
+        # Algunos ABM legacy son ventanas nativas top-level. En Windows,
+        # Qt.WindowStaysOnTopHint/raise_() no siempre alcanza para conservar
+        # el panel delante de ellas. Reafirmamos HWND_TOPMOST sin activar el
+        # asistente, de modo que el operador sigue trabajando en el ABM.
         self._keep_on_top_timer = QTimer(self)
-        self._keep_on_top_timer.setInterval(450)
+        self._keep_on_top_timer.setInterval(300)
         self._keep_on_top_timer.timeout.connect(self._keep_visible_above_rnd)
         self._keep_on_top_timer.start()
 
@@ -424,6 +426,41 @@ class AsistenteRndPanel(QWidget):
         y = available.top() + PANEL_MARGIN
         self.move(x, y)
 
+    def _set_native_topmost(self, enabled):
+        """Fuerza el orden Z nativo en Windows sin robar foco.
+
+        Los ABM legacy de RND son ventanas top-level independientes. En Windows
+        una Qt.Tool sin owner puede quedar detrás de ellas aunque tenga
+        WindowStaysOnTopHint. SetWindowPos resuelve ese caso a nivel HWND.
+        """
+        if sys.platform != "win32":
+            return False
+
+        try:
+            user32 = ctypes.windll.user32
+            hwnd = ctypes.c_void_p(int(self.winId()))
+            insert_after = ctypes.c_void_p(
+                (2 ** (ctypes.sizeof(ctypes.c_void_p) * 8) - 1)
+                if enabled else
+                (2 ** (ctypes.sizeof(ctypes.c_void_p) * 8) - 2)
+            )
+            # SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE | SWP_SHOWWINDOW
+            flags = 0x0001 | 0x0002 | 0x0010 | 0x0040
+            result = user32.SetWindowPos(
+                hwnd,
+                insert_after,
+                0,
+                0,
+                0,
+                0,
+                flags,
+            )
+            return bool(result)
+        except Exception:
+            # Fallback seguro: si la API nativa no está disponible, Qt sigue
+            # usando WindowStaysOnTopHint y raise_().
+            return False
+
     def _keep_visible_above_rnd(self):
         if not self._wanted_visible:
             return
@@ -435,21 +472,22 @@ class AsistenteRndPanel(QWidget):
         if not self.isVisible():
             self.show()
 
-        # raise_() no cambia el foco: el operador puede seguir escribiendo en el
-        # ABM mientras el asistente permanece visible encima de las ventanas RND.
-        self.raise_()
+        if not self._set_native_topmost(True):
+            self.raise_()
 
     def show_panel(self):
         self._wanted_visible = True
         self._refresh_context()
         self._dock_right()
         self.show()
+        self._set_native_topmost(True)
         self.raise_()
         self.activateWindow()
         self.input.setFocus()
 
     def hide_panel(self):
         self._wanted_visible = False
+        self._set_native_topmost(False)
         self.hide()
 
     def toggle(self):
@@ -464,10 +502,12 @@ class AsistenteRndPanel(QWidget):
 
     def _on_application_state(self, state):
         if state != Qt.ApplicationActive:
+            self._set_native_topmost(False)
             if self.isVisible():
                 self.hide()
             return
         if self._wanted_visible:
             self._dock_right()
             self.show()
+            self._set_native_topmost(True)
             self.raise_()
