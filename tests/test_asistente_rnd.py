@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from utiles.asistente_rnd_conocimiento import knowledge_for_prompt, suggestions
+from utiles.asistente_rnd_conocimiento import knowledge_for_prompt
 from utiles.asistente_rnd_servicio import OUT_OF_SCOPE, UNRESOLVED, answer_message
 
 
@@ -98,19 +98,13 @@ def test_base_entregada_a_ia_contiene_funciones_rnd():
     assert "Generar o imprimir la Hoja de Ruta" in prompt
 
 
-def test_sugerencias_son_genericas_y_no_rutean_intenciones():
-    values = suggestions()
-    assert "¿Qué puedo hacer desde esta pantalla?" in values
-    assert "¿Cuál es el siguiente paso?" in values
-
-
 def test_asistente_es_flotante_y_always_on_top():
     source = Path("vistas/AsistenteRnd.py").read_text(encoding="utf-8")
     assert "class AsistenteRndFlotante(QWidget)" in source
     assert "Qt.WindowStaysOnTopHint" in source
     assert "Qt.Tool" in source
     assert "BUBBLE_SIZE = 62" in source
-    assert "PANEL_WIDTH = 410" in source
+    assert "PANEL_WIDTH = 380" in source
 
 
 def test_shell_no_depende_de_boton_asistente():
@@ -119,3 +113,85 @@ def test_shell_no_depende_de_boton_asistente():
     assert "boton_asistente" not in header
     assert "AsistenteRndFlotante" in main
     assert "_mostrar_asistente_flotante()" in main
+
+
+def test_config_asistente_reutiliza_fallback_group_summary(monkeypatch):
+    from utiles.asistente_rnd_servicio import _config
+
+    for name in (
+        "RND_ASSISTANT_AI_URL",
+        "RND_PDF_AI_URL",
+        "RND_ASSISTANT_AI_API_KEY",
+        "RND_PDF_AI_API_KEY",
+        "MINIMAX_API_KEY",
+        "RND_ASSISTANT_AI_MODEL",
+        "RND_PDF_AI_MODEL",
+        "MINIMAX_MODEL",
+        "RND_ASSISTANT_AI_TIMEOUT",
+        "RND_PDF_AI_TIMEOUT",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    monkeypatch.setenv(
+        "GROUP_SUMMARY_AI_CHAT_URL",
+        "https://example.test/v1/chat/completions",
+    )
+    monkeypatch.setenv("GROUP_SUMMARY_AI_API_KEY", "group-key")
+    monkeypatch.setenv("GROUP_SUMMARY_AI_MODEL", "MiniMax-M3")
+
+    url, key, model, timeout = _config()
+
+    assert url == "https://example.test/v1/chat/completions"
+    assert key == "group-key"
+    assert model == "MiniMax-M3"
+    assert timeout == 120
+
+
+def test_asistente_reintenta_error_transitorio(monkeypatch):
+    import urllib.error
+    from utiles.asistente_rnd_servicio import _call_minimax
+
+    attempts = {"count": 0}
+
+    class OkResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            body = {
+                "choices": [{
+                    "message": {
+                        "content": json.dumps({
+                            "status": "answered",
+                            "answer": "OK",
+                            "sources": [],
+                            "reason": "test",
+                        })
+                    }
+                }]
+            }
+            return json.dumps(body).encode("utf-8")
+
+    def urlopen(request, **_kwargs):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise urllib.error.HTTPError(
+                request.full_url, 503, "busy", hdrs=None, fp=None
+            )
+        return OkResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", urlopen)
+    monkeypatch.setattr("time.sleep", lambda *_args: None)
+
+    decision = _call_minimax(
+        {"messages": []},
+        url="https://example.test/v1/chat/completions",
+        key="test-key",
+        timeout=15,
+    )
+
+    assert attempts["count"] == 2
+    assert decision["status"] == "answered"
