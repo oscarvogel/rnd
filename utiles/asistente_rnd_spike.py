@@ -27,6 +27,11 @@ Reglas:
   claramente.
 - Si la pregunta no es sobre RND, explica brevemente que solo podes ayudar con
   RND.
+- Si el conocimiento tecnico-funcional respaldado por codigo contradice una
+  guia o manual historico, prioriza el conocimiento tecnico-funcional actual.
+- Si la pregunta pide "como lo hace internamente" y ese mecanismo esta explicado
+  en el conocimiento tecnico, podes explicarlo en lenguaje operativo sin
+  necesidad de mostrar codigo.
 - Responde como texto normal. NO devuelvas JSON.
 """
 
@@ -39,6 +44,7 @@ def _leer_conocimiento() -> str:
     """Carga documentacion versionada del repo para este spike."""
     root = _root()
     rutas = [
+        root / "docs" / "asistente_rnd_conocimiento_tecnico.md",
         root / "docs" / "manual_usuario_importacion_hoja_ruta.md",
         root / "docs" / "guia_usuario.md",
     ]
