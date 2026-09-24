@@ -114,6 +114,55 @@ QLabel#encabezadoUsuario {
     font-weight: 600;
 }
 
+QPushButton#encabezadoBotonAsistente {
+    background: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 #19B9E7,
+        stop:0.52 #0A84D8,
+        stop:1 #0866C8
+    );
+    color: #FFFFFF;
+    border: 1px solid #7DD3FC;
+    border-radius: 16px;
+    padding: 5px 16px 5px 12px;
+    min-height: 30px;
+    min-width: 108px;
+    font-weight: 700;
+}
+
+QPushButton#encabezadoBotonAsistente:hover {
+    background: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 #2CC8F0,
+        stop:0.52 #1094DF,
+        stop:1 #0A6DB8
+    );
+    border: 2px solid #F5C518;
+    padding: 4px 15px 4px 11px;
+    color: #FFFFFF;
+}
+
+QPushButton#encabezadoBotonAsistente:pressed {
+    background: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 #0A84D8,
+        stop:1 #07529F
+    );
+    border: 2px solid #F5C518;
+    padding: 5px 14px 3px 12px;
+}
+
+QPushButton#encabezadoBotonAsistente:focus {
+    border: 2px solid #F5C518;
+    padding: 4px 15px 4px 11px;
+}
+
+QPushButton#encabezadoBotonAsistente:disabled {
+    background-color: rgba(255,255,255,18);
+    color: #94A3B8;
+    border: 1px solid #64748B;
+}
+
 QPushButton#encabezadoBotonSalir {
     background-color: #0A84D8;
     color: #FFFFFF;

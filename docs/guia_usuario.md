@@ -1,277 +1,291 @@
-# Guia de uso del sistema RND
+# Guía de uso del sistema RND
 
-Este documento explica el camino recomendado para usar RND en la operacion diaria. Esta pensado para usuarios administrativos, de logistica y responsables de reparto.
+**Actualizada:** 24/09/2026
 
-## Objetivo del sistema
+RND organiza pedidos y prepara hojas de ruta para reparto. Esta guía resume las
+pantallas de trabajo actuales y las reglas operativas más importantes.
 
-RND permite organizar pedidos y generar hojas de ruta para reparto. El flujo principal es:
+## Ingreso y pantalla principal
 
-1. Mantener actualizados los datos maestros.
-2. Importar pedidos desde archivos de proveedores.
-3. Revisar y grabar los pedidos importados.
-4. Armar la hoja de ruta por fecha y ruta de reparto.
-5. Asignar camion y chofer.
-6. Imprimir o guardar el reporte de hoja de ruta.
-7. Consultar, corregir o auditar datos cuando sea necesario.
+1. Abra RND.
+2. Ingrese usuario y clave.
+3. Use el panel principal para acceder a las funciones disponibles para su
+   perfil.
 
-## Ingreso al sistema
+Si una opción no aparece puede depender de permisos.
 
-1. Abrir RND desde el acceso directo.
-2. Ingresar usuario y clave.
-3. Al entrar, el sistema muestra la pantalla principal con un panel lateral de opciones.
+El Asistente RND se abre/cierra con **F1**. También puede cerrarse con **Esc** o
+con la **X**.
 
-Si una opcion no aparece o no abre, puede deberse a permisos del usuario. En ese caso se debe consultar con el administrador del sistema.
+## Datos maestros
 
-## Pantalla principal
-
-La pantalla principal se organiza con botones en el panel lateral. Desde ahi se accede a las funciones de trabajo:
+Antes de operar conviene mantener:
 
 - Clientes.
+- Lugares de entrega.
 - Proveedores.
-- Empleados.
-- Equipos.
+- Códigos de cliente por proveedor.
+- Rutas de reparto.
+- Empleados/choferes.
+- Equipos/camiones.
 - Tablas auxiliares.
-- Importacion de pedidos.
-- Ver hoja de ruta.
-- Auditoria y consultas, segun permisos.
 
-El menu puede variar segun el perfil del usuario.
+### Clientes y lugares de entrega
 
-## Camino recomendado antes de operar
+Un cliente puede tener varios destinos.
 
-Antes de importar pedidos o emitir hojas de ruta, conviene revisar estos datos:
+Cada lugar de entrega puede guardar:
 
-1. Clientes activos.
-2. Ruta de reparto asignada a cada cliente.
-3. Proveedores activos.
-4. Codigos de cliente por proveedor.
-5. Choferes o empleados activos.
-6. Equipos o camiones activos.
-7. Tablas auxiliares necesarias, como rutas de reparto, localidades y tipos.
+- nombre o referencia;
+- dirección;
+- localidad;
+- ruta;
+- indicador de principal;
+- activo/inactivo;
+- observaciones.
 
-Si alguno de estos datos falta, la importacion puede quedar incompleta o pedir confirmaciones manuales.
+No cree clientes duplicados sólo porque el mismo cliente reciba mercadería en
+más de un lugar.
 
-## Gestion de datos maestros
+Para agregar lugares a un cliente nuevo, primero guarde el cliente.
 
-Las pantallas de ABM tienen una forma de uso similar:
+### Códigos por proveedor
 
-1. Entrar a la opcion correspondiente, por ejemplo Clientes, Proveedores, Empleados o Equipos.
-2. Usar el campo de busqueda para encontrar registros existentes.
-3. Usar Agregar para crear un nuevo registro.
-4. Usar Editar para modificar el registro seleccionado.
-5. Usar Borrar solo cuando corresponda eliminar el registro.
-6. Usar Excel para exportar la grilla cuando se necesite revisar o compartir informacion.
-7. Usar Cerrar para volver a la pantalla principal.
+RND puede asociar el código que usa un proveedor con el cliente interno. Esa
+relación tiene prioridad al identificar el cliente durante la importación.
 
-En general, los registros dados de baja o inactivos pueden verse marcados con otro color o no estar disponibles para algunas operaciones.
+### Consolidar clientes
 
-## Clientes
-
-En Clientes se cargan los datos necesarios para identificar y rutear pedidos:
-
-- Razon social.
-- Direccion.
-- Telefono.
-- CUIT.
-- Contacto.
-- Ruta de reparto.
-- Observaciones.
-- Estado activo/inactivo.
-
-### Codigos por proveedor
-
-Algunos proveedores informan sus propios codigos de cliente. Para que RND pueda relacionar un pedido importado con el cliente correcto, se debe mantener la relacion entre:
-
-- proveedor,
-- codigo informado por el proveedor,
-- cliente interno de RND.
-
-Si durante la importacion aparece un cliente sin codigo asociado, el sistema puede pedir buscar el cliente correcto y guardar esa relacion.
+Si existen clientes duplicados, la opción **Consolidar** permite simular primero
+la operación y luego reasignar históricos, códigos y lugares al cliente que
+quedará activo. Los clientes origen quedan inactivos.
 
 ## Proveedores
 
-En Proveedores se mantienen las empresas que entregan archivos de pedidos. Para que la importacion funcione correctamente, el proveedor debe estar cargado y activo.
+El proveedor debe existir y tener configurado su método de importación.
 
-La configuracion de columnas de importacion depende del proveedor. Si falta una columna esperada, el sistema puede mostrar avisos como que no encuentra Cliente, Producto, Comprobante, Cantidad, KG, Bultos u Observaciones.
+Los métodos actuales incluyen, según el caso:
 
-## Empleados y choferes
+- COLUMNAS;
+- TREMBLAY;
+- TIO_PUJIO;
+- DETALLE_VENTAS.
 
-En Empleados se administran los datos del personal. Los choferes o responsables activos se usan al asignar una hoja de ruta.
+La configuración del proveedor se utiliza especialmente para validar y
+normalizar Excel.
 
-Desde esta pantalla tambien pueden consultarse fichas, vencimientos y datos relacionados, segun las opciones disponibles para el usuario.
+## Importación de pedidos
 
-## Equipos o camiones
+Abra **Importar pedidos**.
 
-En Equipos se administran los moviles disponibles para reparto. Para asignar una hoja de ruta, el camion debe estar cargado y activo.
+### Formatos admitidos
 
-Tambien pueden consultarse vencimientos asociados al equipo cuando la opcion este disponible.
+RND acepta:
 
-## Importacion de pedidos
+- Excel `.xlsx` y `.xls`;
+- PDF `.pdf`;
+- imágenes `.png`, `.jpg`, `.jpeg`.
 
-La importacion es el primer paso operativo para generar hojas de ruta desde archivos externos.
+PDF e imágenes se procesan con IA y se convierten internamente al formato de
+vista previa. No hace falta convertirlos manualmente a Excel.
 
 ### Pasos
 
-1. Entrar a Importacion de Pedidos.
-2. Seleccionar la Fecha reparto.
-3. Seleccionar la Empresa Proveedora.
-4. Presionar Examinar y elegir el archivo.
-5. Seleccionar la hoja del Excel, si el archivo tiene varias hojas.
-6. Indicar Fila inicio y Fila fin.
-7. Presionar Importar.
-8. Revisar la grilla cargada.
-9. Marcar o desmarcar la columna Importa segun las filas que se deben grabar.
-10. Presionar Grabar.
+1. Seleccione **Proveedor / origen**.
+2. Seleccione **Fecha reparto**.
+3. Presione **Seleccionar archivo**.
+4. Si es Excel, seleccione hoja y opcionalmente filas.
+5. Presione **Cargar vista previa**.
+6. Revise los datos.
+7. Marque o desmarque las filas que corresponda.
+8. Presione **Grabar pedidos**.
+9. Revise el resumen.
+10. Continúe al reparto o corrija pendientes.
 
-### Que hace el sistema al grabar
+### Particularidades de PDF/imagen
 
-Al grabar, RND intenta:
+La extracción por IA se revisa antes de grabar:
 
-- identificar el cliente segun el codigo del proveedor;
-- buscar o pedir asociacion si el codigo no existe;
-- evitar grabar pedidos contra clientes genericos;
-- tomar producto, comprobante, cantidad, kilos, bultos y observaciones;
-- crear o actualizar registros de hoja de ruta para la fecha indicada;
-- asignar inicialmente camion y empleado genericos, hasta que se arme la hoja de ruta definitiva.
+- las celdas pueden editarse;
+- las filas con **REVISAR IA** quedan desmarcadas;
+- el operador decide si corregirlas y habilitarlas.
 
-### Recomendaciones
+Si falta la configuración de IA o no se reconocen pedidos, RND muestra el error
+sin grabar pedidos.
 
-- Verificar que la fecha de reparto sea correcta antes de grabar.
-- Revisar que la empresa proveedora sea la correcta.
-- No grabar filas que no correspondan a pedidos.
-- Si el sistema pide asociar un cliente, elegir cuidadosamente el cliente interno correcto.
-- Si muchas filas fallan por columnas faltantes, revisar la configuracion de importacion del proveedor antes de continuar.
+## Identificación de cliente, lugar y ruta
 
-## Ver y armar hoja de ruta
+Al grabar:
 
-La pantalla Ver Hoja de Ruta se usa para revisar pedidos importados, asignar recursos y emitir el reporte.
+1. RND busca primero cliente por código de proveedor.
+2. Como respaldo intenta coincidencia exacta por razón social.
+3. Para el lugar usa el principal; si no existe y hay un único lugar activo,
+   usa ese.
+4. Con varios lugares sin principal deja el destino pendiente.
+5. La ruta se toma del lugar y, como respaldo, del cliente.
 
-### Cargar una hoja de ruta
+Los casos no resueltos se corrigen en **Pedidos para organizar**.
 
-1. Entrar a Ver Hoja de Ruta.
-2. Seleccionar fecha.
-3. Seleccionar ruta de reparto.
-4. Opcionalmente seleccionar camion o chofer para filtrar.
-5. Presionar Cargar.
+## Reimportación
 
-El sistema muestra una grilla con:
+RND identifica documentos y líneas para evitar duplicar una línea que ya está
+vinculada a una hoja de ruta de la misma fecha.
 
-- seleccion,
-- cliente,
-- comprobante,
-- producto,
-- cantidad,
-- kilos,
-- bultos,
-- observaciones.
+Si una línea ya existe se informa como **ya existente/reimportada** y se conserva
+la hoja de ruta previa.
 
-### Asignar camion y chofer
+Ante una interrupción de conexión, revise el resumen y los pedidos existentes
+antes de repetir una importación.
 
-1. Seleccionar fecha y ruta.
-2. Cargar los pedidos.
-3. Elegir camion asignado.
-4. Elegir chofer responsable.
-5. Marcar las filas que se deben asignar.
-6. Presionar Grabar.
+## Pedidos para organizar
 
-Al grabar, el sistema reasigna la hoja de ruta de esa fecha y ruta: primero deja los pedidos en valores genericos y luego asigna camion/chofer a las filas marcadas.
+Esta pantalla agrupa el trabajo por factura/documento.
 
-### Agregar un pedido manual
+Una fila puede representar varias líneas de producto.
 
-1. Presionar Agregar.
-2. Elegir cliente.
-3. Completar comprobante, producto, cantidad, kilos, bultos y observaciones.
-4. Completar chofer y camion si corresponde.
-5. Presionar Grabar.
+Funciones principales:
 
-### Modificar un pedido
+- fecha;
+- Priorizar pendientes;
+- buscar por factura;
+- Editar;
+- Productos;
+- seleccionar facturas;
+- Ruta destino;
+- Organizar seleccionados;
+- Asignar chofer y camión.
 
-1. Seleccionar una fila de la grilla.
-2. Presionar Modificar.
-3. Corregir los datos necesarios.
-4. Presionar Grabar.
+### Editar
 
-### Borrar un pedido
+Permite corregir:
 
-1. Seleccionar la fila.
-2. Presionar Borrar.
-3. Confirmar solo si realmente corresponde eliminar el registro.
+- cliente;
+- lugar de entrega;
+- ruta;
+- remito;
+- observación general.
+
+También permite abrir **Crear / editar clientes y lugares**.
+
+### Productos
+
+Muestra todas las líneas de la factura.
+
+En este flujo sólo es editable **Cantidad a entregar**. Producto, cantidad
+original, pendiente, KG, bultos y observaciones quedan como referencia.
+
+La cantidad a entregar no puede ser negativa ni superar la cantidad original.
+
+## Organizar una ruta
+
+1. Seleccione una o más facturas.
+2. Elija **Ruta destino**.
+3. Presione **Organizar seleccionados**.
+
+RND verifica en la base que todas las líneas hayan quedado con la ruta elegida.
+Sólo después habilita **Asignar chofer y camión**.
+
+## Asignar chofer y camión
+
+La pantalla trabaja por fecha+ruta.
+
+**Cargar hoja** carga o recarga esa combinación en la misma pantalla.
+
+No existen filtros de chofer/camión en esta pantalla.
+
+Seleccione un chofer real y un camión real y presione **Guardar asignación**.
+Los recursos genéricos representan pendiente.
+
+La asignación se aplica a todos los pedidos de la fecha+ruta y luego se verifica.
+
+Puede continuar con:
+
+- **Ver hoja de ruta ahora**;
+- **Validar hoja de ruta**.
+
+## Ver Hoja de Ruta
+
+La pantalla consulta por fecha+ruta y puede sumar filtros opcionales de:
+
+- chofer;
+- camión.
+
+Si no aparecen datos, revise los cuatro criterios.
+
+Desde aquí se puede revisar el detalle, utilizar acciones legacy sobre líneas y
+**Imprimir PDF**.
+
+## Validar hoja de ruta
+
+El checklist exige:
+
+- pedidos;
+- fecha;
+- ruta;
+- único chofer real;
+- único camión real;
+- cliente;
+- lugar de entrega;
+- comprobante;
+- cantidades mayores que cero.
+
+Estados:
+
+- EN_PREPARACION;
+- LISTA;
+- DESPACHADA.
+
+Una hoja sólo puede pasar a LISTA si el checklist es válido. DESPACHADA requiere
+estar previamente LISTA y continuar válida.
 
 ## Imprimir hoja de ruta
 
-Para emitir el reporte:
+Para imprimir deben estar completos:
 
-1. Cargar la hoja de ruta.
-2. Verificar fecha y ruta.
-3. Verificar que el chofer y el camion esten completos.
-4. Presionar Imprimir.
+- fecha;
+- ruta;
+- responsable/chofer;
+- equipo/camión;
+- pedidos.
 
-El sistema genera un PDF con los pedidos de la fecha y ruta seleccionadas. Si faltan fecha, ruta, responsable o equipo, el sistema muestra una advertencia para completar esos datos.
+La posibilidad de imprimir es independiente del estado LISTA.
 
-## Auditoria
+## Buenas prácticas
 
-El sistema registra cambios importantes sobre algunos datos. Cuando la opcion esta disponible, la auditoria permite revisar modificaciones anteriores de un registro.
-
-Usar auditoria para:
-
-- verificar quien modifico un dato;
-- revisar cambios en clientes, empleados u otros registros;
-- entender diferencias entre datos anteriores y actuales.
-
-## Buenas practicas de operacion
-
-- Revisar datos maestros antes de importar.
-- Mantener clientes activos y con ruta asignada.
-- Mantener actualizados los codigos de cliente por proveedor.
-- Verificar fecha de reparto antes de presionar Grabar.
-- Revisar la grilla antes de importar definitivamente.
-- No usar clientes genericos para pedidos reales.
-- Asignar camion y chofer antes de imprimir la hoja de ruta.
-- Exportar a Excel cuando se necesite control externo.
-- Consultar con administracion si una opcion no aparece por permisos.
+- Seleccione proveedor y fecha antes del archivo.
+- Siempre revise la vista previa.
+- En PDF/imagen controle especialmente las filas marcadas REVISAR IA.
+- Corrija cliente y lugar antes de cerrar el reparto.
+- No duplique clientes por destino.
+- Organice facturas completas cuando viajen juntas.
+- Asigne chofer y camión antes de validar.
+- Si una consulta aparece vacía, distinga Asignación de Ver Hoja de Ruta:
+  Asignación usa fecha+ruta; Ver Hoja puede tener además filtros de recursos.
+- Ante una interrupción de importación, revise antes de repetir.
 
 ## Problemas frecuentes
 
-### No aparece una opcion del menu
+### El PDF no importa
 
-Puede faltar permiso para el usuario. Consultar con el administrador.
+RND sí admite PDF. Revise proveedor, fecha, configuración de IA, calidad del
+archivo y el mensaje mostrado por el procesamiento.
 
-### El archivo no importa
+### La IA extrajo un dato incorrecto
 
-Revisar:
+Corrija la celda en la vista previa antes de grabar.
 
-- proveedor seleccionado;
-- formato del archivo;
-- hoja seleccionada;
-- fila inicio y fila fin;
-- columnas configuradas para ese proveedor.
+### Asignar chofer y camión muestra Sin pedidos
 
-### El sistema no encuentra un cliente
+Revise fecha+ruta y que las facturas hayan sido organizadas en esa ruta.
 
-Puede faltar la relacion entre codigo de proveedor y cliente interno. Buscar el cliente correcto cuando el sistema lo solicite y guardar la asociacion.
+### Ver Hoja de Ruta aparece vacía
 
-### La hoja de ruta aparece vacia
+Revise fecha+ruta y limpie o corrija los filtros opcionales de chofer/camión.
 
-Revisar:
+### No permite marcar LISTA
 
-- fecha seleccionada;
-- ruta de reparto;
-- si se importaron pedidos para esa fecha;
-- si hay filtros de camion o chofer aplicados.
+Revise el checklist de Validar hoja de ruta.
 
 ### No permite imprimir
 
-Completar fecha, ruta, chofer responsable y camion asignado.
-
-## Resumen del flujo diario
-
-1. Verificar clientes, proveedores, empleados y equipos.
-2. Importar pedidos del proveedor para la fecha de reparto.
-3. Corregir o asociar clientes si el sistema lo pide.
-4. Grabar los pedidos importados.
-5. Abrir Ver Hoja de Ruta.
-6. Cargar por fecha y ruta.
-7. Asignar chofer y camion.
-8. Grabar asignaciones.
-9. Imprimir la hoja de ruta.
-10. Revisar o corregir pedidos manuales si hace falta.
+Complete fecha, ruta, chofer y camión y confirme que existan pedidos.

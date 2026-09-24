@@ -27,6 +27,21 @@ def _terminos_lugar(lugar):
     return terminos
 
 
+
+
+def mismo_destino(nombre_a, direccion_a, nombre_b, direccion_b):
+    """Indica si dos lugares representan exactamente el mismo destino.
+
+    La referencia puede repetirse dentro de un cliente siempre que la direccion
+    sea distinta. Solo se considera duplicado cuando coinciden referencia y
+    direccion normalizadas.
+    """
+    return (
+        normalizar_texto(nombre_a) == normalizar_texto(nombre_b)
+        and normalizar_texto(direccion_a) == normalizar_texto(direccion_b)
+    )
+
+
 def resolver_lugar_entrega(observaciones, lugares):
     """Devuelve el lugar inequívoco detectado o ``None``.
 

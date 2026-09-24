@@ -10,7 +10,14 @@ class PackagingStaticTests(unittest.TestCase):
     def test_pyinstaller_spec_includes_runtime_resources(self):
         spec = (ROOT / "main.spec").read_text(encoding="utf-8")
 
-        for resource in ("assets", "imagenes", "temas", "sistema.ini", "rnd.ini"):
+        for resource in (
+            "assets",
+            "imagenes",
+            "temas",
+            "docs/asistente_rnd_conocimiento_tecnico.md",
+            "sistema.ini",
+            "rnd.ini",
+        ):
             with self.subTest(resource=resource):
                 self.assertIn(resource, spec)
 
@@ -117,3 +124,19 @@ class PackagingStaticTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+def test_demo_packaging_includes_assistant_knowledge_and_ai_env():
+    root = ROOT
+    spec = (root / "installer" / "RND_Demo.spec").read_text(encoding="utf-8")
+    build = (root / "scripts" / "build_demo_installer.ps1").read_text(
+        encoding="utf-8"
+    )
+    iss = (root / "installer" / "RND_Demo.iss").read_text(encoding="utf-8")
+
+    assert "../docs/asistente_rnd_conocimiento_tecnico.md" in spec
+    assert '"MINIMAX_API_KEY"' in build
+    assert '"RND_PDF_AI_API_KEY"' in build
+    assert 'dist\\RND Demo\\.env' in build
+    assert 'Source: "..\\dist\\RND Demo\\*"' in iss

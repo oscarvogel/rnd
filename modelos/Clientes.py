@@ -112,7 +112,7 @@ class LugarEntrega(ModeloBase):
     class Meta:
         db_table = 'lugares_entrega'
         indexes = (
-            (('cliente', 'nombre'), True),
+            (('cliente', 'nombre', 'direccion'), True),
         )
 
     def __str__(self):
