@@ -1,3 +1,4 @@
+import logging
 from PyQt5.QtWidgets import QMessageBox
 
 from peewee import JOIN
@@ -282,7 +283,8 @@ class ABMClientesController(ControladorBaseABM):
                 for campo, valor in valores.items():
                     setattr(registro, campo, valor)
                 registro.save()
-            except Exception as exc:
+            except Exception:
+                logging.exception("No se pudo guardar el lugar de entrega")
                 Ventanas.showAlert(
                     "ERROR",
                     "No se pudo guardar el lugar de entrega. Intente nuevamente.",
