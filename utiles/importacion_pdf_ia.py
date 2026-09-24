@@ -285,13 +285,14 @@ def llamar_minimax_texto(
                 "El servicio de IA rechazo la consulta (HTTP {}). {}"
                 .format(exc.code, detalle)
             ) from exc
-        except urllib.error.URLError as exc:
+        except OSError as exc:
             ultimo_error = exc
+            motivo = getattr(exc, "reason", None) or str(exc)
             if intento < 3:
                 time.sleep(float(intento))
                 continue
             raise ExtraccionPdfIAError(
-                "No se pudo conectar con el servicio de IA: {}".format(exc.reason)
+                "No se pudo conectar con el servicio de IA: {}".format(motivo)
             ) from exc
 
     if raw is None:
@@ -384,13 +385,14 @@ def _llamar_vision(
                 "El servicio de IA rechazo la pagina (HTTP {}). {}"
                 .format(exc.code, detalle)
             ) from exc
-        except urllib.error.URLError as exc:
+        except OSError as exc:
             ultimo_error = exc
+            motivo = getattr(exc, "reason", None) or str(exc)
             if intento < 3:
                 time.sleep(float(intento))
                 continue
             raise ExtraccionPdfIAError(
-                "No se pudo conectar con el servicio de IA: {}".format(exc.reason)
+                "No se pudo conectar con el servicio de IA: {}".format(motivo)
             ) from exc
 
     if raw is None:
