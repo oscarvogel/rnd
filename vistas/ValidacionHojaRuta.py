@@ -46,9 +46,27 @@ class ValidacionHojaRutaView(QWidget):
         resumen.addWidget(self.lbl_bultos, 1, 1)
         raiz.addLayout(resumen)
 
+        self.lbl_ayuda = QLabel("")
+        self.lbl_ayuda.setObjectName("validacionHojaAyuda")
+        self.lbl_ayuda.setWordWrap(True)
+        self.lbl_ayuda.setTextFormat(Qt.RichText)
+        self.lbl_ayuda.setStyleSheet(
+            "QLabel#validacionHojaAyuda {"
+            "padding: 8px 10px;"
+            "border: 1px solid palette(mid);"
+            "border-radius: 6px;"
+            "font-weight: 600;"
+            "}"
+        )
+        raiz.addWidget(self.lbl_ayuda)
+
         self.tabla = QTableWidget(0, 3)
         self.tabla.setHorizontalHeaderLabels(["Estado", "Requisito", "Detalle"])
         self.tabla.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.tabla.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tabla.setToolTip(
+            "Doble clic en un requisito PENDIENTE para ir a corregirlo."
+        )
         raiz.addWidget(self.tabla)
 
         self.lbl_mensaje = QLabel("")
@@ -62,7 +80,13 @@ class ValidacionHojaRutaView(QWidget):
         self.btn_lista = QPushButton("Marcar LISTA")
         self.btn_lista.setProperty("role", "primary")
         acciones.addWidget(self.btn_lista)
-        self.btn_despachar = QPushButton("Marcar DESPACHADA")
+        self.btn_hoja = QPushButton("Ver / imprimir hoja")
+        self.btn_hoja.setEnabled(False)
+        acciones.addWidget(self.btn_hoja)
+        self.btn_despachar = QPushButton("Confirmar salida a reparto")
+        self.btn_despachar.setToolTip(
+            "Indica que el camión salió a reparto. No marca los pedidos como entregados."
+        )
         acciones.addWidget(self.btn_despachar)
         self.btn_cerrar = QPushButton("Cerrar")
         acciones.addWidget(self.btn_cerrar)
@@ -81,6 +105,12 @@ class ValidacionHojaRutaView(QWidget):
     def ruta_id(self):
         return int(self.cbo_ruta.currentData() or 0)
 
+    def codigo_fila(self, row):
+        if row < 0 or row >= self.tabla.rowCount():
+            return ""
+        item = self.tabla.item(row, 0)
+        return str(item.data(Qt.UserRole) or "") if item else ""
+
     def mostrar(self, resultado, estado):
         self.lbl_estado.setText("Estado: {}".format(estado))
         self.lbl_pedidos.setText("Pedidos: {}".format(resultado.pedidos))
@@ -90,14 +120,40 @@ class ValidacionHojaRutaView(QWidget):
         for item in resultado.items:
             row = self.tabla.rowCount()
             self.tabla.insertRow(row)
-            self.tabla.setItem(row, 0, QTableWidgetItem("OK" if item.cumplido else "PENDIENTE"))
-            self.tabla.setItem(row, 1, QTableWidgetItem(item.descripcion))
-            self.tabla.setItem(row, 2, QTableWidgetItem(item.detalle or ""))
+            estado_item = QTableWidgetItem("OK" if item.cumplido else "PENDIENTE")
+            estado_item.setData(Qt.UserRole, item.codigo)
+            requisito_item = QTableWidgetItem(item.descripcion)
+            detalle_item = QTableWidgetItem(item.detalle or "")
+            if not item.cumplido:
+                tooltip = "Doble clic para corregir este requisito."
+                estado_item.setToolTip(tooltip)
+                requisito_item.setToolTip(tooltip)
+                detalle_item.setToolTip(tooltip)
+            self.tabla.setItem(row, 0, estado_item)
+            self.tabla.setItem(row, 1, requisito_item)
+            self.tabla.setItem(row, 2, detalle_item)
         self.tabla.resizeColumnsToContents()
+        pendientes = [item for item in resultado.items if not item.cumplido]
+        if pendientes:
+            self.lbl_ayuda.setText(
+                "<b>Cómo resolver:</b> hacé doble clic sobre cualquier renglón "
+                "<b>PENDIENTE</b> y RND te llevará directamente al lugar donde "
+                "podés corregirlo."
+            )
+        else:
+            self.lbl_ayuda.setText(
+                "<b>Checklist completo.</b> No quedan requisitos pendientes."
+            )
         self.btn_lista.setEnabled(estado != "DESPACHADA" and resultado.valida)
+        self.btn_hoja.setEnabled(estado in ("LISTA", "DESPACHADA") and resultado.pedidos > 0)
         self.btn_despachar.setEnabled(estado == "LISTA" and resultado.valida)
         self.btn_asignar.setEnabled(any(i.codigo in ("chofer", "camion") and not i.cumplido for i in resultado.items))
-        self.lbl_mensaje.setText(
-            "La hoja cumple todos los requisitos." if resultado.valida else
-            "Complete los requisitos pendientes antes de marcar la hoja como LISTA."
-        )
+        if estado == "LISTA":
+            mensaje = "Hoja validada. Genere o revise el PDF y luego marque el despacho."
+        elif estado == "DESPACHADA":
+            mensaje = "Hoja despachada. El circuito operativo está finalizado."
+        elif resultado.valida:
+            mensaje = "La hoja cumple todos los requisitos. Puede marcarla como LISTA."
+        else:
+            mensaje = "Complete los requisitos pendientes antes de marcar la hoja como LISTA."
+        self.lbl_mensaje.setText(mensaje)

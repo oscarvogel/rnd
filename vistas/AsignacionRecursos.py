@@ -1,7 +1,7 @@
 # coding=utf-8
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QComboBox, QDateEdit, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
+    QComboBox, QCompleter, QDateEdit, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
     QPushButton, QVBoxLayout, QWidget,
 )
 
@@ -21,7 +21,7 @@ class AsignacionRecursosView(QWidget):
         titulo = QLabel("Asignar chofer y camión")
         titulo.setObjectName("asignacionRecursosTitulo")
         raiz.addWidget(titulo)
-        detalle = QLabel("Seleccione la fecha y la ruta. RND aplicará ambos recursos a todos los pedidos de esa hoja de ruta en una sola operación.")
+        detalle = QLabel("Seleccione la fecha y la ruta y cargue los datos de la hoja. Aquí verá pedidos, kilos, bultos y la asignación actual antes de elegir chofer y camión.")
         detalle.setWordWrap(True)
         raiz.addWidget(detalle)
 
@@ -35,7 +35,7 @@ class AsignacionRecursosView(QWidget):
         self.cbo_ruta = QComboBox()
         self.cbo_ruta.setMinimumWidth(260)
         filtros.addWidget(self.cbo_ruta)
-        self.btn_cargar = QPushButton("Cargar hoja")
+        self.btn_cargar = QPushButton("Cargar datos de hoja")
         filtros.addWidget(self.btn_cargar)
         filtros.addStretch(1)
         raiz.addLayout(filtros)
@@ -57,6 +57,8 @@ class AsignacionRecursosView(QWidget):
         form_recursos = QFormLayout(recursos)
         self.cbo_responsable = QComboBox()
         self.cbo_equipo = QComboBox()
+        self._configurar_autocomplete(self.cbo_responsable, "Buscar chofer…")
+        self._configurar_autocomplete(self.cbo_equipo, "Buscar camión…")
         form_recursos.addRow("Chofer / responsable:", self.cbo_responsable)
         form_recursos.addRow("Camión / equipo:", self.cbo_equipo)
         raiz.addWidget(recursos)
@@ -81,18 +83,50 @@ class AsignacionRecursosView(QWidget):
         self.btn_guardar.setCursor(Qt.PointingHandCursor)
         self.btn_guardar.setEnabled(False)
         acciones.addWidget(self.btn_guardar)
-        self.btn_ver_hoja = QPushButton("Ver hoja de ruta ahora")
-        self.btn_ver_hoja.setProperty("role", "primary")
+        self.btn_ver_hoja = QPushButton("Revisar hoja de ruta")
+        self.btn_ver_hoja.setProperty("role", "secondary")
         self.btn_ver_hoja.setCursor(Qt.PointingHandCursor)
         self.btn_ver_hoja.setEnabled(False)
         acciones.addWidget(self.btn_ver_hoja)
 
+        # Compatibilidad con controladores/tests anteriores: la validación ya no
+        # compite como CTA en esta pantalla. El flujo visible continúa por revisión.
         self.btn_siguiente = QPushButton("Validar hoja de ruta")
         self.btn_siguiente.setEnabled(False)
-        acciones.addWidget(self.btn_siguiente)
+        self.btn_siguiente.setVisible(False)
         self.btn_cerrar = QPushButton("Volver al dashboard")
         acciones.addWidget(self.btn_cerrar)
         raiz.addLayout(acciones)
+
+    @staticmethod
+    def _configurar_autocomplete(combo, placeholder):
+        combo.setEditable(True)
+        combo.setInsertPolicy(QComboBox.NoInsert)
+        combo.lineEdit().setPlaceholderText(placeholder)
+        completer = QCompleter(combo.model(), combo)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCompletionMode(QCompleter.PopupCompletion)
+        combo.setCompleter(completer)
+
+    @staticmethod
+    def _valor_combo(combo):
+        texto = str(combo.currentText() or "").strip()
+        if not texto:
+            return 0
+
+        idx_actual = combo.currentIndex()
+        if idx_actual >= 0:
+            texto_actual = str(combo.itemText(idx_actual) or "").strip()
+            if texto_actual.casefold() == texto.casefold():
+                return int(combo.itemData(idx_actual) or 0)
+
+        for idx in range(combo.count()):
+            candidato = str(combo.itemText(idx) or "").strip()
+            if candidato.casefold() == texto.casefold():
+                combo.setCurrentIndex(idx)
+                return int(combo.itemData(idx) or 0)
+        return 0
 
     def cargar_rutas(self, rutas, seleccion=0):
         self.cbo_ruta.clear()
@@ -128,11 +162,21 @@ class AsignacionRecursosView(QWidget):
             )
         )
         self.panel_exito.setVisible(True)
+        self._set_role(self.btn_guardar, "secondary")
+        self._set_role(self.btn_ver_hoja, "primary")
         self.btn_ver_hoja.setEnabled(True)
         self.btn_ver_hoja.setFocus()
 
     def ocultar_exito(self):
         self.panel_exito.setVisible(False)
+        self._set_role(self.btn_guardar, "primary")
+        self._set_role(self.btn_ver_hoja, "secondary")
+
+    @staticmethod
+    def _set_role(boton, role):
+        boton.setProperty("role", role)
+        boton.style().unpolish(boton)
+        boton.style().polish(boton)
 
     def set_resumen(self, resumen, texto_actual):
         self.lbl_pedidos.setText(str(resumen.pedidos))
@@ -145,7 +189,7 @@ class AsignacionRecursosView(QWidget):
         return int(self.cbo_ruta.currentData() or 0)
 
     def responsable_id(self):
-        return int(self.cbo_responsable.currentData() or 0)
+        return self._valor_combo(self.cbo_responsable)
 
     def equipo_id(self):
-        return int(self.cbo_equipo.currentData() or 0)
+        return self._valor_combo(self.cbo_equipo)

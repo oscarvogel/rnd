@@ -1,8 +1,6 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QFormLayout, QLabel
+from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox, QLabel
 from modelos.Clientes import ValidaCliente, cboRutaReparto
-from modelos.Empleados import ValidaEmpleado
-from modelos.Equipos import ValidaEquipo
 from pyqt5libs.libs.vistas.VistaBase import VistaBase
 from pyqt5libs.pyqt5libs.EntradaTexto import EntradaTexto
 from pyqt5libs.pyqt5libs.Etiquetas import Etiqueta
@@ -28,10 +26,20 @@ class VerHojaRutaView(VistaBase):
         self.lbl_titulo_hoja.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         layoutPpal.addWidget(self.lbl_titulo_hoja)
 
+        self.lbl_estado_operativo = QLabel("Estado: sin cargar")
+        self.lbl_estado_operativo.setObjectName("hojaRutaEstadoOperativo")
+        self.lbl_estado_operativo.setWordWrap(True)
+        layoutPpal.addWidget(self.lbl_estado_operativo)
+
         self.lbl_estado_hoja = QLabel("Seleccione fecha y ruta para cargar la hoja.")
         self.lbl_estado_hoja.setObjectName("hojaRutaEstado")
         self.lbl_estado_hoja.setWordWrap(True)
         layoutPpal.addWidget(self.lbl_estado_hoja)
+
+        self.lbl_resumen_hoja = QLabel("Pedidos: 0 · KG: 0 · Bultos: 0")
+        self.lbl_resumen_hoja.setObjectName("hojaRutaResumen")
+        self.lbl_resumen_hoja.setWordWrap(True)
+        layoutPpal.addWidget(self.lbl_resumen_hoja)
         
         self.avance = Avance()
         layoutPpal.addWidget(self.avance)
@@ -47,29 +55,51 @@ class VerHojaRutaView(VistaBase):
         layout_fechas.addWidget(self.cbo_ruta_reparto)
         layoutPpal.addLayout(layout_fechas)
                 
-        layout_equipo = QHBoxLayout()
-        self.equipo = ValidaEquipo(texto="Camion Asignado:")
-        layout_equipo.addLayout(self.equipo)
-        self.empleado = ValidaEmpleado(texto="Chofer Responsable:")
-        layout_equipo.addLayout(self.empleado)
-        layoutPpal.addLayout(layout_equipo)
+        recursos = QGroupBox("Recursos asignados")
+        form_recursos = QFormLayout(recursos)
+        self.lbl_camion = QLabel("Camión pendiente")
+        self.lbl_chofer = QLabel("Chofer pendiente")
+        self.lbl_camion.setObjectName("hojaRutaCamion")
+        self.lbl_chofer.setObjectName("hojaRutaChofer")
+        form_recursos.addRow("Camión:", self.lbl_camion)
+        form_recursos.addRow("Chofer:", self.lbl_chofer)
+        self.btn_recursos = self.CreaBoton(
+            "Modificar chofer / camión", imagen_str="edit.png"
+        )
+        self.btn_recursos.setProperty("role", "secondary")
+        form_recursos.addRow("", self.btn_recursos)
+        layoutPpal.addWidget(recursos)
         
         self.grilla_datos = Grilla()
         cabeceras = [
-            "Selecciona", "Cliente", "Comprobante", "Factura", "Remito", "Producto", "Cantidad", "KG", "Bultos", "Observaciones", "id", "codigo_cliente"
+            "Cliente", "Comprobante", "Factura", "Remito", "Producto",
+            "Cantidad", "KG", "Bultos", "Observaciones", "id", "codigo_cliente"
         ]
         self.grilla_datos.ArmaCabeceras(cabeceras=cabeceras)
-        self.grilla_datos.columnasHabilitadas = [0,]
+        self.grilla_datos.columnasHabilitadas = []
+        self.grilla_datos.setColumnHidden(9, True)
+        self.grilla_datos.setColumnHidden(10, True)
         layoutPpal.addWidget(self.grilla_datos)
         
         layout_botones = QHBoxLayout()
         self.btn_cargar = self.CreaBoton("Actualizar", imagen_str="search.png")
         self.btn_agregar = self.CreaBoton("Agregar", imagen_str="new.png")
         self.btn_modificar = self.CreaBoton("Modificar", imagen_str="edit.png")
+        # Los recursos se editan únicamente desde Asignar recursos.
+        # Se conserva el atributo por compatibilidad con código legacy.
         self.btn_grabar = self.CreaBoton("Grabar", imagen_str="save.png")
+        self.btn_grabar.setVisible(False)
         self.btn_borrar = self.CreaBoton("Borrar", imagen_str="delete.png")
-        self.btn_imprimir = self.CreaBoton("Imprimir PDF", imagen_str="printing.png")
-        self.btn_imprimir.setProperty("role", "primary")
+        self.btn_continuar = self.CreaBoton(
+            "Hoja correcta → Continuar a validación", imagen_str="save.png"
+        )
+        self.btn_continuar.setProperty("role", "primary")
+        self.btn_continuar.setMinimumHeight(42)
+        self.btn_continuar.setCursor(Qt.PointingHandCursor)
+        self.btn_continuar.setEnabled(False)
+        self.btn_imprimir = self.CreaBoton("Vista previa PDF", imagen_str="printing.png")
+        self.btn_imprimir.setProperty("role", "secondary")
+        self.btn_imprimir.setEnabled(False)
         self.btn_imprimir.setMinimumHeight(42)
         self.btn_imprimir.setCursor(Qt.PointingHandCursor)
         self.btn_cerrar = self.CreaBoton("Cerrar", imagen_str="close.png")
@@ -78,9 +108,74 @@ class VerHojaRutaView(VistaBase):
         layout_botones.addWidget(self.btn_modificar)
         layout_botones.addWidget(self.btn_grabar)
         layout_botones.addWidget(self.btn_borrar)
+        layout_botones.addStretch(1)
+        layout_botones.addWidget(self.btn_continuar)
         layout_botones.addWidget(self.btn_imprimir)
         layout_botones.addWidget(self.btn_cerrar)
         layoutPpal.addLayout(layout_botones)
+
+    def mostrar_recursos(self, chofer, camion):
+        self.lbl_chofer.setText(chofer or "Chofer pendiente")
+        self.lbl_camion.setText(camion or "Camión pendiente")
+
+    @staticmethod
+    def _set_role(boton, role):
+        boton.setProperty("role", role)
+        boton.style().unpolish(boton)
+        boton.style().polish(boton)
+
+    def mostrar_estado_operativo(
+        self, estado, pedidos, kg, bultos, permitir_continuar=True,
+        recursos_completos=True,
+    ):
+        if pedidos and not recursos_completos:
+            texto_estado = (
+                "Estado: REQUIERE CORRECCIÓN — Falta asignar chofer y/o camión"
+            )
+        else:
+            textos = {
+                "EN_PREPARACION": "Estado: EN PREPARACIÓN — Falta revisar y validar",
+                "LISTA": "Estado: LISTA — Puede imprimir / despachar",
+                "DESPACHADA": "Estado: DESPACHADA — Circuito operativo finalizado",
+            }
+            texto_estado = textos.get(
+                estado, "Estado: {}".format(estado or "sin definir")
+            )
+        self.lbl_estado_operativo.setText(texto_estado)
+        self.btn_recursos.setEnabled(bool(pedidos) and estado != "DESPACHADA")
+        self.lbl_resumen_hoja.setText(
+            "Pedidos: {} · KG: {} · Bultos: {}".format(pedidos, kg, bultos)
+        )
+
+        puede_continuar = (
+            bool(pedidos)
+            and recursos_completos
+            and estado != "DESPACHADA"
+            and permitir_continuar
+        )
+        self.btn_continuar.setEnabled(puede_continuar)
+        self.btn_continuar.setVisible(permitir_continuar)
+        self.btn_imprimir.setEnabled(bool(pedidos) and recursos_completos)
+
+        if not recursos_completos:
+            self.btn_continuar.setText("Asignar recursos antes de continuar")
+            self.btn_imprimir.setText("PDF no disponible")
+            self._set_role(self.btn_continuar, "secondary")
+            self._set_role(self.btn_imprimir, "secondary")
+        elif estado == "EN_PREPARACION":
+            self.btn_continuar.setText("Hoja correcta → Continuar a validación")
+            self.btn_imprimir.setText("Vista previa PDF")
+            self._set_role(self.btn_continuar, "primary")
+            self._set_role(self.btn_imprimir, "secondary")
+        elif estado == "LISTA":
+            self.btn_continuar.setText("Continuar a despacho")
+            self.btn_imprimir.setText("Imprimir PDF")
+            self._set_role(self.btn_continuar, "secondary")
+            self._set_role(self.btn_imprimir, "primary")
+        else:
+            self.btn_imprimir.setText("Reimprimir PDF")
+            self._set_role(self.btn_continuar, "secondary")
+            self._set_role(self.btn_imprimir, "secondary")
 
 
 class ModificaHojaDeRutaView(VistaBase):
@@ -97,12 +192,6 @@ class ModificaHojaDeRutaView(VistaBase):
         layout_datos = QFormLayout()
         self.cliente = ValidaCliente()
         layout_datos.addRow(self.cliente)
-        
-        self.layout_empleado = ValidaEmpleado()
-        layout_datos.addRow(self.layout_empleado)
-        
-        self.layout_equipo = ValidaEquipo()
-        layout_datos.addRow(self.layout_equipo)
         
         lbl_comprobante = Etiqueta(texto="Comprobante:")
         self.text_comprobante = EntradaTexto()

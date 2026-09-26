@@ -125,6 +125,25 @@ class BandejaPedidosController(ControladorBase):
         ids = set(getattr(factura, "hoja_ids", ()) or ())
         return [p for p in self._pedidos if p.id in ids]
 
+    def seleccionar_factura_por_hoja(self, hoja_id, abrir=False):
+        hoja_id = int(hoja_id or 0)
+        if not hoja_id:
+            return False
+        factura = next(
+            (
+                item for item in self._facturas
+                if hoja_id in set(getattr(item, "hoja_ids", ()) or ())
+            ),
+            None,
+        )
+        if factura is None:
+            return False
+        if not self.view.seleccionar_clave(factura.clave):
+            return False
+        if abrir:
+            self.editar_factura_actual()
+        return True
+
     def actualizar_totales(self):
         totales = totales_facturas(self.facturas_seleccionadas())
         self.view.set_totales(totales["facturas"], totales["kg"], totales["bultos"])
@@ -272,6 +291,148 @@ class BandejaPedidosController(ControladorBase):
 
             cargar_lugares()
 
+        def alta_rapida_cliente_lugar():
+            """Crea/reutiliza cliente + lugar sin sacar al operador de la factura."""
+            rapido = QDialog(dialogo)
+            rapido.setWindowTitle("Alta rápida de cliente + lugar")
+            rapido.setMinimumWidth(560)
+            layout_rapido = QVBoxLayout(rapido)
+            form_rapido = QFormLayout()
+            layout_rapido.addLayout(form_rapido)
+
+            txt_cliente_rapido = QLineEdit(
+                str(cbo_cliente.currentText() or factura.cliente or "").strip()
+            )
+            txt_lugar_rapido = QLineEdit()
+            txt_lugar_rapido.setPlaceholderText(
+                "Ej.: Depósito central, Sucursal Posadas, Casa central"
+            )
+            txt_direccion_rapida = QLineEdit()
+            txt_direccion_rapida.setPlaceholderText("Opcional")
+
+            cbo_ruta_rapida = QComboBox()
+            cbo_ruta_rapida.addItem("Seleccione una ruta", 0)
+            for idx in range(1, cbo_ruta.count()):
+                cbo_ruta_rapida.addItem(
+                    cbo_ruta.itemText(idx),
+                    int(cbo_ruta.itemData(idx) or 0),
+                )
+
+            ruta_actual = int(cbo_ruta.currentData() or factura.ruta_id or 0)
+            if ruta_actual:
+                idx_ruta = cbo_ruta_rapida.findData(ruta_actual)
+                if idx_ruta >= 0:
+                    cbo_ruta_rapida.setCurrentIndex(idx_ruta)
+
+            form_rapido.addRow("Cliente:", txt_cliente_rapido)
+            form_rapido.addRow("Lugar de entrega:", txt_lugar_rapido)
+            form_rapido.addRow("Dirección:", txt_direccion_rapida)
+            form_rapido.addRow("Ruta:", cbo_ruta_rapida)
+
+            ayuda = QLabel(
+                "Se creará el cliente sólo si no existe. El lugar de entrega "
+                "quedará seleccionado automáticamente en esta factura."
+            )
+            ayuda.setWordWrap(True)
+            layout_rapido.addWidget(ayuda)
+
+            botones_rapidos = QDialogButtonBox(
+                QDialogButtonBox.Save | QDialogButtonBox.Cancel
+            )
+            botones_rapidos.button(QDialogButtonBox.Save).setText("Crear y usar")
+            botones_rapidos.accepted.connect(rapido.accept)
+            botones_rapidos.rejected.connect(rapido.reject)
+            layout_rapido.addWidget(botones_rapidos)
+
+            while rapido.exec_() == QDialog.Accepted:
+                nombre_cliente = txt_cliente_rapido.text().strip()
+                nombre_lugar = txt_lugar_rapido.text().strip()
+                direccion = txt_direccion_rapida.text().strip()
+                ruta_id = int(cbo_ruta_rapida.currentData() or 0)
+
+                if not nombre_cliente:
+                    showAlert("Sistema", "Indique el nombre del cliente")
+                    continue
+                if not nombre_lugar:
+                    showAlert("Sistema", "Indique el lugar de entrega")
+                    continue
+                if not ruta_id:
+                    showAlert("Sistema", "Seleccione la ruta del lugar de entrega")
+                    continue
+
+                cliente = None
+                clave_cliente = self._normalizar_nombre(nombre_cliente)
+                for candidato in Cliente.select():
+                    if self._normalizar_nombre(candidato.razon_social) == clave_cliente:
+                        cliente = candidato
+                        break
+
+                try:
+                    with Cliente._meta.database.atomic():
+                        if cliente is None:
+                            cliente = Cliente.create(
+                                razon_social=nombre_cliente,
+                                ruta_reparto=ruta_id,
+                                activo=True,
+                            )
+                        elif not cliente.activo:
+                            cliente.activo = True
+                            cliente.save()
+
+                        lugar = None
+                        clave_lugar = self._normalizar_nombre(nombre_lugar)
+                        for candidato in LugarEntrega.select().where(
+                            LugarEntrega.cliente == cliente.id
+                        ):
+                            if self._normalizar_nombre(candidato.nombre) == clave_lugar:
+                                lugar = candidato
+                                break
+
+                        if lugar is None:
+                            lugar = LugarEntrega.create(
+                                cliente=cliente.id,
+                                nombre=nombre_lugar,
+                                direccion=direccion or None,
+                                ruta_reparto=ruta_id,
+                                principal=(
+                                    LugarEntrega.principal_cliente(cliente.id) is None
+                                ),
+                                activo=True,
+                            )
+                        else:
+                            lugar.direccion = direccion or lugar.direccion
+                            lugar.ruta_reparto = ruta_id
+                            lugar.activo = True
+                            lugar.save()
+                except Exception as exc:
+                    showAlert(
+                        "Sistema",
+                        "No se pudo completar el alta rápida: {}".format(exc),
+                    )
+                    continue
+
+                recargar_clientes()
+                idx_cliente = cbo_cliente.findData(cliente.id)
+                if idx_cliente >= 0:
+                    cbo_cliente.setCurrentIndex(idx_cliente)
+
+                cargar_lugares()
+                idx_lugar = cbo_lugar.findData(lugar.id)
+                if idx_lugar >= 0:
+                    cbo_lugar.setCurrentIndex(idx_lugar)
+
+                idx_ruta = cbo_ruta.findData(ruta_id)
+                if idx_ruta >= 0:
+                    cbo_ruta.setCurrentIndex(idx_ruta)
+
+                dialogo.raise_()
+                dialogo.activateWindow()
+                return
+
+        btn_alta_rapida = QPushButton("Alta rápida cliente + lugar")
+        btn_alta_rapida.setProperty("role", "primary")
+        btn_alta_rapida.clicked.connect(alta_rapida_cliente_lugar)
+
         def gestionar_clientes():
             from controladores.ABMClientes import ABMClientesController
 
@@ -301,8 +462,13 @@ class BandejaPedidosController(ControladorBase):
             gestor.view.raise_()
             gestor.view.activateWindow()
 
-        btn_gestionar_clientes = QPushButton("Crear / editar clientes y lugares")
+        btn_gestionar_clientes = QPushButton("Administrar clientes y lugares")
+        btn_gestionar_clientes.setProperty("role", "secondary")
         btn_gestionar_clientes.clicked.connect(gestionar_clientes)
+
+        acciones_cliente = QHBoxLayout()
+        acciones_cliente.addWidget(btn_alta_rapida)
+        acciones_cliente.addWidget(btn_gestionar_clientes)
 
         if factura.cliente_id:
             idx = cbo_cliente.findData(factura.cliente_id)
@@ -327,7 +493,7 @@ class BandejaPedidosController(ControladorBase):
         form.addRow("Factura:", QLabel(factura.factura))
         form.addRow("Cliente:", cbo_cliente)
         form.addRow("Lugar de entrega:", cbo_lugar)
-        form.addRow("", btn_gestionar_clientes)
+        form.addRow("", acciones_cliente)
         form.addRow("Ruta:", cbo_ruta)
         form.addRow("Remito:", txt_remito)
         form.addRow("Observación general:", txt_observaciones)
@@ -647,3 +813,4 @@ class BandejaPedidosController(ControladorBase):
             ruta_inicial=ruta_id,
         )
         self.ventana_siguiente.run()
+        self.view.close()

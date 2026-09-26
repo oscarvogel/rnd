@@ -1,7 +1,7 @@
 # coding=utf-8
 
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QEvent, QTimer, Qt
 from PyQt5.QtWidgets import QMainWindow, qApp
 from peewee import DoesNotExist
 
@@ -101,6 +101,24 @@ class MainView(QMainWindow):
             estado=estado,
             version=version,
         )
+
+    def event(self, event):
+        """Recarga el dashboard al recuperar el foco de una ventana operativa."""
+        if event.type() == QEvent.WindowActivate and getattr(self, "dashboard", None) is not None:
+            QTimer.singleShot(0, self._recargar_dashboard_si_visible)
+        return super().event(event)
+
+    def _recargar_dashboard_si_visible(self):
+        dashboard = getattr(self, "dashboard", None)
+        if dashboard is None:
+            return
+        try:
+            if dashboard.isVisible():
+                dashboard.recargar()
+        except RuntimeError:
+            # La ventana puede estar cerrándose mientras llega el evento Qt.
+            return
+
 
     # Prefijos de paquete probados en orden al resolver el modulo del
     # menu lateral. El primero que exista gana. Empezamos por

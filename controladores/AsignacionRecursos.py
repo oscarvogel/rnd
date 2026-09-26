@@ -1,5 +1,5 @@
 # coding=utf-8
-from datetime import date
+from datetime import date, datetime
 
 from PyQt5.QtCore import QDate
 
@@ -7,19 +7,21 @@ from modelos.Clientes import RutaReparto
 from modelos.Empleados import Empleado
 from modelos.Equipos import Equipos
 from modelos.HojaRuta import HojaDeRuta
+from modelos.EstadoHojaRuta import EstadoHojaRuta
 from modelos.ModeloBase import reconnect_if_needed
 from modelos.ParametrosSistema import ParamSist
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.pyqt5libs.Ventanas import showAlert
-from pyqt5libs.pyqt5libs.utiles import inicializar_y_capturar_excepciones
+from pyqt5libs.pyqt5libs.utiles import LeerConf, inicializar_y_capturar_excepciones
 from utiles.asignacion_recursos import construir_resumen, validar_asignacion
 from vistas.AsignacionRecursos import AsignacionRecursosView
 
 
 class AsignacionRecursosController(ControladorBase):
-    def __init__(self, fecha_inicial=None, ruta_inicial=0):
+    def __init__(self, fecha_inicial=None, ruta_inicial=0, on_saved=None):
         super().__init__()
         self.view = AsignacionRecursosView()
+        self.on_saved = on_saved
         self.empleado_generico = int(ParamSist.ObtenerParametro("EMPLEADO_GENERICO", "23"))
         self.camion_generico = int(ParamSist.ObtenerParametro("CAMION_GENERICO", "1"))
         self.ruta_inicial = int(ruta_inicial or 0)
@@ -95,11 +97,19 @@ class AsignacionRecursosController(ControladorBase):
         )
         self.view.btn_siguiente.setEnabled(completa)
         self.view.btn_ver_hoja.setEnabled(not self.resumen_actual.vacia)
-        self.view.lbl_estado.setText(
-            "Recursos completos. Revise la hoja de ruta y luego continúe con la validación."
-            if completa else
-            "Falta asignar un chofer y un camión válidos."
-        )
+        if self.resumen_actual.vacia:
+            self.view.lbl_estado.setText(
+                "No se encontraron pedidos para la fecha y ruta seleccionadas. "
+                "Revise ambos datos y vuelva a cargar."
+            )
+        elif completa:
+            self.view.lbl_estado.setText(
+                "Datos cargados. Recursos completos: puede revisar la hoja de ruta."
+            )
+        else:
+            self.view.lbl_estado.setText(
+                "Datos cargados. Falta asignar un chofer y un camión válidos."
+            )
 
     def _nombre_responsable(self, empleado_id):
         if not empleado_id or int(empleado_id) == self.empleado_generico:
@@ -134,6 +144,23 @@ class AsignacionRecursosController(ControladorBase):
             showAlert("Sistema", mensaje)
             return
 
+        estado = EstadoHojaRuta.get_or_none(
+            (EstadoHojaRuta.fecha == self.fecha_actual()) &
+            (EstadoHojaRuta.ruta == ruta_id)
+        )
+        if estado is not None and estado.estado == EstadoHojaRuta.DESPACHADA:
+            showAlert(
+                "Sistema",
+                "La hoja ya fue despachada. No se pueden modificar sus recursos.",
+            )
+            return
+
+        cambio_recursos = (
+            self.resumen_actual.asignacion_mixta
+            or int(self.resumen_actual.responsable_id or 0) != int(responsable_id)
+            or int(self.resumen_actual.equipo_id or 0) != int(equipo_id)
+        )
+
         (
             HojaDeRuta.update(
                 responsable=responsable_id,
@@ -163,12 +190,24 @@ class AsignacionRecursosController(ControladorBase):
             self.cargar_hoja()
             return
 
+        if (
+            cambio_recursos
+            and estado is not None
+            and estado.estado != EstadoHojaRuta.EN_PREPARACION
+        ):
+            estado.estado = EstadoHojaRuta.EN_PREPARACION
+            estado.actualizado_en = datetime.now()
+            estado.actualizado_por = LeerConf("usuario") or ""
+            estado.save()
+
         fecha = self.fecha_actual()
         ruta = self.view.cbo_ruta.currentText()
         responsable = self._nombre_responsable(responsable_id)
         equipo = self._nombre_equipo(equipo_id)
         self.cargar_hoja()
         self.view.mostrar_exito(fecha, ruta, responsable, equipo)
+        if callable(self.on_saved):
+            self.on_saved()
 
     def ver_hoja_ruta(self):
         from controladores.VerHojaRuta import VerHojaRutaController
@@ -177,6 +216,9 @@ class AsignacionRecursosController(ControladorBase):
             ruta_inicial=self.view.ruta_id(),
         )
         self.ventana_hoja.run()
+        # La asignación queda abierta detrás de la revisión. Si el usuario
+        # cierra la hoja, vuelve exactamente al punto anterior para poder
+        # corregir fecha, ruta, chofer o camión sin reiniciar el circuito.
 
     def ir_validacion(self):
         from controladores.ValidacionHojaRuta import ValidacionHojaRutaController

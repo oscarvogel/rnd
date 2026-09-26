@@ -14,7 +14,7 @@ def _source(path):
 def test_asignacion_expone_accion_directa_a_hoja():
     vista = _source("vistas/AsignacionRecursos.py")
     controlador = _source("controladores/AsignacionRecursos.py")
-    assert "Ver hoja de ruta ahora" in vista
+    assert "Revisar hoja de ruta" in vista
     assert "Volver al dashboard" in vista
     assert "Asignación guardada" in vista
     assert "mostrar_exito" in controlador

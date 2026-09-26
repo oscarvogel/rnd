@@ -152,6 +152,42 @@ class ServiciosDashboardTests(unittest.TestCase):
         self.assertIn("Norte", resultado.detalle)
         self.assertEqual(resultado.fecha, date(2026, 1, 1))
 
+    def test_hoja_lista_se_informa_como_lista_para_imprimir(self):
+        from vistas.dashboard import servicios
+
+        registros = [
+            SimpleNamespace(
+                ruta_id=2,
+                responsable_id=10,
+                equipo_asignado_id=5,
+            )
+        ]
+        mock_query = MagicMock()
+        mock_query.where.return_value.__iter__.return_value = iter(registros)
+        self.mock_hoja.return_value = mock_query
+
+        ruta_q = MagicMock()
+        ruta_q.where.return_value.__iter__.return_value = iter([
+            SimpleNamespace(id=2, descripcion="Centro"),
+        ])
+        estado_q = MagicMock()
+        estado_q.where.return_value.__iter__.return_value = iter([
+            SimpleNamespace(ruta_id=2, estado="LISTA"),
+        ])
+
+        with patch.object(servicios.RutaReparto, "select", return_value=ruta_q), \
+             patch.object(servicios.EstadoHojaRuta, "select", return_value=estado_q), \
+             patch.object(servicios.ParamSist, "ObtenerParametro", side_effect=("1", "23")):
+            resultado = servicios.hojas_ruta_del_dia(
+                usu_id=1,
+                fecha=date(2026, 9, 22),
+            )
+
+        self.assertEqual(resultado.estado, "ok")
+        self.assertEqual(resultado.cantidad, 1)
+        self.assertIn("Lista para imprimir", resultado.detalle)
+        self.assertEqual(resultado.ruta_id, 2)
+
     def test_hojas_ruta_del_dia_vacio(self):
         mock_query = MagicMock()
         mock_query.where.return_value.__iter__.return_value = iter([])
