@@ -1,6 +1,13 @@
 from types import SimpleNamespace
 
-from utiles.lugares_entrega import clave_duplicado, resolver_lugar_entrega
+from peewee import SqliteDatabase
+
+from demo_seed import _asegurar_lugares_entrega_multi_direccion
+from utiles.lugares_entrega import (
+    clave_duplicado,
+    mismo_destino,
+    resolver_lugar_entrega,
+)
 
 
 def lugar(nombre, localidad="", direccion="", activo=True):
@@ -53,3 +60,58 @@ def test_clave_duplicado_prioriza_comprobante():
 def test_clave_duplicado_sin_comprobante_mantiene_compatibilidad():
     clave = clave_duplicado(10, "2026-09-09", "Tablas 2x4", "")
     assert clave == ("10", "2026-09-09", "tablas 2x4")
+
+
+
+def test_misma_referencia_con_otra_direccion_no_es_duplicado():
+    assert not mismo_destino(
+        "Palmesano",
+        "Los Campos",
+        "Palmesano",
+        "Ruta 12 Km 8",
+    )
+
+
+def test_mismo_nombre_y_misma_direccion_si_es_duplicado():
+    assert mismo_destino(
+        "  PALMESANO ",
+        "Los Campos 123",
+        "Palmesano",
+        "los campos 123",
+    )
+
+
+def test_demo_migra_unique_legacy_y_permite_mismo_nombre_otra_direccion():
+    db = SqliteDatabase(":memory:")
+    db.connect()
+    try:
+        db.execute_sql(
+            "CREATE TABLE lugares_entrega ("
+            "id INTEGER PRIMARY KEY, "
+            "cliente_id INTEGER NOT NULL, "
+            "nombre TEXT NOT NULL, "
+            "direccion TEXT)"
+        )
+        db.execute_sql(
+            "CREATE UNIQUE INDEX legacy_lugar_nombre "
+            "ON lugares_entrega(cliente_id, nombre)"
+        )
+
+        _asegurar_lugares_entrega_multi_direccion(db)
+
+        db.execute_sql(
+            "INSERT INTO lugares_entrega(cliente_id, nombre, direccion) "
+            "VALUES (1, 'Palmesano', 'Los Campos')"
+        )
+        db.execute_sql(
+            "INSERT INTO lugares_entrega(cliente_id, nombre, direccion) "
+            "VALUES (1, 'Palmesano', 'Ruta 12 Km 8')"
+        )
+
+        filas = db.execute_sql(
+            "SELECT COUNT(*) FROM lugares_entrega "
+            "WHERE cliente_id = 1 AND nombre = 'Palmesano'"
+        ).fetchone()
+        assert filas[0] == 2
+    finally:
+        db.close()

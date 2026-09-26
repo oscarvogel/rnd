@@ -3,7 +3,9 @@ import os
 
 from controladores.Login import LoginController
 from controladores.Migraciones import MigracionBaseDatos
-from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QKeySequence
+from PyQt5.QtWidgets import QApplication, QShortcut
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.pyqt5libs import Constantes
 from pyqt5libs.pyqt5libs.Menu import GeneraMenu
@@ -27,6 +29,12 @@ class MainController(ControladorBase):
         super().__init__()
         self.view = MainView()
         self._update_coordinator = None
+        self._assistant_panel = None
+        self._assistant_last_context = "Dashboard principal"
+        self._assistant_shortcut = QShortcut(QKeySequence("F1"), self.view)
+        self._assistant_shortcut.setContext(Qt.ApplicationShortcut)
+        self._assistant_shortcut.setEnabled(False)
+        self._assistant_shortcut.activated.connect(self.toggle_asistente)
         self.view.ArmaToolBarContable()
         self.view.ArmaToolBarVentas()
         self.view.ArmaToolBarCompras()
@@ -64,6 +72,8 @@ class MainController(ControladorBase):
             self.view.cargar_menu_lateral(usu_id)
             self._inicializar_dashboard(usu_id, ejecutor=ejecutor)
             self.ArmaMenu()
+            self.view.encabezado.boton_asistente.setEnabled(True)
+            self._assistant_shortcut.setEnabled(True)
             if not demo_mode:
                 self._programar_actualizaciones()
         return lRetVal
@@ -150,11 +160,55 @@ class MainController(ControladorBase):
         self.view.SalirSistema()
 
     def conectarWidgets(self):
+        self.view.encabezado.boton_asistente.clicked.connect(self.toggle_asistente)
         try:
             self.view.barra_lateral.arbol.itemClicked.connect(self.view.onClickItemMenu)
         except AttributeError:
             for btn in self.view.botones:
                 btn.clicked.connect(lambda _, b=btn: self.view.onClickBtnMenuIzquierda(b))
+
+    def _ensure_assistant_panel(self):
+        if self._assistant_panel is None:
+            from vistas.AsistenteRndPanel import AsistenteRndPanel
+
+            self._assistant_panel = AsistenteRndPanel(
+                anchor=self.view,
+                context_provider=self._contexto_asistente,
+            )
+        return self._assistant_panel
+
+    def _contexto_asistente(self):
+        """Describe la pantalla activa sin usarla para rutear la consulta."""
+        active = QApplication.activeWindow()
+
+        if active is self._assistant_panel:
+            return self._assistant_last_context
+
+        if active is not None and active is not self.view:
+            titulo = str(active.windowTitle() or "").strip()
+            clase = active.__class__.__name__
+            contexto = titulo or clase
+            if titulo and clase not in titulo:
+                contexto = "{} ({})".format(titulo, clase)
+            self._assistant_last_context = contexto
+            return contexto
+
+        controller = getattr(self.view, "ventana_menu_lateral", None)
+        window = getattr(controller, "view", None)
+        if window is not None:
+            titulo = str(window.windowTitle() or "").strip()
+            clase = window.__class__.__name__
+            contexto = titulo or clase
+            if titulo and clase not in titulo:
+                contexto = "{} ({})".format(titulo, clase)
+            self._assistant_last_context = contexto
+            return contexto
+
+        return self._assistant_last_context
+
+    def toggle_asistente(self):
+        panel = self._ensure_assistant_panel()
+        panel.toggle()
 
     @inicializar_y_capturar_excepciones
     def toolbtnpressed(self, a, *args, **kwargs) -> None:

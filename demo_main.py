@@ -10,14 +10,16 @@ import sys
 from pathlib import Path
 
 
-def _configurar_fuentes_qt_windows():
-    """Normaliza Qt para que el DEMO abra una ventana real en Windows."""
+def _configurar_qt_windows():
+    """Fuerza el backend gráfico interactivo del demo en Windows.
+
+    Algunos tests/terminales dejan QT_QPA_PLATFORM=offscreen. En ese caso Qt
+    ejecuta la aplicación pero ninguna ventana aparece y sólo imprime warnings
+    como "This plugin does not support propagateSizeHints()".
+    """
     if os.name != "nt":
         return
 
-    # Pytest usa a menudo QT_QPA_PLATFORM=offscreen. Si esa variable queda
-    # heredada en la misma consola, Qt arranca correctamente pero sin mostrar
-    # ninguna ventana y demo.ps1 parece quedar colgado.
     if os.environ.get("QT_QPA_PLATFORM", "").strip().lower() == "offscreen":
         os.environ.pop("QT_QPA_PLATFORM", None)
 
@@ -26,7 +28,7 @@ def _configurar_fuentes_qt_windows():
         os.environ.setdefault("QT_QPA_FONTDIR", windows_fonts)
 
 
-_configurar_fuentes_qt_windows()
+_configurar_qt_windows()
 
 
 def _app_root() -> Path:

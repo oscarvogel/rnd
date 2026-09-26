@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [switch]$SkipTests,
-    [switch]$SkipInstallDependencies
+    [switch]$SkipInstallDependencies,
+    [string]$DemoAiEnvPath = ""
 )
 
 Set-StrictMode -Version Latest
@@ -27,6 +28,90 @@ if (-not $Iscc) {
     if ($IsccCommand) {
         $Iscc = $IsccCommand.Source
     }
+}
+
+function Get-DemoAiConfig {
+    param(
+        [string]$RepoRoot,
+        [string]$ExplicitPath
+    )
+
+    $candidates = @()
+    if ($ExplicitPath) {
+        $candidates += $ExplicitPath
+    }
+    $candidates += (Join-Path $RepoRoot "demo_ai.secrets.env")
+    $candidates += (Join-Path $RepoRoot ".env")
+
+    $source = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+    if (-not $source) {
+        throw @"
+No se encontro configuracion IA para el DEMO.
+Cree $RepoRoot\demo_ai.secrets.env (recomendado) o use el .env local con:
+MINIMAX_API_KEY=...
+"@
+    }
+
+    $allowed = @(
+        "MINIMAX_API_KEY",
+        "RND_PDF_AI_API_KEY",
+        "RND_PDF_AI_URL",
+        "RND_PDF_AI_MODEL",
+        "RND_PDF_AI_TIMEOUT"
+    )
+
+    $values = @{}
+    foreach ($line in Get-Content -LiteralPath $source -Encoding UTF8) {
+        if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$') {
+            $name = $Matches[1]
+            if ($allowed -contains $name) {
+                $value = $Matches[2].Trim()
+                if (
+                    ($value.StartsWith('"') -and $value.EndsWith('"')) -or
+                    ($value.StartsWith("'") -and $value.EndsWith("'"))
+                ) {
+                    $value = $value.Substring(1, $value.Length - 2)
+                }
+                if ($value) {
+                    $values[$name] = $value
+                }
+            }
+        }
+    }
+
+    if (-not $values.ContainsKey("MINIMAX_API_KEY") -and -not $values.ContainsKey("RND_PDF_AI_API_KEY")) {
+        throw "La configuracion IA no contiene MINIMAX_API_KEY ni RND_PDF_AI_API_KEY."
+    }
+
+    return [pscustomobject]@{
+        Source = $source
+        Values = $values
+    }
+}
+
+function Write-DemoAiEnv {
+    param(
+        [hashtable]$Values,
+        [string]$Destination
+    )
+
+    $order = @(
+        "MINIMAX_API_KEY",
+        "RND_PDF_AI_API_KEY",
+        "RND_PDF_AI_URL",
+        "RND_PDF_AI_MODEL",
+        "RND_PDF_AI_TIMEOUT"
+    )
+    $lines = @(
+        "# RND DEMO - configuracion IA incluida por build_demo_installer.ps1"
+        "# No editar durante la demostracion."
+    )
+    foreach ($name in $order) {
+        if ($Values.ContainsKey($name)) {
+            $lines += ("{0}={1}" -f $name, $Values[$name])
+        }
+    }
+    $lines | Set-Content -LiteralPath $Destination -Encoding UTF8
 }
 
 function Get-DemoBuildVersion {
@@ -58,6 +143,8 @@ if (-not $Iscc) {
 Write-Host "[RND DEMO] Inno Setup: $Iscc" -ForegroundColor DarkGray
 
 $BuildVersion = Get-DemoBuildVersion -Path $StateFile
+$DemoAiConfig = Get-DemoAiConfig -RepoRoot $RepoRoot -ExplicitPath $DemoAiEnvPath
+$StagedDemoEnv = Join-Path $RepoRoot "dist\RND Demo\.env"
 
 Push-Location $RepoRoot
 try {
@@ -90,6 +177,10 @@ try {
         throw "Build DEMO invalido: falta dist\RND Demo\rnd.ini"
     }
 
+    Write-DemoAiEnv -Values $DemoAiConfig.Values -Destination $StagedDemoEnv
+    Write-Host "[RND] Configuracion IA DEMO incluida desde $($DemoAiConfig.Source)." -ForegroundColor Cyan
+    Write-Host "[RND] Solo se empaquetan variables IA; no se copia el .env completo." -ForegroundColor Cyan
+
     & $Iscc "/DMyAppVersion=$BuildVersion" installer\RND_Demo.iss
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup fallo." }
 
@@ -100,5 +191,7 @@ try {
     Write-Host "INI demo: dist\RND Demo\sistema.demo.ini" -ForegroundColor Green
     Write-Host "Login demo: usuario 1 / clave DEMO" -ForegroundColor Yellow
 } finally {
+    # Limpia la copia temporal del secreto en dist. El Setup ya la incorporo.
+    Remove-Item -Force $StagedDemoEnv -ErrorAction SilentlyContinue
     Pop-Location
 }

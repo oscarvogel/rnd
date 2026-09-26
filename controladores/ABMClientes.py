@@ -1,3 +1,4 @@
+import logging
 from PyQt5.QtWidgets import QMessageBox
 
 from peewee import JOIN
@@ -12,6 +13,7 @@ from pyqt5libs.libs.controladores.ControladorBaseABM import ControladorBaseABM
 from pyqt5libs.pyqt5libs import Ventanas
 from pyqt5libs.pyqt5libs.utiles import inicializar_y_capturar_excepciones
 from utiles.consolidacion_clientes import simular_consolidacion, consolidar_clientes
+from utiles.lugares_entrega import mismo_destino
 from vistas.ABMClientes import (
     ABMClientesView, CodigoClienteProveedorView, LugarEntregaView,
     ConsolidacionClientesView,
@@ -36,6 +38,42 @@ class ABMClientesController(ControladorBaseABM):
         self.view.btn_lugar_agregar.clicked.connect(self.on_click_lugar_agregar)
         self.view.btn_lugar_editar.clicked.connect(self.on_click_lugar_editar)
         self.view.btn_lugar_borrar.clicked.connect(self.on_click_lugar_borrar)
+
+    def _copiar_controles_al_modelo(self, dato, es_alta):
+        """Copia la ficha al modelo sin forzar el PK autoincremental en altas."""
+        for nombre, control in self.view.controles.items():
+            if (
+                es_alta
+                and self.view.autoincremental
+                and nombre == self.campoclave
+            ):
+                continue
+            dato.__data__[nombre] = control.valor()
+
+    @reconnect_if_needed
+    @inicializar_y_capturar_excepciones
+    def onClickBtnAceptar(self, *args, **kwargs):
+        """Guarda clientes respetando el AutoField también en SQLite/DEMO."""
+        if not self.model:
+            Ventanas.showAlert("Sistema", "Debes establecer un modelo a actualizar")
+            return
+        if self.campoclave is None:
+            Ventanas.showAlert("Sistema", "Debes establecer un campo clave a actualizar")
+            return
+
+        if self.onPreClickAceptar():
+            es_alta = self.view.tipo == 'A'
+            if es_alta:
+                dato = self.model()
+            else:
+                registro_id = self.view.idtabla or self.view.controles[self.campoclave].text()
+                dato = self.model.get_by_id(registro_id)
+
+            self._copiar_controles_al_modelo(dato, es_alta)
+            dato.save(force_insert=es_alta)
+            self.view.idtabla = dato.get_id()
+            self.view.btnAceptarClicked()
+        self.onPostClickAceptar()
         
     def on_click_btn_codigo(self):
         row = self.view.tableView.filaSeleccionada()
@@ -215,14 +253,42 @@ class ABMClientesController(ControladorBaseABM):
             if not valores["nombre"]:
                 Ventanas.showAlert("Sistema", "Debe indicar un nombre o referencia para el lugar")
                 return
+
+            candidatos = LugarEntrega.select().where(
+                LugarEntrega.cliente == cliente_id
+            )
+            if lugar is not None and lugar.id:
+                candidatos = candidatos.where(LugarEntrega.id != lugar.id)
+
+            for existente in candidatos:
+                if mismo_destino(
+                    existente.nombre,
+                    existente.direccion,
+                    valores["nombre"],
+                    valores["direccion"],
+                ):
+                    Ventanas.showAlert(
+                        "Sistema",
+                        (
+                            "Ese lugar de entrega ya existe para el cliente.\n\n"
+                            "Puede repetir el nombre o referencia si la dirección "
+                            "es distinta."
+                        ),
+                    )
+                    return
+
             try:
                 registro = lugar or LugarEntrega(cliente=cliente_id)
                 registro.cliente = cliente_id
                 for campo, valor in valores.items():
                     setattr(registro, campo, valor)
                 registro.save()
-            except Exception as exc:
-                Ventanas.showAlert("ERROR", "No se pudo guardar el lugar de entrega: {}".format(exc))
+            except Exception:
+                logging.exception("No se pudo guardar el lugar de entrega")
+                Ventanas.showAlert(
+                    "ERROR",
+                    "No se pudo guardar el lugar de entrega. Intente nuevamente.",
+                )
                 return
             vista.Cerrar()
             self.cargar_lugares_entrega()
