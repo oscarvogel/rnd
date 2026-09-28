@@ -66,6 +66,7 @@ class ArmadoPalletsController(ControladorBase):
         self.view.btn_agregar.clicked.connect(self.on_click_btn_agregar)
         self.view.btn_parcial.clicked.connect(self.on_click_btn_parcial)
         self.view.btn_quitar.clicked.connect(self.on_click_btn_quitar)
+        self.view.btn_etiqueta.clicked.connect(self.on_click_btn_etiqueta)
         self.view.btn_confirmar.clicked.connect(self.on_click_btn_confirmar)
 
     def _ruta_seleccionada(self):
@@ -340,6 +341,57 @@ class ArmadoPalletsController(ControladorBase):
         quitar_detalle(pallet_id, hoja_id)
         self.refrescar_contenido()
         self.cargar_mercaderia_sin_alertas()
+
+    def dialogo_etiqueta(self, pallet_id):
+        """Construye el diálogo de etiqueta para un pallet (testeable)."""
+        from vistas.EtiquetaPallet import EtiquetaPalletDialog
+
+        dialogo = EtiquetaPalletDialog()
+        if not dialogo.mostrar_pallet(pallet_id):
+            return None
+        return dialogo
+
+    def pdf_etiqueta(self, pallet_id, destino_pdf=None):
+        """Genera el PDF de etiqueta del pallet y devuelve su ruta."""
+        import os
+
+        from utiles.etiqueta_pallet import (
+            generar_pdf_etiqueta, generar_qr_png,
+        )
+
+        pallet = Pallet.get_by_id(pallet_id)
+        total = totales_pallet(pallet_id)
+        destinos = totales_por_destino(pallet_id)
+        qr_png = generar_qr_png(pallet.codigo)
+        ruta = generar_pdf_etiqueta(
+            pallet.codigo, total, destinos, qr_png,
+            destino_pdf=destino_pdf,
+        )
+        try:
+            os.startfile(ruta)
+        except Exception:
+            pass
+        return ruta
+
+    @inicializar_y_capturar_excepciones
+    @reconnect_if_needed
+    def on_click_btn_etiqueta(self, *args, **kwargs):
+        pallet_id = self.view.pallet_actual_id()
+        if not pallet_id:
+            showAlert(
+                "Sistema",
+                "Seleccione o cree un pallet para ver su etiqueta.",
+            )
+            return
+        dialogo = self.dialogo_etiqueta(pallet_id)
+        if dialogo is None:
+            showAlert("Sistema", "El pallet seleccionado ya no existe.")
+            return
+        dialogo.btn_pdf.clicked.connect(
+            lambda: self.pdf_etiqueta(dialogo.pallet_actual_id())
+        )
+        dialogo.btn_cerrar.clicked.connect(dialogo.Cerrar)
+        dialogo.exec_()
 
     @inicializar_y_capturar_excepciones
     @reconnect_if_needed

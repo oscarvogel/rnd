@@ -20,6 +20,7 @@ import peewee
 from modelos.HojaRuta import HojaDeRuta
 from modelos.ModeloBase import ModeloBase, db
 from utiles.carga_camion import mensaje_bloqueo
+from utiles.etiqueta_pallet import normalizar_codigo
 from utiles.pallets import (
     ESTADO_ARMADO,
     a_decimal,
@@ -89,7 +90,7 @@ def crear_pallet(codigo=None, observaciones=None, fecha=None):
     observaciones = (observaciones or "").strip() or None
     if codigo:
         return Pallet.create(
-            codigo=str(codigo).strip(),
+            codigo=normalizar_codigo(codigo),
             observaciones=observaciones,
         )
     prefijo = prefijo_codigo(fecha)
@@ -273,6 +274,21 @@ def lineas_con_saldo(hoja_ids):
         except HojaDeRuta.DoesNotExist:
             continue
     return resultado
+
+
+def buscar_por_codigo(codigo):
+    """Recupera el pallet por codigo exacto (escaneo o ingreso manual).
+
+    Acepta el codigo pelado o el payload del QR. Devuelve None si no existe.
+    """
+    from utiles.etiqueta_pallet import codigo_desde_payload
+
+    codigo = codigo_desde_payload(codigo)
+    if not codigo:
+        return None
+    return Pallet.get_or_none(
+        peewee.fn.UPPER(Pallet.codigo) == codigo
+    )
 
 
 def pallets_de_hoja(fecha, ruta_id):

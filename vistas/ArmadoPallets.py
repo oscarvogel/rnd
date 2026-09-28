@@ -119,6 +119,9 @@ class ArmadoPalletsView(VistaBase):
         self.btn_quitar = self.CreaBoton(
             "Quitar del pallet", imagen_str="delete.png"
         )
+        self.btn_etiqueta = self.CreaBoton(
+            "Etiqueta / QR", imagen_str="printing.png"
+        )
         self.btn_confirmar = self.CreaBoton(
             "Confirmar preparación", imagen_str="save.png"
         )
@@ -126,6 +129,7 @@ class ArmadoPalletsView(VistaBase):
         layout_botones.addWidget(self.btn_agregar)
         layout_botones.addWidget(self.btn_parcial)
         layout_botones.addWidget(self.btn_quitar)
+        layout_botones.addWidget(self.btn_etiqueta)
         layout_botones.addStretch(1)
         layout_botones.addWidget(self.btn_confirmar)
         layout_botones.addWidget(self.btn_cerrar)
