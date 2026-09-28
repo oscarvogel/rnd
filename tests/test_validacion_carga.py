@@ -1,0 +1,258 @@
+# coding=utf-8
+"""Issue #69: validacion de carga y bloqueo de despacho (Epic #58)."""
+
+import os
+from datetime import date
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+import pytest
+from peewee import SqliteDatabase
+from PyQt5.QtCore import QDate, Qt
+from PyQt5.QtWidgets import QApplication
+
+
+_QT_APP = QApplication.instance() or QApplication([])
+
+
+_TEST_DB = SqliteDatabase(":memory:")
+
+
+@pytest.fixture()
+def base_carga():
+    from modelos.Clientes import (
+        Cliente, Localidades, LugarEntrega, RutaReparto,
+    )
+    from modelos.Empleados import ConceptoLiquidacion, Empleado
+    from modelos.Equipos import Equipos
+    from modelos.EstadoHojaRuta import EstadoHojaRuta
+    from modelos.HojaRuta import HojaDeRuta
+    from modelos.ModeloBase import Auditoria
+    from modelos.ModeloBase import db as db_real
+    from modelos.Pallet import Pallet, PalletDetalle
+    from modelos.Tablas import TipoDeMovil
+
+    modelos = [
+        Auditoria, ConceptoLiquidacion, TipoDeMovil, RutaReparto,
+        Localidades, Cliente, LugarEntrega, Empleado, Equipos,
+        HojaDeRuta, Pallet, PalletDetalle, EstadoHojaRuta,
+    ]
+    _TEST_DB.bind(modelos)
+    _TEST_DB.connect()
+    _TEST_DB.create_tables(modelos)
+    try:
+        yield {
+            "RutaReparto": RutaReparto, "HojaDeRuta": HojaDeRuta,
+            "Pallet": Pallet, "PalletDetalle": PalletDetalle,
+            "EstadoHojaRuta": EstadoHojaRuta,
+        }
+    finally:
+        _TEST_DB.drop_tables(modelos)
+        _TEST_DB.close()
+        db_real.bind(modelos)
+
+
+def _hoja(HojaDeRuta, fecha, ruta_id, comprobante="F-1"):
+    return HojaDeRuta.create(
+        fecha=fecha, nombre_cliente="A", comprobante=comprobante,
+        producto="P", cantidad=5, kg=50, cantidad_bultos=5,
+        observaciones="", equipo_asignado=1, responsable=1,
+        ruta=ruta_id,
+    )
+
+
+# --- Reglas puras ---
+
+def test_progreso_y_faltantes():
+    from utiles.carga_camion import faltantes, progreso_carga, texto_progreso
+
+    pallets = [
+        {"codigo": "PLT-1", "cargado": True},
+        {"codigo": "PLT-2", "cargado": False},
+    ]
+    assert progreso_carga(pallets) == (1, 2)
+    assert faltantes(pallets) == ["PLT-2"]
+    assert "1/2" in texto_progreso(pallets)
+    assert "no requiere" in texto_progreso([])
+
+
+def test_mensaje_bloqueo_accionable():
+    from utiles.carga_camion import mensaje_bloqueo
+
+    assert mensaje_bloqueo([]) == ""
+    mensaje = mensaje_bloqueo(["PLT-001"])
+    assert "PLT-001" in mensaje and "Validar carga" in mensaje
+
+
+def test_resultado_sin_pallets_no_agrega_item():
+    from utiles.carga_camion import resultado_con_carga
+    from utiles.validacion_hoja_ruta import ItemChecklist, ResultadoValidacion
+
+    base = ResultadoValidacion(items=(ItemChecklist("x", "X", True),))
+    assert resultado_con_carga(base, []) is base
+
+
+def test_resultado_con_pallets_anexa_carga():
+    from utiles.carga_camion import resultado_con_carga
+    from utiles.validacion_hoja_ruta import ItemChecklist, ResultadoValidacion
+
+    base = ResultadoValidacion(items=(ItemChecklist("x", "X", True),))
+    con_carga = resultado_con_carga(
+        base, [{"codigo": "PLT-1", "cargado": False}]
+    )
+    assert len(con_carga.items) == 2
+    assert con_carga.items[1].codigo == "carga"
+    assert not con_carga.valida
+
+
+# --- Modelo ---
+
+def test_marcar_y_desmarcar_registran_quien_cuando(base_carga):
+    from modelos.Pallet import (
+        ESTADO_ARMADO, ESTADO_CARGADO, crear_pallet, desmarcar_cargado,
+        marcar_cargado,
+    )
+
+    pallet = crear_pallet()
+    marcar_cargado(pallet.id, "demo")
+    pallet = base_carga["Pallet"].get_by_id(pallet.id)
+    assert pallet.estado == ESTADO_CARGADO
+    assert pallet.cargado_por == "demo"
+    assert pallet.cargado_en is not None
+
+    desmarcar_cargado(pallet.id)
+    pallet = base_carga["Pallet"].get_by_id(pallet.id)
+    assert pallet.estado == ESTADO_ARMADO
+    assert pallet.cargado_por == ""
+
+
+def test_puede_despachar_bloquea_solo_con_pallets_pendientes(base_carga):
+    from modelos.Pallet import (
+        PalletDetalle, crear_pallet, marcar_cargado, puede_despachar,
+    )
+
+    fecha = date(2026, 9, 28)
+    ruta = base_carga["RutaReparto"].create(descripcion="CENTRO")
+    assert puede_despachar(fecha, ruta.id) == (True, [], "")
+
+    hoja = _hoja(base_carga["HojaDeRuta"], fecha, ruta.id)
+    pallet = crear_pallet()
+    PalletDetalle.create(pallet=pallet.id, hoja_ruta=hoja.id,
+                         cantidad=5, kg=50, bultos=5)
+
+    ok, pendientes, mensaje = puede_despachar(fecha, ruta.id)
+    assert not ok and pendientes == [pallet.codigo]
+    assert pallet.codigo in mensaje
+
+    marcar_cargado(pallet.id, "demo")
+    assert puede_despachar(fecha, ruta.id) == (True, [], "")
+
+
+def test_pallets_de_hoja_filtra_fecha_ruta(base_carga):
+    from modelos.Pallet import PalletDetalle, crear_pallet, pallets_de_hoja
+
+    fecha = date(2026, 9, 28)
+    ruta_a = base_carga["RutaReparto"].create(descripcion="A")
+    ruta_b = base_carga["RutaReparto"].create(descripcion="B")
+    hoja_a = _hoja(base_carga["HojaDeRuta"], fecha, ruta_a.id, "FA")
+    _hoja(base_carga["HojaDeRuta"], fecha, ruta_b.id, "FB")
+    pallet = crear_pallet()
+    PalletDetalle.create(pallet=pallet.id, hoja_ruta=hoja_a.id)
+
+    assert [p.id for p in pallets_de_hoja(fecha, ruta_a.id)] == [pallet.id]
+    assert pallets_de_hoja(fecha, ruta_b.id) == []
+
+
+# --- Dialogo ---
+
+def test_dialogo_validar_carga():
+    from vistas.ValidarCarga import ValidarCargaDialog
+
+    dialogo = ValidarCargaDialog()
+    dialogo.cargar_pallets([
+        {"id": 1, "codigo": "PLT-001", "cargado": True, "lineas": 2},
+        {"id": 2, "codigo": "PLT-002", "cargado": False, "lineas": 1},
+    ])
+    assert "1/2" in dialogo.lbl_progreso.text()
+    assert dialogo.seleccion() == {1: True, 2: False}
+
+    assert dialogo.marcar_codigo("plt-002") is True
+    assert dialogo.seleccion() == {1: True, 2: True}
+    assert dialogo.marcar_codigo("PLT-999") is False
+    dialogo.close()
+
+
+# --- Gate de despacho en el controlador ---
+
+def _controlador(base_carga, fecha, ruta_id):
+    from controladores.ValidacionHojaRuta import ValidacionHojaRutaController
+    from vistas.ValidacionHojaRuta import ValidacionHojaRutaView
+    from utiles.validacion_hoja_ruta import ItemChecklist, ResultadoValidacion
+
+    controller = ValidacionHojaRutaController.__new__(
+        ValidacionHojaRutaController
+    )
+    controller.view = ValidacionHojaRutaView()
+    controller.empleado_generico = 23
+    controller.camion_generico = 1
+    controller.view.fecha.setDate(QDate(fecha.year, fecha.month, fecha.day))
+    controller.view.cargar_rutas([(ruta_id, "RUTA")], ruta_id)
+    controller.resultado_actual = ResultadoValidacion(
+        items=(ItemChecklist("pedidos", "Pedidos", True),)
+    )
+    controller.estado_actual = "LISTA"
+    controller.pallets_actuales = []
+    return controller
+
+
+def test_cambiar_estado_bloquea_despacho_con_pallet_sin_cargar(
+    base_carga, monkeypatch
+):
+    from modelos.EstadoHojaRuta import EstadoHojaRuta
+    from modelos.Pallet import PalletDetalle, crear_pallet, marcar_cargado
+
+    avisos = []
+    monkeypatch.setattr(
+        "controladores.ValidacionHojaRuta.showAlert",
+        lambda titulo, mensaje: avisos.append(mensaje),
+    )
+
+    fecha = date(2026, 9, 28)
+    ruta = base_carga["RutaReparto"].create(descripcion="CENTRO")
+    hoja = _hoja(base_carga["HojaDeRuta"], fecha, ruta.id)
+    pallet = crear_pallet()
+    PalletDetalle.create(pallet=pallet.id, hoja_ruta=hoja.id)
+
+    controller = _controlador(base_carga, fecha, ruta.id)
+    cambiar = (controller.cambiar_estado.__wrapped__.__wrapped__)
+
+    cambiar(controller, EstadoHojaRuta.DESPACHADA)
+    assert any(pallet.codigo in aviso for aviso in avisos)
+    assert EstadoHojaRuta.select().count() == 0
+
+    marcar_cargado(pallet.id, "demo")
+    cambiar(controller, EstadoHojaRuta.DESPACHADA)
+    estado = EstadoHojaRuta.get(
+        (EstadoHojaRuta.fecha == fecha) & (EstadoHojaRuta.ruta == ruta.id)
+    )
+    assert estado.estado == EstadoHojaRuta.DESPACHADA
+
+
+def test_checklist_muestra_item_carga(base_carga):
+    from controladores.ValidacionHojaRuta import ValidacionHojaRutaController  # noqa
+    from utiles.carga_camion import resultado_con_carga
+    from utiles.validacion_hoja_ruta import ItemChecklist, ResultadoValidacion
+    from vistas.ValidacionHojaRuta import ValidacionHojaRutaView
+
+    view = ValidacionHojaRutaView()
+    base = ResultadoValidacion(items=(ItemChecklist("x", "X", True),))
+    resultado = resultado_con_carga(
+        base, [{"codigo": "PLT-001", "cargado": False}]
+    )
+    view.mostrar(resultado, "LISTA")
+    codigos = [
+        view.codigo_fila(row) for row in range(view.tabla.rowCount())
+    ]
+    assert "carga" in codigos
+    assert not view.btn_despachar.isEnabled()
+    view.close()

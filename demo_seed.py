@@ -69,6 +69,7 @@ def prepare_demo_database() -> None:
 
     _asegurar_lugares_entrega_multi_direccion(db)
     _asegurar_columna_metodo_importacion(db)
+    _asegurar_columnas_pallet(db)
 
     admin, _ = Usuario.get_or_create(
         usu_id=1,
@@ -510,6 +511,21 @@ def _asegurar_columna_metodo_importacion(db) -> None:
         "ALTER TABLE proveedor ADD COLUMN metodo_importacion "
         "VARCHAR(30) NOT NULL DEFAULT 'COLUMNAS'"
     )
+
+
+def _asegurar_columnas_pallet(db) -> None:
+    """Agrega quién/cuándo validó la carga sobre demos SQLite ya existentes."""
+    try:
+        columnas = {col.name for col in db.get_columns("pallet")}
+    except Exception:
+        return
+    if "cargado_por" not in columnas:
+        db.execute_sql(
+            "ALTER TABLE pallet ADD COLUMN cargado_por "
+            "VARCHAR(100) NOT NULL DEFAULT ''"
+        )
+    if "cargado_en" not in columnas:
+        db.execute_sql("ALTER TABLE pallet ADD COLUMN cargado_en DATETIME")
 
 
 def _generar_archivos_importacion_demo() -> None:

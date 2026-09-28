@@ -13,12 +13,13 @@ un detalle puede ajustarse o quitarse mientras el pallet lo permita.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 import peewee
 
 from modelos.HojaRuta import HojaDeRuta
 from modelos.ModeloBase import ModeloBase, db
+from utiles.carga_camion import mensaje_bloqueo
 from utiles.pallets import (
     ESTADO_ARMADO,
     a_decimal,
@@ -30,12 +31,17 @@ from utiles.pallets import (
 )
 
 
+ESTADO_CARGADO = "CARGADO"
+
+
 class Pallet(ModeloBase):
     id = peewee.AutoField(primary_key=True)
     codigo = peewee.CharField(max_length=40, unique=True)
     estado = peewee.CharField(max_length=30, default=ESTADO_ARMADO)
     observaciones = peewee.TextField(null=True)
     creado = peewee.DateField(default=date.today)
+    cargado_por = peewee.CharField(max_length=100, default="")
+    cargado_en = peewee.DateTimeField(null=True)
 
     class Meta:
         db_table = "pallet"
@@ -267,3 +273,60 @@ def lineas_con_saldo(hoja_ids):
         except HojaDeRuta.DoesNotExist:
             continue
     return resultado
+
+
+def pallets_de_hoja(fecha, ruta_id):
+    """Pallets con mercaderia en las hojas de una fecha/ruta.
+
+    Son los pallets 'esperados' en el camion para ese despacho.
+    """
+    hoja_ids = [
+        h.id for h in HojaDeRuta.select(HojaDeRuta.id).where(
+            HojaDeRuta.fecha == fecha, HojaDeRuta.ruta == ruta_id
+        )
+    ]
+    if not hoja_ids:
+        return []
+    pallet_ids = (
+        PalletDetalle.select(PalletDetalle.pallet)
+        .where(PalletDetalle.hoja_ruta.in_(hoja_ids))
+        .distinct()
+    )
+    return list(
+        Pallet.select().where(Pallet.id.in_(pallet_ids)).order_by(Pallet.codigo)
+    )
+
+
+def marcar_cargado(pallet, usuario=""):
+    """Marca un pallet como cargado registrando quien y cuando."""
+    pallet = Pallet.get_by_id(getattr(pallet, "id", pallet))
+    pallet.estado = ESTADO_CARGADO
+    pallet.cargado_por = str(usuario or "")
+    pallet.cargado_en = datetime.now()
+    pallet.save()
+    return pallet
+
+
+def desmarcar_cargado(pallet):
+    """Devuelve un pallet a ARMADO (permite corregir la validacion)."""
+    pallet = Pallet.get_by_id(getattr(pallet, "id", pallet))
+    pallet.estado = ESTADO_ARMADO
+    pallet.cargado_por = ""
+    pallet.cargado_en = None
+    pallet.save()
+    return pallet
+
+
+def puede_despachar(fecha, ruta_id):
+    """Gate de despacho por carga (Issue #69).
+
+    Sin pallets armados no hay nada que validar: (True, [], "").
+    Con pallets, todos deben estar CARGADO.
+    """
+    pallets = pallets_de_hoja(fecha, ruta_id)
+    if not pallets:
+        return True, [], ""
+    pendientes = [p.codigo for p in pallets if p.estado != ESTADO_CARGADO]
+    if pendientes:
+        return False, pendientes, mensaje_bloqueo(pendientes)
+    return True, [], ""

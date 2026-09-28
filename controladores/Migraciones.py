@@ -10,7 +10,7 @@ from modelos.EstadoHojaRuta import EstadoHojaRuta
 from modelos.HojaRuta import HojaDeRuta
 from modelos.Pallet import Pallet, PalletDetalle
 from modelos.ModeloBase import Auditoria, db
-from playhouse.migrate import MySQLMigrator, CharField, migrate, DecimalField, IntegerField, BooleanField, FloatField, TextField, TimeField
+from playhouse.migrate import MySQLMigrator, CharField, migrate, DecimalField, IntegerField, BooleanField, FloatField, TextField, TimeField, DateTimeField
 
 from modelos.Clientes import Localidades
 from modelos.Proveedores import ProcesoLista, Proveedor
@@ -87,6 +87,16 @@ class MigracionBaseDatos:
                 "proveedor",
                 "metodo_importacion",
                 CharField(max_length=30, default="COLUMNAS"),
+            ),
+            migrator.add_column(
+                "pallet",
+                "cargado_por",
+                CharField(max_length=100, default=""),
+            ),
+            migrator.add_column(
+                "pallet",
+                "cargado_en",
+                DateTimeField(null=True),
             ),
         ]
         self.RealizaMigraciones()
