@@ -439,6 +439,7 @@ def _seed_menu(Formula, MenuLateral) -> None:
         (f_oper, cab_oper.id, "Importar pedidos", "ImportacionPedidos.ImportacionPedidosController", "IMPORTAR_PEDIDOS", 10, "iconfinder_icon-81-document-add_314445.png"),
         (f_oper, cab_oper.id, "Organizar pedidos", "BandejaPedidos.BandejaPedidosController", "ORGANIZAR_PEDIDOS", 20, "edit.png"),
         (f_oper, cab_oper.id, "Asignar recursos", "AsignacionRecursos.AsignacionRecursosController", "ASIGNAR_RECURSOS", 30, "empleados.png"),
+        (f_oper, cab_oper.id, "Armar pallets", "ArmadoPallets.ArmadoPalletsController", "ARMAR_PALLETS", 35, "edit.png"),
         (f_oper, cab_oper.id, "Validar hoja de ruta", "ValidacionHojaRuta.ValidacionHojaRutaController", "VALIDAR_HOJA", 40, "search.png"),
         (f_maestros, cab_mae.id, "Clientes", "ABMClientes.ABMClientesController", "ABM_CLIENTES", 50, "clientes.png"),
         (f_maestros, cab_mae.id, "Equipos", "ABMEquipos.ABMEquiposController", "ABM_EQUIPOS", 60, "maquinas.png"),
