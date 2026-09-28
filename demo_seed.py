@@ -32,6 +32,7 @@ def prepare_demo_database() -> None:
     from modelos.Empleados import ConceptoLiquidacion, Empleado
     from modelos.Equipos import ChoferEquipo, Equipos, Vencimientos
     from modelos.HojaRuta import HojaDeRuta
+    from modelos.Pallet import Pallet, PalletDetalle
     from modelos.EstadoHojaRuta import EstadoHojaRuta
 
     if db.is_closed():
@@ -61,6 +62,8 @@ def prepare_demo_database() -> None:
         Vencimientos,
         HojaDeRuta,
         EstadoHojaRuta,
+        Pallet,
+        PalletDetalle,
     ]
     db.create_tables(tables, safe=True)
 

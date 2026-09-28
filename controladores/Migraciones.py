@@ -8,6 +8,7 @@ from modelos.Clientes import CodigoClienteProveedor, LugarEntrega, Cliente
 from modelos.Empleados import ConceptoLiquidacion
 from modelos.EstadoHojaRuta import EstadoHojaRuta
 from modelos.HojaRuta import HojaDeRuta
+from modelos.Pallet import Pallet, PalletDetalle
 from modelos.ModeloBase import Auditoria, db
 from playhouse.migrate import MySQLMigrator, CharField, migrate, DecimalField, IntegerField, BooleanField, FloatField, TextField, TimeField
 
@@ -48,6 +49,8 @@ class MigracionBaseDatos:
             (Localidades, "Localidades"),
             (LugarEntrega, "LugarEntrega"),
             (HojaDeRuta, "HojaDeRuta"),
+            (Pallet, "Pallet"),
+            (PalletDetalle, "PalletDetalle"),
             (ProcesoLista, "ProcesoLista"),
             (ConceptoLiquidacion, "ConceptoLiquidacion"),
             (EstadoHojaRuta, "EstadoHojaRuta"),
