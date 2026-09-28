@@ -318,14 +318,30 @@ def desmarcar_cargado(pallet):
 
 
 def puede_despachar(fecha, ruta_id):
-    """Gate de despacho por carga (Issue #69).
+    """Gate de despacho por pallets (Issue #69).
 
     Sin pallets armados no hay nada que validar: (True, [], "").
-    Con pallets, todos deben estar CARGADO.
+    Con pallets, frena si quedan lineas sin asignar o pallets sin cargar.
     """
+    hoja_ids = [
+        h.id for h in HojaDeRuta.select(HojaDeRuta.id).where(
+            HojaDeRuta.fecha == fecha, HojaDeRuta.ruta == ruta_id
+        )
+    ]
     pallets = pallets_de_hoja(fecha, ruta_id)
     if not pallets:
         return True, [], ""
+    saldos = lineas_con_saldo(hoja_ids)
+    faltan = sum(
+        1 for saldo in saldos.values()
+        if a_decimal(saldo.get("cantidad")) > 0
+    )
+    if faltan:
+        return False, [], (
+            "No se puede despachar: faltan {} líneas por asignar a "
+            "pallets. Complete el armado en 'Armar pallets' antes de "
+            "despachar.".format(faltan)
+        )
     pendientes = [p.codigo for p in pallets if p.estado != ESTADO_CARGADO]
     if pendientes:
         return False, pendientes, mensaje_bloqueo(pendientes)

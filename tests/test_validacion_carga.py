@@ -84,12 +84,31 @@ def test_mensaje_bloqueo_accionable():
     assert "PLT-001" in mensaje and "Validar carga" in mensaje
 
 
-def test_resultado_sin_pallets_no_agrega_item():
+def test_resultado_sin_pallets_informa_sin_bloquear():
     from utiles.carga_camion import resultado_con_carga
     from utiles.validacion_hoja_ruta import ItemChecklist, ResultadoValidacion
 
     base = ResultadoValidacion(items=(ItemChecklist("x", "X", True),))
-    assert resultado_con_carga(base, []) is base
+    resultado = resultado_con_carga(base, [])
+    assert len(resultado.items) == 2
+    assert resultado.items[1].codigo == "carga"
+    assert resultado.items[1].cumplido
+    assert resultado.valida
+
+
+def test_resultado_con_faltan_asignacion_frena():
+    from utiles.carga_camion import resultado_con_carga
+    from utiles.validacion_hoja_ruta import ItemChecklist, ResultadoValidacion
+
+    base = ResultadoValidacion(items=(ItemChecklist("x", "X", True),))
+    resultado = resultado_con_carga(
+        base, [{"codigo": "PLT-1", "cargado": False}],
+        faltan_asignacion=2, total_lineas=5,
+    )
+    assert resultado.items[1].codigo == "carga"
+    assert not resultado.items[1].cumplido
+    assert "2 de 5" in resultado.items[1].detalle
+    assert not resultado.valida
 
 
 def test_resultado_con_pallets_anexa_carga():
@@ -146,6 +165,24 @@ def test_puede_despachar_bloquea_solo_con_pallets_pendientes(base_carga):
 
     marcar_cargado(pallet.id, "demo")
     assert puede_despachar(fecha, ruta.id) == (True, [], "")
+
+
+def test_puede_despachar_frena_si_falta_asignar(base_carga):
+    from modelos.Pallet import (
+        PalletDetalle, crear_pallet, puede_despachar,
+    )
+
+    fecha = date(2026, 9, 28)
+    ruta = base_carga["RutaReparto"].create(descripcion="CENTRO")
+    hoja_a = _hoja(base_carga["HojaDeRuta"], fecha, ruta.id, "FA")
+    _hoja(base_carga["HojaDeRuta"], fecha, ruta.id, "FB")
+    pallet = crear_pallet()
+    PalletDetalle.create(pallet=pallet.id, hoja_ruta=hoja_a.id,
+                         cantidad=5, kg=50, bultos=5)
+
+    ok, _pendientes, mensaje = puede_despachar(fecha, ruta.id)
+    assert not ok
+    assert "asignar" in mensaje.lower()
 
 
 def test_pallets_de_hoja_filtra_fecha_ruta(base_carga):
@@ -221,7 +258,8 @@ def test_cambiar_estado_bloquea_despacho_con_pallet_sin_cargar(
     ruta = base_carga["RutaReparto"].create(descripcion="CENTRO")
     hoja = _hoja(base_carga["HojaDeRuta"], fecha, ruta.id)
     pallet = crear_pallet()
-    PalletDetalle.create(pallet=pallet.id, hoja_ruta=hoja.id)
+    from modelos.Pallet import agregar_detalle
+    agregar_detalle(pallet.id, hoja.id)
 
     controller = _controlador(base_carga, fecha, ruta.id)
     cambiar = (controller.cambiar_estado.__wrapped__.__wrapped__)
@@ -256,3 +294,44 @@ def test_checklist_muestra_item_carga(base_carga):
     assert "carga" in codigos
     assert not view.btn_despachar.isEnabled()
     view.close()
+
+
+def test_doble_clic_carga_navega_segun_faltante(base_carga, monkeypatch):
+    from vistas.ValidacionHojaRuta import ValidacionHojaRutaView
+    from utiles.carga_camion import resultado_con_carga
+    from utiles.validacion_hoja_ruta import ItemChecklist, ResultadoValidacion
+    from controladores.ValidacionHojaRuta import ValidacionHojaRutaController
+
+    destinos = []
+    monkeypatch.setattr(
+        ValidacionHojaRutaController, "ir_armado",
+        lambda self: destinos.append("armado"),
+    )
+    monkeypatch.setattr(
+        ValidacionHojaRutaController, "abrir_validar_carga",
+        lambda self, *a, **k: destinos.append("dialogo"),
+    )
+
+    controller = ValidacionHojaRutaController.__new__(
+        ValidacionHojaRutaController
+    )
+    controller.view = ValidacionHojaRutaView()
+
+    base = ResultadoValidacion(items=(ItemChecklist("x", "X", True),))
+    controller.resultado_actual = resultado_con_carga(
+        base, [{"codigo": "PLT-1", "cargado": False}],
+        faltan_asignacion=1, total_lineas=2,
+    )
+    controller.faltan_asignacion = 1
+    controller.view.mostrar(controller.resultado_actual, "LISTA")
+    fila = next(
+        row for row in range(controller.view.tabla.rowCount())
+        if controller.view.codigo_fila(row) == "carga"
+    )
+    controller.resolver_pendiente(fila, 0)
+    assert destinos == ["armado"]
+
+    controller.faltan_asignacion = 0
+    controller.resolver_pendiente(fila, 0)
+    assert destinos == ["armado", "dialogo"]
+    controller.view.close()

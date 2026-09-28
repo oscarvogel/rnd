@@ -60,8 +60,32 @@ def mensaje_bloqueo(faltante_codigos) -> str:
     )
 
 
-def item_carga(pallets) -> ItemChecklist:
-    """Item de checklist para anexar al resultado de validacion."""
+def item_carga(pallets, faltan_asignacion=0, total_lineas=0) -> ItemChecklist:
+    """Item de checklist para anexar al resultado de validacion.
+
+    - Sin pallets: informativo, no bloquea (flujo legacy intacto).
+    - Con pallets y lineas sin asignar: PENDIENTE, frena LISTA/despacho.
+    - Todo asignado: PENDIENTE hasta que todos esten CARGADO.
+    """
+    pallets = list(pallets or [])
+    if not pallets:
+        return ItemChecklist(
+            CODIGO_CARGA,
+            "Pallets y carga del camión",
+            True,
+            "Sin pallets armados. Para controlar la carga, asigne la "
+            "mercadería en 'Armar pallets'.",
+        )
+    faltan_asignacion = int(faltan_asignacion or 0)
+    if faltan_asignacion > 0:
+        return ItemChecklist(
+            CODIGO_CARGA,
+            "Mercadería asignada a pallets",
+            False,
+            "Faltan {} de {} líneas por asignar a pallets.".format(
+                faltan_asignacion, int(total_lineas or 0)
+            ),
+        )
     pendientes = faltantes(pallets)
     cargados, esperados = progreso_carga(pallets)
     if not pendientes:
@@ -81,12 +105,12 @@ def item_carga(pallets) -> ItemChecklist:
     )
 
 
-def resultado_con_carga(resultado, pallets):
-    """Anexa el control de carga al resultado (solo si hay pallets)."""
-    pallets = list(pallets or [])
-    if not pallets:
-        return resultado
-    items = tuple(resultado.items) + (item_carga(pallets),)
+def resultado_con_carga(resultado, pallets, faltan_asignacion=0,
+                         total_lineas=0):
+    """Anexa el control de pallets/carga al resultado de validacion."""
+    items = tuple(resultado.items) + (
+        item_carga(pallets, faltan_asignacion, total_lineas),
+    )
     return ResultadoValidacion(
         items=items,
         pedidos=resultado.pedidos,
