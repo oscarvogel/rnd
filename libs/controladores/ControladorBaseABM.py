@@ -55,14 +55,27 @@ class ControladorBaseABM(ControladorBase):
             return
 
         if self.onPreClickAceptar():
+            es_alta = self.view.tipo == 'A'
             if self.view.tipo == 'M':
                 dato = self.model.get_by_id(self.view.controles[self.campoclave].text())
             else:
                 dato = self.model()
 
             for control in self.view.controles:
+                # En altas con PK autoincremental no copiar el control visual del ID.
+                # En SQLite el formulario entrega "" y forzarlo sobre un AutoField
+                # provoca peewee.IntegrityError: datatype mismatch.
+                if (
+                    es_alta
+                    and getattr(self.view, 'autoincremental', False)
+                    and control == self.campoclave
+                ):
+                    continue
                 dato.__data__[control] = self.view.controles[control].valor()
-            dato.save(force_insert=self.view.tipo == 'A')
+            dato.save(force_insert=es_alta)
+            # Deja disponible el ID generado para fichas que cargan relaciones
+            # inmediatamente después del alta (p. ej. direcciones del proveedor).
+            self.view.idtabla = dato.get_id()
             self.view.btnAceptarClicked()
         self.onPostClickAceptar()
 
