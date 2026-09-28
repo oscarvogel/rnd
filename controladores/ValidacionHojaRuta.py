@@ -8,12 +8,23 @@ from modelos.Clientes import RutaReparto
 from modelos.EstadoHojaRuta import EstadoHojaRuta
 from modelos.HojaRuta import HojaDeRuta
 from modelos.ModeloBase import reconnect_if_needed
+from modelos.Pallet import (
+    PalletDetalle,
+    desmarcar_cargado,
+    lineas_con_saldo,
+    marcar_cargado,
+    pallets_de_hoja,
+    puede_despachar,
+)
 from modelos.ParametrosSistema import ParamSist
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.pyqt5libs.Ventanas import showAlert
 from pyqt5libs.pyqt5libs.utiles import LeerConf, inicializar_y_capturar_excepciones
+from utiles.carga_camion import resultado_con_carga
+from utiles.pallets import a_decimal
 from utiles.validacion_hoja_ruta import puede_transicionar, validar_hoja
 from vistas.ValidacionHojaRuta import ValidacionHojaRutaView
+from vistas.ValidarCarga import ValidarCargaDialog
 
 
 class ValidacionHojaRutaController(ControladorBase):
@@ -27,6 +38,8 @@ class ValidacionHojaRutaController(ControladorBase):
         self.view.fecha.setDate(QDate(inicial.year, inicial.month, inicial.day))
         self.resultado_actual = validar_hoja([], inicial, self.ruta_inicial, self.empleado_generico, self.camion_generico)
         self.estado_actual = EstadoHojaRuta.EN_PREPARACION
+        self.pallets_actuales = []
+        self.faltan_asignacion = 0
         self.conectarWidgets()
         self.cargar_rutas()
         if self.ruta_inicial:
@@ -37,6 +50,7 @@ class ValidacionHojaRutaController(ControladorBase):
         self.view.cbo_ruta.currentIndexChanged.connect(self.cargar)
         self.view.btn_lista.clicked.connect(lambda: self.cambiar_estado(EstadoHojaRuta.LISTA))
         self.view.btn_hoja.clicked.connect(self.ver_hoja_ruta)
+        self.view.btn_carga.clicked.connect(self.abrir_validar_carga)
         self.view.btn_despachar.clicked.connect(self.confirmar_despacho)
         self.view.btn_asignar.clicked.connect(self.resolver_recursos)
         self.view.tabla.cellDoubleClicked.connect(self.resolver_pendiente)
@@ -60,16 +74,35 @@ class ValidacionHojaRutaController(ControladorBase):
         if not ruta_id:
             self.resultado_actual = validar_hoja([], fecha, 0, self.empleado_generico, self.camion_generico)
             self.estado_actual = EstadoHojaRuta.EN_PREPARACION
+            self.pallets_actuales = []
+            self.faltan_asignacion = 0
             self.view.mostrar(self.resultado_actual, self.estado_actual)
+            self.view.btn_carga.setVisible(False)
             return
 
         registros = list(HojaDeRuta.select().where((HojaDeRuta.fecha == fecha) & (HojaDeRuta.ruta == ruta_id)))
-        self.resultado_actual = validar_hoja(registros, fecha, ruta_id, self.empleado_generico, self.camion_generico)
+        resultado = validar_hoja(registros, fecha, ruta_id, self.empleado_generico, self.camion_generico)
+        self.pallets_actuales = pallets_de_hoja(fecha, ruta_id)
+        saldos = lineas_con_saldo([h.id for h in registros])
+        self.faltan_asignacion = sum(
+            1 for saldo in saldos.values()
+            if a_decimal(saldo.get("cantidad")) > 0
+        )
+        self.resultado_actual = resultado_con_carga(
+            resultado,
+            [
+                {"codigo": p.codigo, "cargado": p.estado == "CARGADO"}
+                for p in self.pallets_actuales
+            ],
+            self.faltan_asignacion,
+            len(registros),
+        )
         estado = EstadoHojaRuta.get_or_none(
             (EstadoHojaRuta.fecha == fecha) & (EstadoHojaRuta.ruta == ruta_id)
         )
         self.estado_actual = estado.estado if estado else EstadoHojaRuta.EN_PREPARACION
         self.view.mostrar(self.resultado_actual, self.estado_actual)
+        self.view.btn_carga.setVisible(bool(self.pallets_actuales))
 
     def confirmar_despacho(self):
         respuesta = QMessageBox.question(
@@ -94,6 +127,13 @@ class ValidacionHojaRutaController(ControladorBase):
         if not ruta_id:
             showAlert("Sistema", "Seleccione una ruta")
             return
+        if destino == EstadoHojaRuta.DESPACHADA:
+            ok, _pendientes, mensaje = puede_despachar(
+                self.fecha_actual(), ruta_id
+            )
+            if not ok:
+                showAlert("Sistema", mensaje)
+                return
         permitido, mensaje = puede_transicionar(self.estado_actual, destino, self.resultado_actual)
         if not permitido:
             showAlert("Sistema", mensaje)
@@ -128,6 +168,12 @@ class ValidacionHojaRutaController(ControladorBase):
             return
         if codigo == "datos":
             self.resolver_datos_operativos()
+            return
+        if codigo == "carga":
+            if getattr(self, "faltan_asignacion", 0):
+                self.ir_armado()
+            else:
+                self.abrir_validar_carga()
             return
         if codigo == "pedidos":
             self.resolver_pedidos()
@@ -236,3 +282,68 @@ class ValidacionHojaRutaController(ControladorBase):
         )
         self.ventana_siguiente.run()
         self.view.close()
+
+    def ir_armado(self):
+        from controladores.ArmadoPallets import ArmadoPalletsController
+        self.ventana_armado = ArmadoPalletsController(
+            fecha_inicial=self.fecha_actual(),
+            ruta_inicial=self.view.ruta_id(),
+        )
+        self.ventana_armado.run()
+
+    def dialogo_carga(self):
+        """Construye el diálogo con los pallets esperados (testeable)."""
+        from modelos.Pallet import ESTADO_CARGADO
+
+        dialogo = ValidarCargaDialog()
+        dialogo.cargar_pallets([
+            {
+                "id": p.id,
+                "codigo": p.codigo,
+                "cargado": p.estado == ESTADO_CARGADO,
+                "lineas": PalletDetalle.select()
+                .where(PalletDetalle.pallet == p.id)
+                .count(),
+            }
+            for p in (self.pallets_actuales or pallets_de_hoja(
+                self.fecha_actual(), self.view.ruta_id()
+            ))
+        ])
+        return dialogo
+
+    def aplicar_validacion_carga(self, seleccion):
+        """Aplica lo tildado: CARGADO con usuario, destildado a ARMADO."""
+        usuario = LeerConf("usuario") or ""
+        for pallet in (self.pallets_actuales or []):
+            if pallet.id not in seleccion:
+                continue
+            if seleccion[pallet.id]:
+                if pallet.estado != "CARGADO":
+                    marcar_cargado(pallet.id, usuario)
+            else:
+                if pallet.estado == "CARGADO":
+                    desmarcar_cargado(pallet.id)
+
+    @reconnect_if_needed
+    @inicializar_y_capturar_excepciones
+    def abrir_validar_carga(self, *args, **kwargs):
+        ruta_id = self.view.ruta_id()
+        if not ruta_id:
+            showAlert("Sistema", "Seleccione una ruta")
+            return
+        self.pallets_actuales = pallets_de_hoja(self.fecha_actual(), ruta_id)
+        if not self.pallets_actuales:
+            showAlert(
+                "Sistema",
+                "No hay pallets armados para esta hoja: la carga no "
+                "requiere validación.",
+            )
+            return
+        dialogo = self.dialogo_carga()
+        dialogo.btn_guardar.clicked.connect(dialogo.accept)
+        dialogo.btn_cancelar.clicked.connect(dialogo.Cerrar)
+        if dialogo.exec_() != dialogo.Accepted:
+            return
+        self.aplicar_validacion_carga(dialogo.seleccion())
+        dialogo.Cerrar()
+        self.cargar()
