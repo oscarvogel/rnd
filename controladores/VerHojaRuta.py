@@ -93,6 +93,7 @@ class VerHojaRutaController(ControladorBase):
         self.view.btn_agregar.clicked.connect(self.on_click_btn_agregar)
         self.view.btn_modificar.clicked.connect(self.on_click_btn_modificar)
         self.view.btn_continuar.clicked.connect(self.ir_validacion)
+        self.view.btn_armar.clicked.connect(self.ir_armado)
     
     def _nombre_responsable(self, recurso_id, generico_id):
         recurso_id = int(recurso_id or 0)
@@ -259,6 +260,19 @@ class VerHojaRutaController(ControladorBase):
         )
         self.ventana_validacion.run()
         self.view.close()
+
+    def ir_armado(self):
+        ruta_id = int(self.view.cbo_ruta_reparto.valor() or 0)
+        if not ruta_id:
+            showAlert("Sistema", "Seleccione una ruta antes de armar pallets.")
+            return
+        from controladores.ArmadoPallets import ArmadoPalletsController
+
+        self.ventana_armado = ArmadoPalletsController(
+            fecha_inicial=self.view.fecha_reparto.valor(),
+            ruta_inicial=ruta_id,
+        )
+        self.ventana_armado.run()
 
     
     @inicializar_y_capturar_excepciones
