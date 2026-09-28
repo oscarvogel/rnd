@@ -208,6 +208,7 @@ class ABMClientesController(ControladorBaseABM):
                 lugar.ruta_reparto.descripcion if lugar.ruta_reparto_id else "",
                 "Sí" if lugar.principal else "",
                 "Sí" if lugar.activo else "No",
+                lugar.observaciones or "",
                 lugar.id,
             ])
         self.view.cargar_lugares(filas)
@@ -217,7 +218,7 @@ class ABMClientesController(ControladorBaseABM):
         row = self.view.grilla_lugares.filaSeleccionada()
         if row == -1:
             return None
-        return self.view.grilla_lugares.ObtenerItemNumerico(fila=row, col=6)
+        return self.view.grilla_lugares.ObtenerItemNumerico(fila=row, col=7)
 
     def _abrir_lugar(self, lugar=None):
         cliente_id = self._cliente_ficha()

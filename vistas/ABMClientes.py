@@ -95,7 +95,7 @@ class ABMClientesView(ABM):
         self.grilla_lugares = Grilla()
         self.grilla_lugares.ArmaCabeceras([
             "Nombre / Referencia", "Dirección", "Localidad", "Ruta de Reparto",
-            "Principal", "Activo", "ID",
+            "Principal", "Activo", "Observaciones", "ID",
         ])
         self.grilla_lugares.permiteagregar = False
         self.grilla_lugares.setMinimumHeight(150)
