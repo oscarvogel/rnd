@@ -206,8 +206,19 @@ try {
         Write-Host ""
         Write-Host "[RND DEMO] Publicando SIEMPRE sobre la release fija '$ReleaseTag'..." -ForegroundColor Cyan
 
-        & gh release view $ReleaseTag --repo $ReleaseRepo *> $null
-        if ($LASTEXITCODE -ne 0) {
+        # En PowerShell 5.1, con $ErrorActionPreference = "Stop", gh escribe el
+        # "release not found" por stderr como NativeCommandError antes de que podamos
+        # evaluar $LASTEXITCODE. Consultamos la API, que permite controlar el 404.
+        $releaseExiste = $false
+        try {
+            $null = & gh api "repos/$ReleaseRepo/releases/tags/$ReleaseTag" 2>$null
+            $releaseExiste = ($LASTEXITCODE -eq 0)
+        } catch {
+            $releaseExiste = $false
+        }
+
+        if (-not $releaseExiste) {
+            Write-Host "[RND DEMO] La release fija no existe; creándola..." -ForegroundColor Cyan
             & gh release create $ReleaseTag --repo $ReleaseRepo --title "RND Demo" --notes "Última versión DEMO de RND. Este release se reemplaza en cada publicación."
             if ($LASTEXITCODE -ne 0) {
                 throw "No se pudo crear la release fija '$ReleaseTag' en $ReleaseRepo."
