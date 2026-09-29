@@ -67,6 +67,9 @@ class ArmadoPalletsController(ControladorBase):
         self.view.btn_parcial.clicked.connect(self.on_click_btn_parcial)
         self.view.btn_quitar.clicked.connect(self.on_click_btn_quitar)
         self.view.btn_confirmar.clicked.connect(self.on_click_btn_confirmar)
+        # Atajos operativos: doble click mueve la línea entre pendiente y pallet.
+        self.view.grilla_pendientes.cellDoubleClicked.connect(self.on_doble_click_pendiente)
+        self.view.grilla_contenido.cellDoubleClicked.connect(self.on_doble_click_contenido)
 
     def _ruta_seleccionada(self):
         try:
@@ -237,6 +240,33 @@ class ArmadoPalletsController(ControladorBase):
             self.actualizar_guias()
         else:
             showAlert("Sistema", "Seleccione al menos una línea con saldo disponible.")
+
+    @inicializar_y_capturar_excepciones
+    @reconnect_if_needed
+    def on_doble_click_pendiente(self, fila, columna):
+        """Agrega al pallet activo todo el saldo de la línea clickeada."""
+        hoja_id = self.view.id_pendiente_en_fila(fila)
+        if not hoja_id:
+            return
+        agregados, errores = self.agregar_lineas([hoja_id])
+        if errores:
+            showAlert("Sistema", errores[0])
+            return
+        if agregados:
+            self.refrescar_contenido()
+            self.cargar_mercaderia_sin_alertas()
+
+    @inicializar_y_capturar_excepciones
+    @reconnect_if_needed
+    def on_doble_click_contenido(self, fila, columna):
+        """Quita del pallet activo la línea clickeada y devuelve su saldo."""
+        hoja_id = self.view.id_contenido_en_fila(fila)
+        pallet_id = self.view.pallet_actual_id()
+        if not hoja_id or not pallet_id:
+            return
+        quitar_detalle(pallet_id, hoja_id)
+        self.refrescar_contenido()
+        self.cargar_mercaderia_sin_alertas()
 
     def agregar_lineas(self, hoja_ids):
         if not hoja_ids:
