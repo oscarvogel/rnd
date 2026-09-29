@@ -187,11 +187,21 @@ class ModificaHojaDeRutaView(VistaBase):
         self.setupUi(self)
         
     def setupUi(self, Form):
-        self.resize(600, 400)
+        # Issue #138: este formulario contiene datos operativos que necesitan
+        # espacio real de trabajo. Evitamos el diálogo legacy de 600x400,
+        # pero sin maximizarlo.
+        self.resize(820, 600)
+        self.setMinimumSize(720, 520)
         self.setWindowTitle("Modificar Hoja de Ruta")
         layout_ppal = QVBoxLayout(Form)
+        layout_ppal.setContentsMargins(24, 20, 24, 20)
+        layout_ppal.setSpacing(16)
         
         layout_datos = QFormLayout()
+        layout_datos.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        layout_datos.setRowWrapPolicy(QFormLayout.DontWrapRows)
+        layout_datos.setHorizontalSpacing(18)
+        layout_datos.setVerticalSpacing(12)
         self.cliente = ValidaCliente()
         layout_datos.addRow(self.cliente)
         
@@ -231,8 +241,14 @@ class ModificaHojaDeRutaView(VistaBase):
         layout_ppal.addLayout(layout_datos)
         
         layout_botones = QHBoxLayout()
+        layout_botones.setSpacing(12)
+        layout_botones.addStretch(1)
         self.btn_grabar = self.CreaBoton("Grabar", imagen_str="save.png")
         self.btn_cerrar = self.CreaBoton("Cerrar", imagen_str="close.png")
+        self.btn_grabar.setMinimumSize(180, 44)
+        self.btn_cerrar.setMinimumSize(180, 44)
+        self.btn_grabar.setProperty("role", "primary")
+        self.btn_cerrar.setProperty("role", "secondary")
         layout_botones.addWidget(self.btn_grabar)
         layout_botones.addWidget(self.btn_cerrar)
         layout_ppal.addLayout(layout_botones)
