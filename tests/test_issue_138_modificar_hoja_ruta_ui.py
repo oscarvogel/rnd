@@ -10,6 +10,8 @@ def test_issue_138_dialogo_modificar_hoja_tiene_tamano_operativo():
     assert "self.resize(820, 600)" in source
     assert "self.setMinimumSize(720, 520)" in source
     assert "QFormLayout.AllNonFixedFieldsGrow" in source
+    assert "def showEvent(self, event):" in source
+    assert "geometria.moveCenter(centro)" in source
 
 
 def test_issue_138_acciones_principales_son_comodas():
