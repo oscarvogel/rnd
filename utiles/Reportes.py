@@ -172,15 +172,59 @@ class GeneradorPDFHojaRuta(FPDF):
                 "{}{}".format(x["codigo"], " (P)" if x["parcial"] else "")
                 for x in p["pallets"]
             )
-            altura = 7
-            if len(destino) > 38 or len(pallets) > 42:
-                altura = 10
-            y = self.get_y()
-            x = self.get_x()
-            self.cell(anchos[0], altura, str(p["numero"]).zfill(2), 1, 0, "C")
-            self.cell(anchos[1], altura, _texto_pdf(destino[:48]), 1, 0, "L")
-            self.cell(anchos[2], altura, _texto_pdf(pallets[:55]), 1, 0, "L")
-            self.cell(anchos[3], altura, _numero(p["bultos"]), 1, 1, "R")
+            # Cada columna calcula sus propias líneas y la fila toma la altura
+            # máxima. Así nombres/destinos largos nunca invaden la columna Pallets.
+            def envolver(texto, ancho_mm, fuente=8):
+                texto = _texto_pdf(texto)
+                palabras = texto.split()
+                lineas, actual = [], ""
+                for palabra in palabras:
+                    candidato = (actual + " " + palabra).strip()
+                    if self.get_string_width(candidato) <= ancho_mm - 4:
+                        actual = candidato
+                    else:
+                        if actual:
+                            lineas.append(actual)
+                        # Un código/palabra excepcionalmente largo se conserva
+                        # entero; los códigos normales de pallet entran en su columna.
+                        actual = palabra
+                if actual:
+                    lineas.append(actual)
+                return lineas or [""]
+
+            destino_lineas = envolver(destino, anchos[1])
+            pallet_lineas = envolver(pallets, anchos[2])
+            cantidad_lineas = max(len(destino_lineas), len(pallet_lineas), 1)
+            alto_linea = 6
+            altura = max(7, cantidad_lineas * alto_linea)
+            x0, y0 = self.get_x(), self.get_y()
+
+            # Dibujar primero las celdas completas y luego escribir cada bloque
+            # dentro de sus límites para mantener las columnas perfectamente alineadas.
+            x = x0
+            for ancho in anchos:
+                self.rect(x, y0, ancho, altura)
+                x += ancho
+
+            self.set_xy(x0, y0 + (altura - alto_linea) / 2)
+            self.cell(anchos[0], alto_linea, str(p["numero"]).zfill(2), 0, 0, "C")
+
+            x_dest = x0 + anchos[0]
+            self.set_xy(x_dest + 2, y0 + 1)
+            for linea in destino_lineas:
+                self.cell(anchos[1] - 4, alto_linea, linea, 0, 1, "L")
+                self.set_x(x_dest + 2)
+
+            x_pal = x_dest + anchos[1]
+            self.set_xy(x_pal + 2, y0 + 1)
+            for linea in pallet_lineas:
+                self.cell(anchos[2] - 4, alto_linea, linea, 0, 1, "L")
+                self.set_x(x_pal + 2)
+
+            x_bultos = x_pal + anchos[2]
+            self.set_xy(x_bultos, y0 + (altura - alto_linea) / 2)
+            self.cell(anchos[3] - 2, alto_linea, _numero(p["bultos"]), 0, 0, "R")
+            self.set_xy(x0, y0 + altura)
         self.ln(3)
         self.set_font("Arial", "I", 8)
         self.multi_cell(0, 5, _texto_pdf("(P) = pallet con descarga parcial: contiene mercadería de más de un destino."))
