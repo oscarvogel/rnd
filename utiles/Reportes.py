@@ -28,7 +28,7 @@ def _texto_pdf(valor):
 
 
 def construir_descargas_pallets(hojas):
-    """Construye la vista operativa parada -> pallets -> líneas.
+    """Construye la vista operativa entrega -> pallets -> líneas.
 
     La fuente es PalletDetalle: no se infieren cantidades desde HojaDeRuta.
     Devuelve [] cuando la hoja todavía no fue paletizada para permitir fallback.
@@ -70,7 +70,7 @@ def construir_descargas_pallets(hojas):
                  int(getattr(h, "lugar_entrega_id", 0) or 0))
             )
 
-    paradas = {}
+    entregas = {}
     orden = []
     for d in detalles:
         h = por_id.get(d.hoja_ruta_id)
@@ -80,9 +80,9 @@ def construir_descargas_pallets(hojas):
             int(getattr(h, "cliente_id", 0) or 0),
             int(getattr(h, "lugar_entrega_id", 0) or 0),
         )
-        if clave not in paradas:
+        if clave not in entregas:
             lugar = lugares.get(clave[1])
-            paradas[clave] = {
+            entregas[clave] = {
                 "cliente": getattr(h, "nombre_cliente", "") or (
                     getattr(getattr(h, "cliente", None), "razon_social", "") or "Cliente"
                 ),
@@ -94,8 +94,8 @@ def construir_descargas_pallets(hojas):
             }
             orden.append(clave)
 
-        parada = paradas[clave]
-        pallet = parada["pallets"].setdefault(d.pallet_id, {
+        entrega = entregas[clave]
+        pallet = entrega["pallets"].setdefault(d.pallet_id, {
             "codigo": d.pallet.codigo,
             "parcial": len(destinos_pallet[d.pallet_id]) > 1,
             "lineas": [],
@@ -111,15 +111,15 @@ def construir_descargas_pallets(hojas):
         pallet["lineas"].append(linea)
         pallet["bultos"] += linea["bultos"]
         pallet["kg"] += linea["kg"]
-        parada["bultos"] += linea["bultos"]
-        parada["kg"] += linea["kg"]
+        entrega["bultos"] += linea["bultos"]
+        entrega["kg"] += linea["kg"]
 
     resultado = []
     for numero, clave in enumerate(orden, start=1):
-        parada = paradas[clave]
-        parada["numero"] = numero
-        parada["pallets"] = list(parada["pallets"].values())
-        resultado.append(parada)
+        entrega = entregas[clave]
+        entrega["numero"] = numero
+        entrega["pallets"] = list(entrega["pallets"].values())
+        resultado.append(entrega)
     return resultado
 
 
@@ -156,15 +156,15 @@ class GeneradorPDFHojaRuta(FPDF):
         self.cell(0, 9, _texto_pdf(texto), 0, 1, "C")
         self.ln(2)
 
-    def _mapa_recorrido(self, paradas):
-        self._titulo("MAPA DE DESCARGA")
+    def _mapa_recorrido(self, entregas):
+        self._titulo("SECUENCIA DE ENTREGAS")
         self.set_font("Arial", "B", 8)
         anchos = (15, 68, 72, 25)
-        for ancho, titulo in zip(anchos, ("Parada", "Cliente / destino", "Pallets", "Bultos")):
+        for ancho, titulo in zip(anchos, ("Entrega", "Cliente / destino", "Pallets", "Bultos")):
             self.cell(ancho, 7, _texto_pdf(titulo), 1, 0, "C")
         self.ln()
         self.set_font("Arial", "", 8)
-        for p in paradas:
+        for p in entregas:
             destino = p["cliente"]
             if p["lugar"]:
                 destino += " - " + p["lugar"]
@@ -229,8 +229,8 @@ class GeneradorPDFHojaRuta(FPDF):
         self.set_font("Arial", "I", 8)
         self.multi_cell(0, 5, _texto_pdf("(P) = pallet con descarga parcial: contiene mercadería de más de un destino."))
 
-    def _encabezado_parada(self, p, continuacion=False):
-        titulo = "PARADA {:02d}{}".format(p["numero"], " - CONTINUACIÓN" if continuacion else "")
+    def _encabezado_entrega(self, p, continuacion=False):
+        titulo = "ENTREGA {:02d}{}".format(p["numero"], " - CONTINUACIÓN" if continuacion else "")
         self.set_font("Arial", "B", 14)
         self.cell(0, 8, _texto_pdf(titulo), 1, 1, "L")
         self.set_font("Arial", "B", 12)
@@ -242,16 +242,16 @@ class GeneradorPDFHojaRuta(FPDF):
         if destino:
             self.multi_cell(0, 6, _texto_pdf("Lugar de entrega: " + destino), 1, "L")
         self.set_font("Arial", "B", 10)
-        self.cell(0, 7, _texto_pdf("DESCARGAR EN ESTA PARADA: {} pallet(s) · {} bultos".format(
+        self.cell(0, 7, _texto_pdf("DESCARGAR EN ESTA ENTREGA: {} pallet(s) · {} bultos".format(
             len(p["pallets"]), _numero(p["bultos"]))), 1, 1, "C")
         self.ln(3)
 
-    def _pallet(self, pallet, parada):
+    def _pallet(self, pallet, entrega):
         lineas = pallet["lineas"]
         alto_estimado = 19 + 6 * len(lineas)
         if self.get_y() + alto_estimado > self.h - 18:
             self.add_page()
-            self._encabezado_parada(parada, continuacion=True)
+            self._encabezado_entrega(entrega, continuacion=True)
 
         estado = "DESCARGA PARCIAL - RETIRAR SOLO LO INDICADO" if pallet["parcial"] else "DESCARGA COMPLETA"
         self.set_font("Arial", "B", 11)
@@ -272,17 +272,17 @@ class GeneradorPDFHojaRuta(FPDF):
         self.cell(30, 6, _numero(pallet["bultos"]), 1, 1, "R")
         self.ln(3)
 
-    def _reporte_operativo(self, paradas):
+    def _reporte_operativo(self, entregas):
         self.add_page()
-        self._mapa_recorrido(paradas)
+        self._mapa_recorrido(entregas)
 
-        for p in paradas:
+        for p in entregas:
             self.add_page()
-            self._encabezado_parada(p)
+            self._encabezado_entrega(p)
             for pallet in p["pallets"]:
                 self._pallet(pallet, p)
             self.set_font("Arial", "B", 11)
-            self.cell(0, 8, _texto_pdf("TOTAL PARADA {:02d}: {} BULTOS".format(
+            self.cell(0, 8, _texto_pdf("TOTAL ENTREGA {:02d}: {} BULTOS".format(
                 p["numero"], _numero(p["bultos"]))), "T", 1, "R")
 
         # Resumen al final; sólo abre página si realmente no entra.
@@ -291,12 +291,12 @@ class GeneradorPDFHojaRuta(FPDF):
         self.ln(5)
         self.set_font("Arial", "B", 12)
         self.cell(0, 8, "RESUMEN GENERAL DEL VIAJE", "T", 1, "C")
-        total_bultos = sum((p["bultos"] for p in paradas), Decimal("0"))
+        total_bultos = sum((p["bultos"] for p in entregas), Decimal("0"))
         total_kg = sum((p["kg"] for p in paradas), Decimal("0"))
-        pallets = {x["codigo"] for p in paradas for x in p["pallets"]}
+        pallets = {x["codigo"] for p in entregas for x in p["pallets"]}
         self.set_font("Arial", "B", 10)
-        self.cell(0, 6, _texto_pdf("Paradas: {}   ·   Pallets: {}   ·   Bultos: {}   ·   Peso: {} kg".format(
-            len(paradas), len(pallets), _numero(total_bultos), _numero(total_kg))), 0, 1, "C")
+        self.cell(0, 6, _texto_pdf("Entregas: {}   ·   Pallets: {}   ·   Bultos: {}   ·   Peso: {} kg".format(
+            len(entregas), len(pallets), _numero(total_bultos), _numero(total_kg))), 0, 1, "C")
 
     def _reporte_legacy(self, hojas):
         """Fallback para hojas antiguas que aún no tienen PalletDetalle."""
@@ -332,10 +332,10 @@ class GeneradorPDFHojaRuta(FPDF):
             messagebox.showinfo("Sin datos", "No hay datos para generar el reporte.")
             return
 
-        paradas = construir_descargas_pallets(hojas)
+        entregas = construir_descargas_pallets(hojas)
         self.alias_nb_pages()
-        if paradas:
-            self._reporte_operativo(paradas)
+        if entregas:
+            self._reporte_operativo(entregas)
         else:
             self._reporte_legacy(hojas)
 
