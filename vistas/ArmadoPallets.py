@@ -215,6 +215,22 @@ class ArmadoPalletsView(VistaBase):
                 continue
         return ids
 
+    def id_pendiente_en_fila(self, fila):
+        try:
+            return int(float(str(
+                self.grilla_pendientes.ObtenerItem(fila, self.COL_ID_PENDIENTE)
+            )))
+        except (TypeError, ValueError):
+            return None
+
+    def id_contenido_en_fila(self, fila):
+        try:
+            return int(float(str(
+                self.grilla_contenido.ObtenerItem(fila, self.COL_ID_CONTENIDO)
+            )))
+        except (TypeError, ValueError):
+            return None
+
     def id_contenido_seleccionado(self):
         fila = self.grilla_contenido.filaSeleccionada()
         if fila == -1:
