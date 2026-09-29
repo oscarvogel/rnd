@@ -1,5 +1,5 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox, QLabel
+from PyQt5.QtWidgets import QApplication, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox, QLabel
 from modelos.Clientes import ValidaCliente, cboRutaReparto
 from pyqt5libs.libs.vistas.VistaBase import VistaBase
 from pyqt5libs.pyqt5libs.EntradaTexto import EntradaTexto
@@ -252,3 +252,13 @@ class ModificaHojaDeRutaView(VistaBase):
         layout_botones.addWidget(self.btn_grabar)
         layout_botones.addWidget(self.btn_cerrar)
         layout_ppal.addLayout(layout_botones)
+
+    def showEvent(self, event):
+        """Centra el editor sobre la ventana operativa activa sin maximizarlo."""
+        super().showEvent(event)
+        referencia = self.parentWidget() or QApplication.activeWindow()
+        if referencia is not None and referencia is not self:
+            centro = referencia.frameGeometry().center()
+            geometria = self.frameGeometry()
+            geometria.moveCenter(centro)
+            self.move(geometria.topLeft())
