@@ -2,7 +2,8 @@
 param(
     [switch]$SkipTests,
     [switch]$SkipInstallDependencies,
-    [string]$DemoAiEnvPath = ""
+    [string]$DemoAiEnvPath = "",
+    [switch]$Publish
 )
 
 Set-StrictMode -Version Latest
@@ -11,6 +12,11 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Python = Join-Path $RepoRoot ".venv-build\Scripts\python.exe"
 $StateFile = Join-Path $RepoRoot "installer\.demo_build_state"
+$ReleaseRepo = "oscarvogel/vogel-releases"
+$ReleaseTag = "rnd-demo"
+$ReleaseAssetName = "setup_rnd_demo.exe"
+$ReleaseUrl = "https://github.com/$ReleaseRepo/releases/download/$ReleaseTag/$ReleaseAssetName"
+
 $IsccCandidates = @(
     $env:INNO_SETUP_COMPILER,
     'C:\InnoSetup6\ISCC.exe',
@@ -190,6 +196,36 @@ try {
     Write-Host "Instalador: dist\installer\setup_rnd_demo.exe" -ForegroundColor Green
     Write-Host "INI demo: dist\RND Demo\sistema.demo.ini" -ForegroundColor Green
     Write-Host "Login demo: usuario 1 / clave DEMO" -ForegroundColor Yellow
+
+    if ($Publish) {
+        if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+            throw "No se encontro gh.exe. Instala GitHub CLI y autentica con: gh auth login"
+        }
+
+        $Installer = Join-Path $RepoRoot "dist\installer\setup_rnd_demo.exe"
+        Write-Host ""
+        Write-Host "[RND DEMO] Publicando SIEMPRE sobre la release fija '$ReleaseTag'..." -ForegroundColor Cyan
+
+        & gh release view $ReleaseTag --repo $ReleaseRepo *> $null
+        if ($LASTEXITCODE -ne 0) {
+            & gh release create $ReleaseTag --repo $ReleaseRepo --title "RND Demo" --notes "Última versión DEMO de RND. Este release se reemplaza en cada publicación."
+            if ($LASTEXITCODE -ne 0) {
+                throw "No se pudo crear la release fija '$ReleaseTag' en $ReleaseRepo."
+            }
+        }
+
+        & gh release upload $ReleaseTag $Installer --repo $ReleaseRepo --clobber
+        if ($LASTEXITCODE -ne 0) {
+            throw "Fallo la subida del instalador a Vogel Releases."
+        }
+
+        Write-Host ""
+        Write-Host "RND DEMO publicado/reemplazado correctamente." -ForegroundColor Green
+        Write-Host "Release fija: $ReleaseTag" -ForegroundColor Green
+        Write-Host "Archivo único: $ReleaseAssetName" -ForegroundColor Green
+        Write-Host "URL directa:" -ForegroundColor Yellow
+        Write-Host $ReleaseUrl -ForegroundColor Yellow
+    }
 } finally {
     # Limpia la copia temporal del secreto en dist. El Setup ya la incorporo.
     Remove-Item -Force $StagedDemoEnv -ErrorAction SilentlyContinue
