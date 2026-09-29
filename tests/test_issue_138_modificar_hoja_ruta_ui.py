@@ -20,3 +20,9 @@ def test_issue_138_acciones_principales_son_comodas():
     assert 'self.btn_grabar.setMinimumSize(180, 44)' in source
     assert 'self.btn_cerrar.setMinimumSize(180, 44)' in source
     assert 'self.btn_grabar.setProperty("role", "primary")' in source
+
+
+def test_issue_138_doble_click_abre_modificacion():
+    source = Path("controladores/VerHojaRuta.py").read_text(encoding="utf-8")
+
+    assert "self.view.grilla_datos.doubleClicked.connect(self.on_click_btn_modificar)" in source
