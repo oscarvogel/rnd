@@ -4,8 +4,12 @@
 from pathlib import Path
 
 
+def _source():
+    return Path("utiles/Reportes.py").read_text(encoding="utf-8")
+
+
 def test_issue_140_pdf_se_alimenta_de_pallet_detalle():
-    source = Path("utiles/Reportes.py").read_text(encoding="utf-8")
+    source = _source()
     assert "PalletDetalle" in source
     assert "PalletDetalle.hoja_ruta.in_" in source
     assert "d.cantidad" in source
@@ -13,21 +17,80 @@ def test_issue_140_pdf_se_alimenta_de_pallet_detalle():
 
 
 def test_issue_140_distingue_descarga_parcial_y_completa():
-    source = Path("utiles/Reportes.py").read_text(encoding="utf-8")
+    source = _source()
     assert "DESCARGA PARCIAL - RETIRAR SOLO LO INDICADO" in source
     assert "DESCARGA COMPLETA" in source
     assert "len(destinos_pallet[d.pallet_id]) > 1" in source
 
 
-def test_issue_140_incluye_mapa_paradas_y_resumen():
-    source = Path("utiles/Reportes.py").read_text(encoding="utf-8")
-    assert "MAPA DE DESCARGA" in source
-    assert "PARADA {:02d}" in source
+def test_issue_140_presenta_secuencia_de_entregas_no_paradas():
+    source = _source()
+    assert "SECUENCIA DE ENTREGAS" in source
+    assert 'titulo = "ENTREGA {:02d}{}"' in source
+    assert "TOTAL ENTREGA {:02d}: {} BULTOS" in source
+    assert "Entregas: {}" in source
+    assert "MAPA DE DESCARGA" not in source
+    assert 'titulo = "PARADA {:02d}{}"' not in source
+
+
+def test_issue_140_agrupa_entrega_por_cliente_y_lugar_no_por_pallet():
+    source = _source()
+    assert 'int(getattr(h, "cliente_id", 0) or 0)' in source
+    assert 'int(getattr(h, "lugar_entrega_id", 0) or 0)' in source
+    assert 'entrega["pallets"].setdefault(d.pallet_id' in source
+    assert 'for numero, clave in enumerate(orden, start=1)' in source
+
+
+def test_issue_140_incluye_resumen_y_continuacion():
+    source = _source()
     assert "RESUMEN GENERAL DEL VIAJE" in source
     assert "CONTINUACIÓN" in source
 
 
 def test_issue_140_conserva_fallback_sin_pallets():
-    source = Path("utiles/Reportes.py").read_text(encoding="utf-8")
+    source = _source()
     assert "_reporte_legacy" in source
     assert "SIN PALLETS ASIGNADOS" in source
+
+
+def test_issue_140_reporte_operativo_ejecuta_con_entregas(monkeypatch):
+    """Regresión: el render real no puede conservar referencias a 'paradas'."""
+    import utiles.Reportes as reportes
+
+    pdf = reportes.GeneradorPDFHojaRuta()
+    pdf.fecha_reporte = "29/09/2026"
+    pdf.nombre_ruta = "Demo"
+    pdf.responsable = "Chofer"
+    pdf.equipo = "Camión"
+
+    entrega = {
+        "numero": 1,
+        "cliente": "CLIENTE DEMO",
+        "lugar": "LOCAL",
+        "direccion": "DIRECCIÓN DEMO",
+        "bultos": reportes.Decimal("10"),
+        "kg": reportes.Decimal("100"),
+        "pallets": [{
+            "codigo": "PLT-DEMO-001",
+            "parcial": False,
+            "bultos": reportes.Decimal("10"),
+            "kg": reportes.Decimal("100"),
+            "lineas": [{
+                "producto": "PRODUCTO DEMO",
+                "cantidad": reportes.Decimal("10"),
+                "kg": reportes.Decimal("100"),
+                "bultos": reportes.Decimal("10"),
+            }],
+        }],
+    }
+
+    pdf._reporte_operativo([entrega])
+    salida = pdf.output(dest="S")
+    assert salida
+    assert pdf.page_no() >= 2
+
+
+def test_issue_140_no_quedan_referencias_de_runtime_a_paradas():
+    source = _source()
+    assert 'for p in paradas' not in source
+    assert 'len(paradas)' not in source
