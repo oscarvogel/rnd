@@ -292,7 +292,7 @@ class GeneradorPDFHojaRuta(FPDF):
         self.set_font("Arial", "B", 12)
         self.cell(0, 8, "RESUMEN GENERAL DEL VIAJE", "T", 1, "C")
         total_bultos = sum((p["bultos"] for p in entregas), Decimal("0"))
-        total_kg = sum((p["kg"] for p in paradas), Decimal("0"))
+        total_kg = sum((p["kg"] for p in entregas), Decimal("0"))
         pallets = {x["codigo"] for p in entregas for x in p["pallets"]}
         self.set_font("Arial", "B", 10)
         self.cell(0, 6, _texto_pdf("Entregas: {}   ·   Pallets: {}   ·   Bultos: {}   ·   Peso: {} kg".format(
