@@ -51,3 +51,46 @@ def test_issue_140_conserva_fallback_sin_pallets():
     source = _source()
     assert "_reporte_legacy" in source
     assert "SIN PALLETS ASIGNADOS" in source
+
+
+def test_issue_140_reporte_operativo_ejecuta_con_entregas(monkeypatch):
+    """Regresión: el render real no puede conservar referencias a 'paradas'."""
+    import utiles.Reportes as reportes
+
+    pdf = reportes.GeneradorPDFHojaRuta()
+    pdf.fecha_reporte = "29/09/2026"
+    pdf.nombre_ruta = "Demo"
+    pdf.responsable = "Chofer"
+    pdf.equipo = "Camión"
+
+    entrega = {
+        "numero": 1,
+        "cliente": "CLIENTE DEMO",
+        "lugar": "LOCAL",
+        "direccion": "DIRECCIÓN DEMO",
+        "bultos": reportes.Decimal("10"),
+        "kg": reportes.Decimal("100"),
+        "pallets": [{
+            "codigo": "PLT-DEMO-001",
+            "parcial": False,
+            "bultos": reportes.Decimal("10"),
+            "kg": reportes.Decimal("100"),
+            "lineas": [{
+                "producto": "PRODUCTO DEMO",
+                "cantidad": reportes.Decimal("10"),
+                "kg": reportes.Decimal("100"),
+                "bultos": reportes.Decimal("10"),
+            }],
+        }],
+    }
+
+    pdf._reporte_operativo([entrega])
+    salida = pdf.output(dest="S")
+    assert salida
+    assert pdf.page_no() >= 2
+
+
+def test_issue_140_no_quedan_referencias_de_runtime_a_paradas():
+    source = _source()
+    assert 'for p in paradas' not in source
+    assert 'len(paradas)' not in source
