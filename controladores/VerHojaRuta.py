@@ -92,6 +92,7 @@ class VerHojaRutaController(ControladorBase):
         self.view.btn_imprimir.clicked.connect(self.on_click_btn_imprimir)
         self.view.btn_agregar.clicked.connect(self.on_click_btn_agregar)
         self.view.btn_modificar.clicked.connect(self.on_click_btn_modificar)
+        self.view.grilla_datos.doubleClicked.connect(self.on_click_btn_modificar)
         self.view.btn_continuar.clicked.connect(self.ir_validacion)
         self.view.btn_armar.clicked.connect(self.ir_armado)
     
