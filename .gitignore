@@ -55,3 +55,9 @@ Thumbs.db
 !tests/fixtures/*.xlsx
 !tests/fixtures/*.csv
 !tests/fixtures/*.pdf
+
+# Andamiaje local de desarrollo en Windows (no portable)
+# setup_venv.bat tiene el path de Python 3.12 de esta maquina hardcodeado.
+/pip_install.bat
+/run_tests.bat
+/setup_venv.bat
