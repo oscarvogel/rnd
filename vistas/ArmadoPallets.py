@@ -1,7 +1,7 @@
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QButtonGroup, QGroupBox, QGridLayout, QHBoxLayout, QLabel, QPushButton,
-    QSplitter, QTableWidget, QVBoxLayout, QWidget,
+    QSizePolicy, QSplitter, QTableWidget, QVBoxLayout, QWidget,
 )
 from modelos.Clientes import cboRutaReparto
 from pyqt5libs.libs.vistas.VistaBase import VistaBase
@@ -17,12 +17,16 @@ class PalletSelector(QWidget):
         super().__init__(parent)
         self._actual_id = 0
         self.botones = {}
+        self.columnas_por_fila = 5
         self._grupo = QButtonGroup(self)
         self._grupo.setExclusive(True)
         self._layout = QGridLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setHorizontalSpacing(6)
         self._layout.setVerticalSpacing(6)
+        for columna in range(self.columnas_por_fila):
+            self._layout.setColumnStretch(columna, 1)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
 
     def cargar(self, pallets, seleccionado=None):
         while self._layout.count():
@@ -38,29 +42,33 @@ class PalletSelector(QWidget):
             pallet_id = int(pallet_id)
             boton = QPushButton(str(posicion))
             boton.setCheckable(True)
-            boton.setMinimumSize(44, 34)
+            boton.setMinimumSize(72, 40)
+            boton.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             boton.setToolTip("Pallet {}\n{}".format(posicion, codigo))
             boton.setProperty("palletId", pallet_id)
             boton.setStyleSheet(
-                "QPushButton { padding: 6px 10px; border: 1px solid #b8c2cc; "
-                "border-radius: 8px; background: #ffffff; font-weight: 600; }"
-                "QPushButton:hover { border-color: #4c84ff; }"
-                "QPushButton:checked { background: #1976d2; color: white; "
-                "border-color: #1976d2; }"
+                "QPushButton { padding: 7px 12px; border: 1px solid #b8c2cc; "
+                "border-radius: 8px; background: #ffffff; font-weight: 700; }"
+                "QPushButton:hover { border-color: #4c84ff; background: #f4f8ff; }"
+                "QPushButton:checked { background: #173f68; color: white; "
+                "border-color: #173f68; }"
             )
             boton.clicked.connect(
                 lambda checked=False, pid=pallet_id: self._seleccionar(pid)
             )
             self._grupo.addButton(boton)
             self.botones[pallet_id] = boton
-            fila = (posicion - 1) // 10
-            columna = (posicion - 1) % 10
+            fila = (posicion - 1) // self.columnas_por_fila
+            columna = (posicion - 1) % self.columnas_por_fila
             self._layout.addWidget(boton, fila, columna)
 
         if seleccionado and int(seleccionado) in self.botones:
             self._marcar(int(seleccionado), emitir=False)
         elif pallets:
             self._marcar(int(pallets[0][0]), emitir=False)
+
+        filas = max(1, (len(pallets) + self.columnas_por_fila - 1) // self.columnas_por_fila)
+        self.setMinimumHeight(filas * 46)
 
     def _marcar(self, pallet_id, emitir=True):
         boton = self.botones.get(int(pallet_id))
@@ -80,6 +88,13 @@ class PalletSelector(QWidget):
 
     def cantidad(self):
         return len(self.botones)
+
+    def posicion_actual(self):
+        actual = self.pallet_actual_id()
+        for posicion, pallet_id in enumerate(self.botones.keys(), start=1):
+            if pallet_id == actual:
+                return posicion
+        return 0
 
 
 class ArmadoPalletsView(VistaBase):
@@ -152,22 +167,36 @@ class ArmadoPalletsView(VistaBase):
 
         grp_pallet = QGroupBox("Pallet actual")
         layout_pallet = QVBoxLayout(grp_pallet)
-        fila_pallet = QHBoxLayout()
-        fila_pallet.addWidget(QLabel("Pallets de esta carga:"))
-        self.selector_pallets = PalletSelector()
-        fila_pallet.addWidget(self.selector_pallets, 1)
-        self.btn_nuevo_pallet = self.CreaBoton("Nuevo", imagen_str="new.png")
-        fila_pallet.addWidget(self.btn_nuevo_pallet)
-        layout_pallet.addLayout(fila_pallet)
+
         self.lbl_contexto = QLabel("")
         self.lbl_contexto.setWordWrap(True)
         layout_pallet.addWidget(self.lbl_contexto)
+
+        self.btn_nuevo_pallet = self.CreaBoton("+ Nuevo pallet", imagen_str="new.png")
+        self.btn_nuevo_pallet.setMinimumHeight(40)
+        layout_pallet.addWidget(self.btn_nuevo_pallet)
+
+        self.lbl_pallets = QLabel("Pallets:")
+        self.lbl_pallets.setStyleSheet("font-weight: 600;")
+        layout_pallet.addWidget(self.lbl_pallets)
+
+        self.selector_pallets = PalletSelector()
+        self.selector_pallets.pallet_seleccionado.connect(self._actualizar_pallet_actual)
+        layout_pallet.addWidget(self.selector_pallets)
+
+        self.lbl_pallet_actual = QLabel("PALLET ACTUAL: -")
+        self.lbl_pallet_actual.setStyleSheet("font-size: 15px; font-weight: 800; padding: 4px 0;")
+        layout_pallet.addWidget(self.lbl_pallet_actual)
+
         self.grilla_contenido = Grilla()
         self.grilla_contenido.ArmaCabeceras(list(self.CABECERAS_CONTENIDO))
         self.grilla_contenido.setColumnHidden(
             self.CABECERAS_CONTENIDO.index("ID"), True
         )
+        self.grilla_contenido.setMaximumHeight(300)
+        self.grilla_contenido.setMinimumHeight(180)
         layout_pallet.addWidget(self.grilla_contenido)
+
         self.lbl_totales = QLabel("Pallet: 0 líneas · 0 cant · 0 KG · 0 bultos")
         self.lbl_totales.setObjectName("armadoPalletsTotales")
         self.lbl_totales.setWordWrap(True)
@@ -176,6 +205,7 @@ class ArmadoPalletsView(VistaBase):
         self.lbl_destinos.setObjectName("armadoPalletsDestinos")
         self.lbl_destinos.setWordWrap(True)
         layout_pallet.addWidget(self.lbl_destinos)
+        layout_pallet.addStretch(1)
         divisor.addWidget(grp_pallet)
 
         divisor.setStretchFactor(0, 3)
@@ -223,6 +253,12 @@ class ArmadoPalletsView(VistaBase):
 
     def cargar_pallets(self, pallets, seleccionado=None):
         self.selector_pallets.cargar(pallets, seleccionado=seleccionado)
+        self._actualizar_pallet_actual(self.selector_pallets.pallet_actual_id())
+
+    def _actualizar_pallet_actual(self, pallet_id):
+        posicion = self.selector_pallets.posicion_actual()
+        texto = "PALLET ACTUAL: {}".format(posicion) if pallet_id and posicion else "PALLET ACTUAL: -"
+        self.lbl_pallet_actual.setText(texto)
 
     def cantidad_pallets(self):
         return self.selector_pallets.cantidad()
