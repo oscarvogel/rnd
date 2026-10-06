@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit, Q
 from modelos.Documentos import referencias_por_hojas
 from modelos.HojaRuta import HojaDeRuta
 from modelos.ModeloBase import reconnect_if_needed
+from modelos.ParametrosSistema import ParamSist
 from modelos.Pallet import (
     ESTADO_ARMADO,
     Pallet,
@@ -21,8 +22,26 @@ from modelos.Pallet import (
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.pyqt5libs.Ventanas import showAlert
 from pyqt5libs.pyqt5libs.utiles import inicializar_y_capturar_excepciones
-from utiles.pallets import a_decimal
+from utiles.pallets import a_decimal, limite_kg_configurable
 from vistas.ArmadoPallets import ArmadoPalletsView
+
+
+PARAM_KG_LIMITE_PALLET = "KG_LIMITE_PALLET"
+
+
+def limite_kg_pallet():
+    """Límite de KG por pallet configurado, o ``None`` si no existe.
+
+    No se usa ``ParamSist.ObtenerParametro`` porque ese método inserta el
+    parámetro cuando falta: leerlo en cada refresco ensuciaría la tabla de
+    parámetros en cada arranque. Se lee directo y cualquier falla (tabla
+    inexistente en bases de prueba o sin migrar) se toma como "sin límite".
+    """
+    try:
+        fila = ParamSist.get(ParamSist.parametro == PARAM_KG_LIMITE_PALLET)
+    except Exception:
+        return None
+    return limite_kg_configurable(fila.valor)
 
 
 class ArmadoPalletsController(ControladorBase):
@@ -195,15 +214,20 @@ class ArmadoPalletsController(ControladorBase):
 
     def refrescar_contenido(self):
         pallet_id = self.view.pallet_actual_id()
+        limite = limite_kg_pallet()
         if not pallet_id:
             self.view.cargar_contenido([])
             self.view.mostrar_totales(
-                {"lineas": 0, "cantidad": 0, "kg": 0, "bultos": 0}, []
+                {"lineas": 0, "cantidad": 0, "kg": 0, "bultos": 0}, [],
+                limite_kg=limite,
             )
             return
         filas = composicion_pallet(pallet_id)
         self.view.cargar_contenido(filas)
-        self.view.mostrar_totales(totales_pallet(pallet_id), totales_por_destino(pallet_id))
+        self.view.mostrar_totales(
+            totales_pallet(pallet_id), totales_por_destino(pallet_id),
+            limite_kg=limite,
+        )
 
     def actualizar_guias(self):
         pendientes = self.view.grilla_pendientes.rowCount()

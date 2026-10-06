@@ -84,6 +84,58 @@ def totales(lineas) -> dict:
     return {"lineas": n, "cantidad": cantidad, "kg": kg, "bultos": bultos}
 
 
+def formato_kg(valor) -> str:
+    """Texto de un peso para mostrar en pantalla.
+
+    Dos decimales como maximo y se omiten cuando el peso es entero:
+    ``115.62`` se ve como ``115.62`` pero un pallet vacio tiene que
+    mostrarse como ``0`` y no como ``0.00``.
+    """
+    cantidad = a_decimal(valor)
+    if cantidad == cantidad.to_integral_value():
+        return "{:d}".format(int(cantidad))
+    return "{:.2f}".format(cantidad)
+
+
+def limite_kg_configurable(valor):
+    """Normaliza el limite de KG por pallet configurado.
+
+    Devuelve ``None`` cuando no hay limite cargado, esta vacio o no es
+    positivo: en ese caso el KPI muestra solamente el KG actual.
+    """
+    if valor is None or valor == "":
+        return None
+    limite = a_decimal(valor)
+    return limite if limite > 0 else None
+
+
+def estado_limite_kg(kg, limite_kg):
+    """Estado del peso frente al limite configurado.
+
+    Devuelve ``(texto, excede)`` o ``None`` si todavia no hay limite.
+    ``texto`` ya viene listo para mostrar, por ejemplo
+    ``"Límite: 100 KG · Exceso 15.62 KG"``.
+    """
+    limite = limite_kg_configurable(limite_kg)
+    if limite is None:
+        return None
+    peso = a_decimal(kg)
+    diferencia = limite - peso
+    if diferencia < 0:
+        return (
+            "Límite: {} KG · Exceso {} KG".format(
+                formato_kg(limite), formato_kg(abs(diferencia))
+            ),
+            True,
+        )
+    return (
+        "Límite: {} KG · Disponible {} KG".format(
+            formato_kg(limite), formato_kg(diferencia)
+        ),
+        False,
+    )
+
+
 def agrupar_por_cliente_destino(filas) -> list:
     """Agrupa filas (dicts con cliente_id, lugar_entrega_id, ...) sumando.
 

@@ -11,6 +11,8 @@ import pytest
 from peewee import SqliteDatabase
 from PyQt5.QtWidgets import QApplication
 
+from utiles.pallets import a_decimal
+
 
 _QT_APP = QApplication.instance() or QApplication([])
 _TEST_DB = SqliteDatabase(":memory:")
@@ -292,3 +294,240 @@ def test_quitar_devuelve_saldo(base_armado, parche_referencias):
     quitar_detalle(pallet_id, hoja.id)
     assert saldo_linea(hoja.id)["cantidad"] == Decimal("6")
     controller.view.close()
+
+
+def _vista_con_pallets(*ids):
+    from vistas.ArmadoPallets import ArmadoPalletsView
+
+    view = ArmadoPalletsView()
+    view.cargar_pallets(
+        [(i, "PLT-20261006-{:03d}".format(i)) for i in ids], seleccionado=ids[0]
+    )
+    return view
+
+
+def _totales(kg, lineas=1, cantidad=None):
+    kg = a_decimal(kg)
+    return {
+        "lineas": lineas,
+        "cantidad": a_decimal(cantidad) if cantidad is not None else kg,
+        "kg": kg,
+        "bultos": Decimal("1") if lineas else Decimal("0"),
+    }
+
+
+def test_kpi_peso_muestra_kg_como_principal_y_mantiene_resumen(base_armado):
+    view = _vista_con_pallets(10)
+
+    assert view.kpi_peso.lbl_titulo.text() == "KG ACTUALES"
+    view.mostrar_totales(_totales(Decimal("115.62"), cantidad=Decimal("24")), [])
+
+    assert view.kpi_peso.texto_peso_actual() == "115.62 KG"
+    assert view.kg_pallet_actual() == Decimal("115.62")
+    # Sin límite configurado no se inventa ninguna línea de límite.
+    assert view.kpi_peso.texto_limite() == ""
+    # El resumen de abajo sigue completo, sólo deja de ser la única fuente.
+    assert "líneas" in view.lbl_totales.text()
+    assert "cant" in view.lbl_totales.text()
+    assert "KG" in view.lbl_totales.text()
+    assert "bultos" in view.lbl_totales.text()
+    view.close()
+
+
+def test_kpi_peso_cambia_al_cambiar_de_chip(base_armado):
+    view = _vista_con_pallets(10, 12)
+
+    view.mostrar_totales(_totales(Decimal("115.62")), [])
+    assert view.kpi_peso.texto_peso_actual() == "115.62 KG"
+
+    view.selector_pallets.botones[12].click()
+    assert view.pallet_actual_id() == 12
+    assert view.kpi_peso.texto_peso_actual() == "0 KG"
+
+    view.mostrar_totales(_totales(Decimal("40")), [])
+    assert view.kpi_peso.texto_peso_actual() == "40 KG"
+
+    # Volver al primer pallet recupera su propio peso, no el del último.
+    view.selector_pallets.botones[10].click()
+    assert view.pallet_actual_id() == 10
+    assert view.kpi_peso.texto_peso_actual() == "115.62 KG"
+    view.close()
+
+
+def test_kpi_peso_de_pallet_vacio_muestra_0_kg(base_armado):
+    view = _vista_con_pallets(10)
+
+    view.mostrar_totales(
+        {"lineas": 0, "cantidad": Decimal("0"), "kg": Decimal("0"), "bultos": Decimal("0")},
+        [],
+    )
+
+    assert view.kpi_peso.texto_peso_actual() == "0 KG"
+    assert view.kg_pallet_actual() == Decimal("0")
+    assert "Pallet vacío" in view.lbl_destinos.text()
+    view.close()
+
+
+def test_kpi_peso_muestra_exceso_y_disponible_cuando_hay_limite(base_armado):
+    view = _vista_con_pallets(10)
+
+    view.mostrar_totales(_totales(Decimal("115.62")), [], limite_kg=Decimal("100"))
+    assert view.kpi_peso.texto_peso_actual() == "115.62 KG"
+    assert view.kpi_peso.texto_limite() == "Límite: 100 KG · Exceso 15.62 KG"
+    assert "15803d" not in view.kpi_peso.lbl_valor.styleSheet()
+    assert "b91c1c" in view.kpi_peso.lbl_valor.styleSheet()
+
+    view.mostrar_totales(_totales(Decimal("80")), [], limite_kg=Decimal("100"))
+    assert view.kpi_peso.texto_limite() == "Límite: 100 KG · Disponible 20 KG"
+    assert "15803d" in view.kpi_peso.lbl_valor.styleSheet()
+    assert "b91c1c" not in view.kpi_peso.lbl_valor.styleSheet()
+    view.close()
+
+
+def test_kpi_peso_sin_pallet_seleccionado_no_muestra_limite(base_armado):
+    from vistas.ArmadoPallets import ArmadoPalletsView
+
+    view = ArmadoPalletsView()
+
+    assert view.lbl_pallet_actual.text() == "PALLET ACTUAL: -"
+    view.mostrar_totales(_totales(Decimal("0"), lineas=0), [], limite_kg=Decimal("100"))
+
+    # Sin pallet no hay contra qué límite compararse: sólo el KG actual.
+    assert view.kpi_peso.texto_peso_actual() == "0 KG"
+    assert view.kpi_peso.texto_limite() == ""
+    view.close()
+
+
+def test_kpi_peso_conserva_el_peso_al_recargar_pallets(base_armado):
+    view = _vista_con_pallets(10, 12)
+
+    view.mostrar_totales(_totales(Decimal("130.45")), [])
+    assert view.kpi_peso.texto_peso_actual() == "130.45 KG"
+
+    # El controlador recarga el selector al crear/seleccionar otro pallet. Si
+    # esa recarga borrara lo que se sabía, el chip 1 volvería a pintar 0 KG.
+    view.selector_pallets.botones[12].click()
+    view.mostrar_totales(_totales(Decimal("25.17")), [])
+    assert view.kpi_peso.texto_peso_actual() == "25.17 KG"
+    view.cargar_pallets(
+        [(10, "PLT-20261006-010"), (12, "PLT-20261006-012")], seleccionado=12
+    )
+    view.selector_pallets.botones[10].click()
+    assert view.kpi_peso.texto_peso_actual() == "130.45 KG"
+
+    # Un pallet de otra carga sí se descarta del histórico.
+    view.cargar_pallets([(99, "PLT-20261006-099")], seleccionado=99)
+    assert view.kpi_peso.texto_peso_actual() == "0 KG"
+    view.close()
+
+
+def test_controlador_actualiza_el_kpi_al_cambiar_de_chip(base_armado, monkeypatch, parche_referencias):
+    RutaReparto = base_armado["RutaReparto"]
+    HojaDeRuta = base_armado["HojaDeRuta"]
+
+    ruta = RutaReparto.create(descripcion="CENTRO")
+    for nombre, kg in (("Cinco Hermanos", 90.45), ("Ceferino", 40.00)):
+        HojaDeRuta.create(
+            fecha=date(2026, 10, 6), nombre_cliente=nombre, comprobante="F-1",
+            producto="P", cantidad=6, kg=kg, cantidad_bultos=6, observaciones="",
+            equipo_asignado=1, responsable=1, ruta=ruta.id,
+        )
+    controller = _controlador(date(2026, 10, 6), ruta.id)
+    controller.conectarWidgets()
+    assert controller.cargar_mercaderia() is True
+
+    hojas = list(HojaDeRuta.select())
+    controller.agregar_lineas([hojas[0].id])
+    controller.refrescar_contenido()
+    assert controller.view.kpi_peso.texto_peso_actual() == "90.45 KG"
+
+    from modelos.Pallet import crear_pallet
+    segundo = crear_pallet(**controller.contexto_carga)
+    controller.refrescar_pallets(seleccionado=segundo.id)
+    controller.agregar_lineas([hojas[1].id])
+    controller.refrescar_contenido()
+    assert controller.view.kpi_peso.texto_peso_actual() == "40 KG"
+
+    # Clic real en el chip del primer pallet: el controlador recarga el
+    # contenido y el KPI tiene que seguir al pallet, no quedar en 0.
+    primero = min(controller.view.selector_pallets.botones)
+    controller.view.selector_pallets.botones[primero].click()
+    assert controller.view.pallet_actual_id() == primero
+    assert controller.view.kpi_peso.texto_peso_actual() == "90.45 KG"
+    controller.view.close()
+
+
+def test_controlador_pasa_el_limite_configurado_al_kpi(base_armado, monkeypatch):
+    RutaReparto = base_armado["RutaReparto"]
+    Pallet = base_armado["Pallet"]
+
+    ruta = RutaReparto.create(descripcion="CENTRO")
+    pallet = Pallet.create(
+        codigo="PLT-20261006-001", fecha_reparto=date(2026, 10, 6),
+        ruta_id=ruta.id, responsable_id=1, equipo_id=1,
+    )
+    controller = _controlador(date(2026, 10, 6), ruta.id)
+    controller.contexto_carga = {
+        "fecha_reparto": date(2026, 10, 6), "ruta_id": ruta.id,
+        "responsable_id": 1, "equipo_id": 1,
+    }
+
+    monkeypatch.setattr(
+        "controladores.ArmadoPallets.limite_kg_pallet", lambda: Decimal("100")
+    )
+    controller.view.cargar_pallets([(pallet.id, pallet.codigo)], seleccionado=pallet.id)
+    controller.refrescar_contenido()
+    assert controller.view.kpi_peso.texto_peso_actual() == "0 KG"
+    assert controller.view.kpi_peso.texto_limite() == "Límite: 100 KG · Disponible 100 KG"
+
+    monkeypatch.setattr("controladores.ArmadoPallets.limite_kg_pallet", lambda: None)
+    controller.refrescar_contenido()
+    assert controller.view.kpi_peso.texto_limite() == ""
+    controller.view.close()
+
+
+def test_limite_kg_pallet_no_crea_el_parametro(base_armado):
+    from controladores.ArmadoPallets import PARAM_KG_LIMITE_PALLET, limite_kg_pallet
+    from modelos.ModeloBase import db as db_real
+    from modelos.ParametrosSistema import ParamSist
+
+    # `ObtenerParametro` inserta el parámetro cuando falta. Leer el límite no
+    # debe escribir en la tabla de parámetros en cada refresco de pantalla.
+    _TEST_DB.bind([ParamSist])
+    _TEST_DB.connect(reuse_if_open=True)
+    _TEST_DB.create_tables([ParamSist])
+    try:
+        assert limite_kg_pallet() is None
+        assert ParamSist.select().count() == 0
+
+        ParamSist.create(parametro=PARAM_KG_LIMITE_PALLET, valor="100")
+        assert limite_kg_pallet() == Decimal("100")
+        assert ParamSist.select().count() == 1
+    finally:
+        # No se cierra la conexión: es la del fixture, que cierra al terminar.
+        _TEST_DB.drop_tables([ParamSist])
+        db_real.bind([ParamSist])
+
+
+def test_formato_kg_omite_decimales_en_pesos_enteros():
+    from utiles.pallets import formato_kg
+
+    assert formato_kg(Decimal("0")) == "0"
+    assert formato_kg(Decimal("115.62")) == "115.62"
+    assert formato_kg(Decimal("300")) == "300"
+    assert formato_kg(Decimal("115.625")) == "115.62"
+    assert formato_kg(None) == "0"
+
+
+def test_estado_limite_kg_sin_limite_configurado():
+    from utiles.pallets import estado_limite_kg, limite_kg_configurable
+
+    assert estado_limite_kg(Decimal("115.62"), None) is None
+    assert estado_limite_kg(Decimal("115.62"), "") is None
+    assert estado_limite_kg(Decimal("115.62"), "0") is None
+    assert limite_kg_configurable("abc") is None
+    assert limite_kg_configurable("100") == Decimal("100")
+
+    texto, excede = estado_limite_kg(Decimal("100"), Decimal("100"))
+    assert texto == "Límite: 100 KG · Disponible 0 KG"
+    assert excede is False
