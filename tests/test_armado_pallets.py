@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from peewee import SqliteDatabase
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QSizePolicy
 
 from utiles.pallets import a_decimal
 
@@ -143,7 +143,7 @@ def test_selector_pallets_cambia_activo_con_click(base_armado):
     view.close()
 
 
-def test_selector_muestra_20_pallets_sin_scroll_y_grilla_compacta(base_armado):
+def test_selector_muestra_20_pallets_sin_scroll_y_grilla_expandible(base_armado):
     from vistas.ArmadoPallets import ArmadoPalletsView
 
     view = ArmadoPalletsView()
@@ -157,7 +157,10 @@ def test_selector_muestra_20_pallets_sin_scroll_y_grilla_compacta(base_armado):
     assert len(view.selector_pallets.botones) == 20
     assert view.selector_pallets.columnas_por_fila == 5
     assert view.selector_pallets._layout.itemAtPosition(3, 4).widget().text() == "20"
-    assert view.grilla_contenido.maximumHeight() == 300
+    # La grilla usa el alto disponible: ya no lleva el tope fijo de 300px que
+    # limitaba el contenido a un fragmento de la pantalla (aab4a4c).
+    assert view.grilla_contenido.maximumHeight() > 10000
+    assert view.grilla_contenido.sizePolicy().verticalPolicy() == QSizePolicy.Expanding
     assert view.lbl_pallet_actual.text() == "PALLET ACTUAL: 1"
 
     view.selector_pallets.botones[15].click()
