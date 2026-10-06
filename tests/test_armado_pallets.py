@@ -13,16 +13,12 @@ from PyQt5.QtWidgets import QApplication
 
 
 _QT_APP = QApplication.instance() or QApplication([])
-
-
 _TEST_DB = SqliteDatabase(":memory:")
 
 
 @pytest.fixture()
 def base_armado():
-    from modelos.Clientes import (
-        Cliente, Localidades, LugarEntrega, RutaReparto,
-    )
+    from modelos.Clientes import Cliente, Localidades, LugarEntrega, RutaReparto
     from modelos.Empleados import ConceptoLiquidacion, Empleado
     from modelos.Equipos import Equipos
     from modelos.HojaRuta import HojaDeRuta
@@ -41,8 +37,9 @@ def base_armado():
     _TEST_DB.create_tables(modelos)
     try:
         yield {
-            "RutaReparto": RutaReparto, "HojaDeRuta": HojaDeRuta,
-            "Pallet": Pallet, "Empleado": Empleado, "Equipos": Equipos,
+            "RutaReparto": RutaReparto,
+            "HojaDeRuta": HojaDeRuta,
+            "Pallet": Pallet,
         }
     finally:
         _TEST_DB.drop_tables(modelos)
@@ -66,6 +63,7 @@ def _controlador(fecha, ruta_id):
     controller.view = ArmadoPalletsView()
     controller.ruta_inicial = int(ruta_id)
     controller.hojas_actuales = []
+    controller.contexto_carga = None
     controller.view.fecha_reparto.setFecha(fecha)
     controller.view.cbo_ruta_reparto.CargaDatos()
     controller._seleccionar_ruta_inicial()
@@ -147,37 +145,46 @@ def test_pallets_se_filtran_por_contexto_de_carga(base_armado):
     from modelos.Pallet import Pallet, pallets_para_carga
 
     RutaReparto = base_armado["RutaReparto"]
-    Empleado = base_armado["Empleado"]
-    Equipos = base_armado["Equipos"]
-
     ruta_centro = RutaReparto.create(descripcion="CENTRO")
     ruta_norte = RutaReparto.create(descripcion="NORTE")
-    chofer_a = Empleado.create(nombre="Juan", apellido="Perez")
-    chofer_b = Empleado.create(nombre="Pedro", apellido="Gomez")
-    camion = Equipos.create(descripcion="Camion 1")
 
     esperado = Pallet.create(
-        codigo="PLT-20261006-001", fecha_reparto=date(2026, 10, 6),
-        ruta=ruta_centro, responsable=chofer_a, equipo=camion,
+        codigo="PLT-20261006-001",
+        fecha_reparto=date(2026, 10, 6),
+        ruta_id=ruta_centro.id,
+        responsable_id=101,
+        equipo_id=501,
     )
     Pallet.create(
-        codigo="PLT-20261006-002", fecha_reparto=date(2026, 10, 6),
-        ruta=ruta_norte, responsable=chofer_a, equipo=camion,
+        codigo="PLT-20261006-002",
+        fecha_reparto=date(2026, 10, 6),
+        ruta_id=ruta_norte.id,
+        responsable_id=101,
+        equipo_id=501,
     )
     Pallet.create(
-        codigo="PLT-20261006-003", fecha_reparto=date(2026, 10, 6),
-        ruta=ruta_centro, responsable=chofer_b, equipo=camion,
+        codigo="PLT-20261006-003",
+        fecha_reparto=date(2026, 10, 6),
+        ruta_id=ruta_centro.id,
+        responsable_id=102,
+        equipo_id=501,
+    )
+    Pallet.create(
+        codigo="PLT-20261006-004",
+        fecha_reparto=date(2026, 10, 6),
+        ruta_id=ruta_centro.id,
+        responsable_id=101,
+        equipo_id=502,
     )
 
     encontrados = pallets_para_carga(
-        date(2026, 10, 6), ruta_centro.id, chofer_a.id, camion.id
+        date(2026, 10, 6), ruta_centro.id, 101, 501
     )
     assert [p.id for p in encontrados] == [esperado.id]
 
 
 def test_filas_pendientes_calculan_asignado():
     from types import SimpleNamespace
-
     from controladores.ArmadoPallets import ArmadoPalletsController
 
     hojas = [
@@ -191,11 +198,10 @@ def test_filas_pendientes_calculan_asignado():
     assert filas[0]["saldo"] == Decimal("4")
 
 
-def test_cargar_mercaderia_y_agregar_end_to_end(
-    base_armado, parche_referencias
-):
+def test_cargar_mercaderia_y_agregar_end_to_end(base_armado, parche_referencias):
     RutaReparto = base_armado["RutaReparto"]
     HojaDeRuta = base_armado["HojaDeRuta"]
+    Pallet = base_armado["Pallet"]
 
     ruta = RutaReparto.create(descripcion="CENTRO")
     hoja_a = HojaDeRuta.create(
@@ -219,12 +225,17 @@ def test_cargar_mercaderia_y_agregar_end_to_end(
 
     agregados, errores = controller.agregar_lineas([hoja_a.id])
     assert (agregados, errores) == (1, [])
+    pallet = Pallet.get_by_id(controller.view.pallet_actual_id())
+    assert pallet.fecha_reparto == date(2026, 9, 28)
+    assert pallet.ruta_id == ruta.id
+    assert pallet.responsable_id == 1
+    assert pallet.equipo_id == 1
+
     controller.refrescar_contenido()
     controller.cargar_mercaderia_sin_alertas()
     assert controller.view.grilla_contenido.rowCount() == 1
     assert "Toda la mercadería ya está paletizada" not in controller.view.lbl_estado.text()
 
-    # Sin saldo: reporta error sin romper.
     agregados, errores = controller.agregar_lineas([hoja_a.id])
     assert agregados == 0 and len(errores) == 1
     controller.view.close()
