@@ -171,8 +171,21 @@ try {
     Remove-Item -Recurse -Force "dist\RND Demo" -ErrorAction SilentlyContinue
     Remove-Item -Force "dist\installer\setup_rnd_demo.exe" -ErrorAction SilentlyContinue
 
-    & $Python -m PyInstaller --noconfirm --clean installer\RND_Demo.spec
-    if ($LASTEXITCODE -ne 0) { throw "PyInstaller fallo." }
+    # PyInstaller escribe sus lineas INFO en stderr. En PowerShell 5.1 con
+    # $ErrorActionPreference = "Stop" eso se convierte en NativeCommandError y
+    # abortaba TODO el build con codigo 1, aunque PyInstaller terminara bien:
+    # el log muria en su primer mensaje ("PyInstaller: 6.21.0, contrib hooks"),
+    # o sea apenas Starting up. Mismo problema que se corrigio para gh en
+    # 75be42d, aplicado aca a PyInstaller.
+    # El codigo de salida sigue siendo el que decide si el build fallo.
+    $ErrorActionPreference = "Continue"
+    try {
+        & $Python -m PyInstaller --noconfirm --clean installer\RND_Demo.spec
+        $PyInstallerExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = "Stop"
+    }
+    if ($PyInstallerExit -ne 0) { throw "PyInstaller fallo." }
 
     $DemoIni = Join-Path $RepoRoot "dist\RND Demo\sistema.demo.ini"
     $RndIni = Join-Path $RepoRoot "dist\RND Demo\rnd.ini"
@@ -187,8 +200,15 @@ try {
     Write-Host "[RND] Configuracion IA DEMO incluida desde $($DemoAiConfig.Source)." -ForegroundColor Cyan
     Write-Host "[RND] Solo se empaquetan variables IA; no se copia el .env completo." -ForegroundColor Cyan
 
-    & $Iscc "/DMyAppVersion=$BuildVersion" installer\RND_Demo.iss
-    if ($LASTEXITCODE -ne 0) { throw "Inno Setup fallo." }
+    # ISCC tambien reporta por stderr; mismo cuidado que con PyInstaller.
+    $ErrorActionPreference = "Continue"
+    try {
+        & $Iscc "/DMyAppVersion=$BuildVersion" installer\RND_Demo.iss
+        $IsccExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = "Stop"
+    }
+    if ($IsccExit -ne 0) { throw "Inno Setup fallo." }
 
     Write-Host ""
     Write-Host "RND DEMO generado correctamente." -ForegroundColor Green
