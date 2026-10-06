@@ -92,6 +92,8 @@ class MigracionBaseDatos:
             migrator.add_column("pallet", "equipo_id", IntegerField(null=True)),
         ]
         self.RealizaMigraciones()
+        self._backfill_contexto_pallets()
+
         try:
             Proveedor.update(metodo_importacion="TREMBLAY").where(Proveedor.id == 15).execute()
         except Exception:
@@ -105,6 +107,49 @@ class MigracionBaseDatos:
         self.RealizaMigraciones()
 
         self._crear_lugares_iniciales()
+
+    def _backfill_contexto_pallets(self):
+        """Completa contexto de pallets legacy cuando puede deducirse sin ambigüedad.
+
+        Los pallets vacíos anteriores quedan sin contexto porque no existe evidencia
+        suficiente para asignarlos con seguridad. Un pallet con detalles de más de una
+        carga también se conserva sin contexto y se registra en log para revisión.
+        """
+        try:
+            pendientes = Pallet.select().where(Pallet.fecha_reparto.is_null(True))
+            for pallet in pendientes:
+                detalles = list(
+                    PalletDetalle.select(PalletDetalle, HojaDeRuta)
+                    .join(HojaDeRuta)
+                    .where(PalletDetalle.pallet == pallet.id)
+                )
+                if not detalles:
+                    continue
+                contextos = {
+                    (
+                        detalle.hoja_ruta.fecha,
+                        int(detalle.hoja_ruta.ruta_id or 0),
+                        int(detalle.hoja_ruta.responsable_id or 0),
+                        int(detalle.hoja_ruta.equipo_asignado_id or 0),
+                    )
+                    for detalle in detalles
+                }
+                if len(contextos) != 1:
+                    logging.warning(
+                        "Pallet legacy %s tiene más de un contexto de carga; no se migra",
+                        pallet.codigo,
+                    )
+                    continue
+                fecha_reparto, ruta_id, responsable_id, equipo_id = next(iter(contextos))
+                if not (fecha_reparto and ruta_id and responsable_id and equipo_id):
+                    continue
+                pallet.fecha_reparto = fecha_reparto
+                pallet.ruta_id = ruta_id
+                pallet.responsable_id = responsable_id
+                pallet.equipo_id = equipo_id
+                pallet.save()
+        except Exception:
+            logging.exception("No se pudo completar el contexto de pallets legacy")
 
     def _quitar_unicidad_nombre_lugar_entrega(self):
         """Migra índices de lugares: misma referencia puede tener otra dirección."""
