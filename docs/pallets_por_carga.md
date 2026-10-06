@@ -18,11 +18,22 @@ Esto evita mezclar pallets de repartos diferentes y permite conservar correctame
 El selector principal ya no es un combo desplegable. Los pallets pertenecientes a la carga se muestran como botones/chips numerados `1..N`.
 
 - Un clic cambia inmediatamente el pallet activo.
-- El pallet actual queda visualmente resaltado.
-- Los botones se distribuyen hasta diez por fila.
+- El pallet actual queda visualmente resaltado y además se muestra como `PALLET ACTUAL: N`.
+- Los botones se distribuyen en cinco columnas para darles buen tamaño operativo.
+- El selector crece verticalmente según la cantidad de pallets, evitando ocultarlos detrás de un scroll en el uso normal (por ejemplo, 20 pallets se ven en cuatro filas).
 - El tooltip conserva el código técnico completo (`PLT-AAAAMMDD-NNN`).
 - La numeración visible es operativa; las operaciones internas siguen usando `pallet.id` y `pallet.codigo`.
-- `Nuevo` crea un pallet dentro del contexto activo y lo deja seleccionado.
+- `+ Nuevo pallet` ocupa una fila propia para quedar siempre visible y crea un pallet dentro del contexto activo dejándolo seleccionado.
+- La grilla de contenido del pallet se mantiene compacta (máximo 300 px de alto) para priorizar visualmente la selección de pallets.
+
+La jerarquía visual del panel derecho es:
+
+1. contexto de carga;
+2. acción `+ Nuevo pallet`;
+3. selector completo de pallets;
+4. indicador `PALLET ACTUAL: N`;
+5. grilla compacta con el contenido del pallet seleccionado;
+6. totales y destinos.
 
 ## Persistencia
 
@@ -73,12 +84,17 @@ El cambio no modifica el funcionamiento de:
 - confirmación de preparación;
 - identificación técnica por `pallet_id` y `codigo`.
 
+No se incorpora en este cambio configuración de Kg/pallet ni creación masiva por cantidad; la referencia visual solicitada se utiliza sólo como guía de jerarquía y ergonomía.
+
 ## Pruebas
 
 `tests/test_armado_pallets.py` cubre, entre otros casos:
 
 - carga y selección visual de pallets;
 - cambio de pallet mediante clic en un chip;
+- 20 pallets distribuidos en cuatro filas de cinco botones;
+- actualización del indicador `PALLET ACTUAL: N`;
+- límite de altura de la grilla de contenido;
 - preservación del pallet seleccionado;
 - filtrado por fecha, ruta, chofer y equipo;
 - creación automática de un pallet con el contexto correcto al comenzar a paletizar;
