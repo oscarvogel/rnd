@@ -1,13 +1,85 @@
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
-    QComboBox, QGroupBox, QHBoxLayout, QLabel, QSplitter, QTableWidget,
-    QVBoxLayout,
+    QButtonGroup, QGroupBox, QGridLayout, QHBoxLayout, QLabel, QPushButton,
+    QSplitter, QTableWidget, QVBoxLayout, QWidget,
 )
 from modelos.Clientes import cboRutaReparto
 from pyqt5libs.libs.vistas.VistaBase import VistaBase
 from pyqt5libs.pyqt5libs.Etiquetas import Etiqueta
 from pyqt5libs.pyqt5libs.Fechas import Fecha
 from pyqt5libs.pyqt5libs.Grillas import Grilla
+
+
+class PalletSelector(QWidget):
+    pallet_seleccionado = pyqtSignal(int)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._actual_id = 0
+        self.botones = {}
+        self._grupo = QButtonGroup(self)
+        self._grupo.setExclusive(True)
+        self._layout = QGridLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setHorizontalSpacing(6)
+        self._layout.setVerticalSpacing(6)
+
+    def cargar(self, pallets, seleccionado=None):
+        while self._layout.count():
+            item = self._layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                self._grupo.removeButton(widget)
+                widget.deleteLater()
+        self.botones = {}
+        self._actual_id = 0
+
+        for posicion, (pallet_id, codigo) in enumerate(pallets, start=1):
+            pallet_id = int(pallet_id)
+            boton = QPushButton(str(posicion))
+            boton.setCheckable(True)
+            boton.setMinimumSize(44, 34)
+            boton.setToolTip("Pallet {}\n{}".format(posicion, codigo))
+            boton.setProperty("palletId", pallet_id)
+            boton.setStyleSheet(
+                "QPushButton { padding: 6px 10px; border: 1px solid #b8c2cc; "
+                "border-radius: 8px; background: #ffffff; font-weight: 600; }"
+                "QPushButton:hover { border-color: #4c84ff; }"
+                "QPushButton:checked { background: #1976d2; color: white; "
+                "border-color: #1976d2; }"
+            )
+            boton.clicked.connect(
+                lambda checked=False, pid=pallet_id: self._seleccionar(pid)
+            )
+            self._grupo.addButton(boton)
+            self.botones[pallet_id] = boton
+            fila = (posicion - 1) // 10
+            columna = (posicion - 1) % 10
+            self._layout.addWidget(boton, fila, columna)
+
+        if seleccionado and int(seleccionado) in self.botones:
+            self._marcar(int(seleccionado), emitir=False)
+        elif pallets:
+            self._marcar(int(pallets[0][0]), emitir=False)
+
+    def _marcar(self, pallet_id, emitir=True):
+        boton = self.botones.get(int(pallet_id))
+        if boton is None:
+            self._actual_id = 0
+            return
+        boton.setChecked(True)
+        self._actual_id = int(pallet_id)
+        if emitir:
+            self.pallet_seleccionado.emit(self._actual_id)
+
+    def _seleccionar(self, pallet_id):
+        self._marcar(pallet_id, emitir=True)
+
+    def pallet_actual_id(self):
+        return int(self._actual_id or 0)
+
+    def cantidad(self):
+        return len(self.botones)
 
 
 class ArmadoPalletsView(VistaBase):
@@ -81,13 +153,15 @@ class ArmadoPalletsView(VistaBase):
         grp_pallet = QGroupBox("Pallet actual")
         layout_pallet = QVBoxLayout(grp_pallet)
         fila_pallet = QHBoxLayout()
-        fila_pallet.addWidget(QLabel("Pallet:"))
-        self.cbo_pallet = QComboBox()
-        self.cbo_pallet.setMinimumWidth(220)
-        fila_pallet.addWidget(self.cbo_pallet, 1)
+        fila_pallet.addWidget(QLabel("Pallets de esta carga:"))
+        self.selector_pallets = PalletSelector()
+        fila_pallet.addWidget(self.selector_pallets, 1)
         self.btn_nuevo_pallet = self.CreaBoton("Nuevo", imagen_str="new.png")
         fila_pallet.addWidget(self.btn_nuevo_pallet)
         layout_pallet.addLayout(fila_pallet)
+        self.lbl_contexto = QLabel("")
+        self.lbl_contexto.setWordWrap(True)
+        layout_pallet.addWidget(self.lbl_contexto)
         self.grilla_contenido = Grilla()
         self.grilla_contenido.ArmaCabeceras(list(self.CABECERAS_CONTENIDO))
         self.grilla_contenido.setColumnHidden(
@@ -135,45 +209,34 @@ class ArmadoPalletsView(VistaBase):
         layout_botones.addWidget(self.btn_cerrar)
         layout_ppal.addLayout(layout_botones)
 
-    # --- Carga de datos (listas de dicts, sin lógica de negocio) ---
-
     def cargar_pendientes(self, filas):
         self.grilla_pendientes.limpiarGrilla()
         for fila in filas:
             self.grilla_pendientes.AgregaItem([
-                str(fila.get("cliente") or ""),
-                str(fila.get("comprobante") or ""),
-                str(fila.get("factura") or ""),
-                str(fila.get("producto") or ""),
-                str(fila.get("total") or ""),
-                str(fila.get("asignado") or ""),
-                str(fila.get("saldo") or ""),
-                str(fila.get("saldo_kg") or ""),
-                str(fila.get("saldo_bultos") or ""),
-                str(fila.get("hoja_ruta_id") or ""),
+                str(fila.get("cliente") or ""), str(fila.get("comprobante") or ""),
+                str(fila.get("factura") or ""), str(fila.get("producto") or ""),
+                str(fila.get("total") or ""), str(fila.get("asignado") or ""),
+                str(fila.get("saldo") or ""), str(fila.get("saldo_kg") or ""),
+                str(fila.get("saldo_bultos") or ""), str(fila.get("hoja_ruta_id") or ""),
             ])
         self.grilla_pendientes.resizeColumnsToContents()
 
     def cargar_pallets(self, pallets, seleccionado=None):
-        self.cbo_pallet.clear()
-        self.cbo_pallet.addItem("(Seleccione un pallet)", 0)
-        for pallet_id, codigo in pallets:
-            self.cbo_pallet.addItem(str(codigo), int(pallet_id))
-        if seleccionado:
-            idx = self.cbo_pallet.findData(int(seleccionado))
-            if idx >= 0:
-                self.cbo_pallet.setCurrentIndex(idx)
+        self.selector_pallets.cargar(pallets, seleccionado=seleccionado)
+
+    def cantidad_pallets(self):
+        return self.selector_pallets.cantidad()
+
+    def mostrar_contexto(self, texto):
+        self.lbl_contexto.setText(texto or "")
 
     def cargar_contenido(self, filas):
         self.grilla_contenido.limpiarGrilla()
         for fila in filas:
             self.grilla_contenido.AgregaItem([
-                str(fila.get("producto") or ""),
-                str(fila.get("cliente") or ""),
-                str(fila.get("comprobante") or ""),
-                str(fila.get("cantidad") or ""),
-                str(fila.get("kg") or ""),
-                str(fila.get("bultos") or ""),
+                str(fila.get("producto") or ""), str(fila.get("cliente") or ""),
+                str(fila.get("comprobante") or ""), str(fila.get("cantidad") or ""),
+                str(fila.get("kg") or ""), str(fila.get("bultos") or ""),
                 str(fila.get("hoja_ruta_id") or ""),
             ])
         self.grilla_contenido.resizeColumnsToContents()
@@ -197,41 +260,30 @@ class ArmadoPalletsView(VistaBase):
                     d.get("cliente") or "Sin cliente",
                     d.get("lugar_entrega") or "Sin lugar",
                     d.get("cantidad", 0),
-                )
-                for d in destinos
+                ) for d in destinos
             ))
         else:
             self.lbl_destinos.setText("Pallet vacío: agregue líneas desde la mercadería pendiente.")
 
-    # --- Lectura de selección ---
-
     def ids_pendientes_seleccionados(self):
-        filas = sorted(
-            {indice.row() for indice in self.grilla_pendientes.selectedIndexes()}
-        )
+        filas = sorted({indice.row() for indice in self.grilla_pendientes.selectedIndexes()})
         ids = []
         for fila in filas:
             try:
-                ids.append(int(float(str(
-                    self.grilla_pendientes.ObtenerItem(fila, self.COL_ID_PENDIENTE)
-                ))))
+                ids.append(int(float(str(self.grilla_pendientes.ObtenerItem(fila, self.COL_ID_PENDIENTE)))))
             except (TypeError, ValueError):
                 continue
         return ids
 
     def id_pendiente_en_fila(self, fila):
         try:
-            return int(float(str(
-                self.grilla_pendientes.ObtenerItem(fila, self.COL_ID_PENDIENTE)
-            )))
+            return int(float(str(self.grilla_pendientes.ObtenerItem(fila, self.COL_ID_PENDIENTE))))
         except (TypeError, ValueError):
             return None
 
     def id_contenido_en_fila(self, fila):
         try:
-            return int(float(str(
-                self.grilla_contenido.ObtenerItem(fila, self.COL_ID_CONTENIDO)
-            )))
+            return int(float(str(self.grilla_contenido.ObtenerItem(fila, self.COL_ID_CONTENIDO))))
         except (TypeError, ValueError):
             return None
 
@@ -240,14 +292,9 @@ class ArmadoPalletsView(VistaBase):
         if fila == -1:
             return None
         try:
-            return int(float(str(
-                self.grilla_contenido.ObtenerItem(fila, self.COL_ID_CONTENIDO)
-            )))
+            return int(float(str(self.grilla_contenido.ObtenerItem(fila, self.COL_ID_CONTENIDO))))
         except (TypeError, ValueError):
             return None
 
     def pallet_actual_id(self):
-        try:
-            return int(self.cbo_pallet.currentData() or 0)
-        except (TypeError, ValueError):
-            return 0
+        return self.selector_pallets.pallet_actual_id()
