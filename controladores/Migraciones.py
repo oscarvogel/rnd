@@ -16,6 +16,7 @@ from playhouse.migrate import (
 )
 
 from modelos.Clientes import Localidades
+from modelos.Documentos import asegurar_esquema_documentos
 from modelos.Proveedores import ProcesoLista, Proveedor
 from pyqt5libs.pyqt5libs.utiles import LeerIni
 
@@ -98,6 +99,17 @@ class MigracionBaseDatos:
             Proveedor.update(metodo_importacion="TREMBLAY").where(Proveedor.id == 15).execute()
         except Exception:
             logging.exception("No se pudo inicializar método Tremblay para proveedor 15")
+
+        # documento_pedido y sus tablas hijas son aditivas (#82) y solo se
+        # creaban al importar pedidos (ver Documentos.asegurar_esquema_documentos).
+        # La migracion siguiente altera su cliente_id, asi que la tabla tiene que
+        # existir antes: en una instalacion que nunca importo, MySQL devolvia
+        # 1146 "Table 'rnd.documento_pedido' doesn't exist" y abortaba TODO el
+        # arranque con "No se pudieron aplicar las migraciones".
+        # safe=True no toca instalaciones que ya tienen las tablas, y el modelo
+        # ya declara cliente nullable, de modo que el alter queda como no-op
+        # para las nuevas y sigue corrigiendo a las viejas que lo tengan NOT NULL.
+        asegurar_esquema_documentos()
 
         self.migraciones = [
             migrator.alter_column_type('hoja_de_ruta', 'cliente_id', IntegerField(null=True)),
