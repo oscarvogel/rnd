@@ -141,6 +141,28 @@ def test_selector_pallets_cambia_activo_con_click(base_armado):
     view.close()
 
 
+def test_selector_muestra_20_pallets_sin_scroll_y_grilla_compacta(base_armado):
+    from vistas.ArmadoPallets import ArmadoPalletsView
+
+    view = ArmadoPalletsView()
+    pallets = [
+        (i, "PLT-20261006-{:03d}".format(i))
+        for i in range(1, 21)
+    ]
+    view.cargar_pallets(pallets, seleccionado=1)
+
+    assert view.cantidad_pallets() == 20
+    assert len(view.selector_pallets.botones) == 20
+    assert view.selector_pallets.columnas_por_fila == 5
+    assert view.selector_pallets._layout.itemAtPosition(3, 4).widget().text() == "20"
+    assert view.grilla_contenido.maximumHeight() == 300
+    assert view.lbl_pallet_actual.text() == "PALLET ACTUAL: 1"
+
+    view.selector_pallets.botones[15].click()
+    assert view.lbl_pallet_actual.text() == "PALLET ACTUAL: 15"
+    view.close()
+
+
 def test_pallets_se_filtran_por_contexto_de_carga(base_armado):
     from modelos.Pallet import Pallet, pallets_para_carga
 
