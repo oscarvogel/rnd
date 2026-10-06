@@ -13,6 +13,7 @@ from modelos.Pallet import (
     composicion_pallet,
     crear_pallet,
     lineas_con_saldo,
+    pallets_para_carga,
     quitar_detalle,
     totales_pallet,
     totales_por_destino,
@@ -32,6 +33,7 @@ class ArmadoPalletsController(ControladorBase):
         self.view = ArmadoPalletsView()
         self.ruta_inicial = int(ruta_inicial or 0)
         self.hojas_actuales = []
+        self.contexto_carga = None
         if fecha_inicial is not None:
             self.view.fecha_reparto.setFecha(fecha_inicial)
         self._seleccionar_ruta_inicial()
@@ -62,13 +64,12 @@ class ArmadoPalletsController(ControladorBase):
         self.view.btn_cerrar.clicked.connect(self.view.Cerrar)
         self.view.btn_cargar.clicked.connect(self.on_click_btn_cargar)
         self.view.btn_nuevo_pallet.clicked.connect(self.on_click_nuevo_pallet)
-        self.view.cbo_pallet.currentIndexChanged.connect(self.on_cambio_pallet)
+        self.view.selector_pallets.pallet_seleccionado.connect(self.on_cambio_pallet)
         self.view.btn_agregar.clicked.connect(self.on_click_btn_agregar)
         self.view.btn_parcial.clicked.connect(self.on_click_btn_parcial)
         self.view.btn_quitar.clicked.connect(self.on_click_btn_quitar)
         self.view.btn_etiqueta.clicked.connect(self.on_click_btn_etiqueta)
         self.view.btn_confirmar.clicked.connect(self.on_click_btn_confirmar)
-        # Atajos operativos: doble click mueve la línea entre pendiente y pallet.
         self.view.grilla_pendientes.cellDoubleClicked.connect(self.on_doble_click_pendiente)
         self.view.grilla_contenido.cellDoubleClicked.connect(self.on_doble_click_contenido)
 
@@ -78,7 +79,48 @@ class ArmadoPalletsController(ControladorBase):
         except (TypeError, ValueError):
             return 0
 
-    # --- Carga (métodos planos testeables; los slots delegan) ---
+    def _resolver_contexto_carga(self):
+        """Deriva fecha+ruta+chofer+equipo de las hojas visibles.
+
+        Una fecha/ruta debe representar una única carga operativa en esta pantalla.
+        Si hay más de una combinación chofer/equipo, se considera ambigua.
+        """
+        if not self.hojas_actuales:
+            return None
+        contextos = {
+            (
+                int(getattr(h, "responsable_id", 0) or 0),
+                int(getattr(h, "equipo_asignado_id", 0) or 0),
+            )
+            for h in self.hojas_actuales
+        }
+        contextos.discard((0, 0))
+        if len(contextos) != 1:
+            return None
+        responsable_id, equipo_id = next(iter(contextos))
+        return {
+            "fecha_reparto": self.view.fecha_reparto.valor(),
+            "ruta_id": self._ruta_seleccionada(),
+            "responsable_id": responsable_id,
+            "equipo_id": equipo_id,
+        }
+
+    def _mostrar_contexto_carga(self):
+        if not self.contexto_carga or not self.hojas_actuales:
+            self.view.mostrar_contexto("")
+            return
+        hoja = self.hojas_actuales[0]
+        try:
+            chofer = str(hoja.responsable)
+        except Exception:
+            chofer = "#{}".format(self.contexto_carga["responsable_id"])
+        try:
+            equipo = str(hoja.equipo_asignado)
+        except Exception:
+            equipo = "#{}".format(self.contexto_carga["equipo_id"])
+        self.view.mostrar_contexto(
+            "Carga activa · Chofer: {} · Equipo: {}".format(chofer, equipo)
+        )
 
     def cargar_mercaderia(self):
         ruta_id = self._ruta_seleccionada()
@@ -91,16 +133,27 @@ class ArmadoPalletsController(ControladorBase):
             .where(HojaDeRuta.fecha == fecha, HojaDeRuta.ruta == ruta_id)
             .order_by(HojaDeRuta.nombre_cliente, HojaDeRuta.producto)
         )
+        self.contexto_carga = self._resolver_contexto_carga()
         if not self.hojas_actuales:
             self.view.cargar_pendientes([])
+            self._mostrar_contexto_carga()
         else:
+            if self.contexto_carga is None:
+                self.view.cargar_pendientes([])
+                self.view.cargar_pallets([])
+                self.view.mostrar_contexto("Carga ambigua: hay más de un chofer/equipo para la fecha y ruta.")
+                showAlert(
+                    "Sistema",
+                    "La fecha y ruta seleccionadas contienen más de una combinación de "
+                    "chofer/equipo. Corrija la asignación antes de armar pallets.",
+                )
+                return False
             referencias = referencias_por_hojas([h.id for h in self.hojas_actuales])
             saldos = lineas_con_saldo([h.id for h in self.hojas_actuales])
             self.view.cargar_pendientes(
-                self.filas_pendientes(
-                    self.hojas_actuales, referencias, saldos
-                )
+                self.filas_pendientes(self.hojas_actuales, referencias, saldos)
             )
+            self._mostrar_contexto_carga()
         self.refrescar_pallets()
         self.actualizar_guias()
         return True
@@ -127,13 +180,14 @@ class ArmadoPalletsController(ControladorBase):
             })
         return filas
 
+    def _pallets_contexto(self):
+        if not self.contexto_carga:
+            return []
+        return pallets_para_carga(**self.contexto_carga)
+
     def refrescar_pallets(self, seleccionado=None):
-        pallets = [
-            (p.id, p.codigo)
-            for p in Pallet.select()
-            .where(Pallet.estado == ESTADO_ARMADO)
-            .order_by(Pallet.id.desc())
-        ]
+        pallets_modelo = self._pallets_contexto()
+        pallets = [(p.id, p.codigo) for p in pallets_modelo]
         if seleccionado is None:
             seleccionado = self.view.pallet_actual_id()
         self.view.cargar_pallets(pallets, seleccionado=seleccionado)
@@ -149,15 +203,12 @@ class ArmadoPalletsController(ControladorBase):
             return
         filas = composicion_pallet(pallet_id)
         self.view.cargar_contenido(filas)
-        self.view.mostrar_totales(totales_pallet(pallet_id),
-                                  totales_por_destino(pallet_id))
+        self.view.mostrar_totales(totales_pallet(pallet_id), totales_por_destino(pallet_id))
 
     def actualizar_guias(self):
         pendientes = self.view.grilla_pendientes.rowCount()
         if not self.hojas_actuales:
-            self.view.mostrar_estado(
-                "Sin mercadería para la fecha y ruta seleccionadas."
-            )
+            self.view.mostrar_estado("Sin mercadería para la fecha y ruta seleccionadas.")
         else:
             saldos = lineas_con_saldo([h.id for h in self.hojas_actuales])
             sin_saldo = sum(
@@ -175,17 +226,18 @@ class ArmadoPalletsController(ControladorBase):
                     "Toda la mercadería ya está paletizada. Siguiente paso: "
                     "confirme la preparación o valide la carga."
                 )
-        total_lineas = sum(
-            len(composicion_pallet(p.id))
-            for p in Pallet.select().where(Pallet.estado == ESTADO_ARMADO)
-        )
+        pallets = self._pallets_contexto()
+        total_lineas = sum(len(composicion_pallet(p.id)) for p in pallets)
         self.view.mostrar_resumen(
             "Fecha: {} · Pallets armados: {} · Líneas en pallets: {}".format(
-                self.view.fecha_reparto.valor(),
-                self.view.cbo_pallet.count() - 1,
-                total_lineas,
+                self.view.fecha_reparto.valor(), self.view.cantidad_pallets(), total_lineas
             )
         )
+
+    def _crear_pallet_en_contexto(self):
+        if not self.contexto_carga:
+            return None
+        return crear_pallet(**self.contexto_carga)
 
     def _pallet_activo(self, crear_si_falta=True):
         pallet_id = self.view.pallet_actual_id()
@@ -193,11 +245,10 @@ class ArmadoPalletsController(ControladorBase):
             (Pallet.id == pallet_id) & (Pallet.estado == ESTADO_ARMADO)
         )
         if pallet is None and crear_si_falta:
-            pallet = crear_pallet()
-            self.refrescar_pallets(seleccionado=pallet.id)
+            pallet = self._crear_pallet_en_contexto()
+            if pallet is not None:
+                self.refrescar_pallets(seleccionado=pallet.id)
         return pallet
-
-    # --- Slots (delegan en los métodos planos) ---
 
     @inicializar_y_capturar_excepciones
     @reconnect_if_needed
@@ -212,11 +263,14 @@ class ArmadoPalletsController(ControladorBase):
     @inicializar_y_capturar_excepciones
     @reconnect_if_needed
     def on_click_nuevo_pallet(self, *args, **kwargs):
-        pallet = crear_pallet()
+        pallet = self._crear_pallet_en_contexto()
+        if pallet is None:
+            showAlert("Sistema", "Cargue primero una fecha/ruta con chofer y equipo asignados.")
+            return
         self.refrescar_pallets(seleccionado=pallet.id)
         showAlert(
             "Sistema",
-            "Pallet {} creado. Seleccione líneas pendientes y agréguelas.".format(
+            "Pallet {} creado para esta carga. Seleccione líneas pendientes y agréguelas.".format(
                 pallet.codigo
             ),
         )
@@ -225,9 +279,7 @@ class ArmadoPalletsController(ControladorBase):
     @inicializar_y_capturar_excepciones
     @reconnect_if_needed
     def on_click_btn_agregar(self, *args, **kwargs):
-        agregados, errores = self.agregar_lineas(
-            self.view.ids_pendientes_seleccionados()
-        )
+        agregados, errores = self.agregar_lineas(self.view.ids_pendientes_seleccionados())
         self.refrescar_contenido()
         self.cargar_mercaderia_sin_alertas()
         if errores:
@@ -245,7 +297,6 @@ class ArmadoPalletsController(ControladorBase):
     @inicializar_y_capturar_excepciones
     @reconnect_if_needed
     def on_doble_click_pendiente(self, fila, columna):
-        """Agrega al pallet activo todo el saldo de la línea clickeada."""
         hoja_id = self.view.id_pendiente_en_fila(fila)
         if not hoja_id:
             return
@@ -260,7 +311,6 @@ class ArmadoPalletsController(ControladorBase):
     @inicializar_y_capturar_excepciones
     @reconnect_if_needed
     def on_doble_click_contenido(self, fila, columna):
-        """Quita del pallet activo la línea clickeada y devuelve su saldo."""
         hoja_id = self.view.id_contenido_en_fila(fila)
         pallet_id = self.view.pallet_actual_id()
         if not hoja_id or not pallet_id:
@@ -274,7 +324,7 @@ class ArmadoPalletsController(ControladorBase):
             return 0, []
         pallet = self._pallet_activo()
         if pallet is None:
-            return 0, ["No hay un pallet activo."]
+            return 0, ["No hay un pallet activo para esta carga."]
         agregados = 0
         errores = []
         for hoja_id in hoja_ids:
@@ -288,7 +338,6 @@ class ArmadoPalletsController(ControladorBase):
         return agregados, errores
 
     def cargar_mercaderia_sin_alertas(self):
-        """Recarga pendientes conservando el pallet (sin alertar por ruta)."""
         if not self._ruta_seleccionada() or not self.hojas_actuales:
             return
         fecha_ids = [h.id for h in self.hojas_actuales]
@@ -299,9 +348,7 @@ class ArmadoPalletsController(ControladorBase):
         )
         referencias = referencias_por_hojas(fecha_ids)
         saldos = lineas_con_saldo(fecha_ids)
-        self.view.cargar_pendientes(
-            self.filas_pendientes(self.hojas_actuales, referencias, saldos)
-        )
+        self.view.cargar_pendientes(self.filas_pendientes(self.hojas_actuales, referencias, saldos))
         self.actualizar_guias()
 
     @inicializar_y_capturar_excepciones
@@ -309,10 +356,7 @@ class ArmadoPalletsController(ControladorBase):
     def on_click_btn_parcial(self, *args, **kwargs):
         ids = self.view.ids_pendientes_seleccionados()
         if len(ids) != 1:
-            showAlert(
-                "Sistema",
-                "Seleccione exactamente una línea para agregar una cantidad parcial.",
-            )
+            showAlert("Sistema", "Seleccione exactamente una línea para agregar una cantidad parcial.")
             return
         from modelos.Pallet import saldo_linea
 
@@ -373,29 +417,22 @@ class ArmadoPalletsController(ControladorBase):
         self.cargar_mercaderia_sin_alertas()
 
     def dialogo_etiqueta(self, pallet_id):
-        """Construye el diálogo de etiqueta para un pallet (testeable)."""
         from vistas.EtiquetaPallet import EtiquetaPalletDialog
-
         dialogo = EtiquetaPalletDialog()
         if not dialogo.mostrar_pallet(pallet_id):
             return None
         return dialogo
 
     def pdf_etiqueta(self, pallet_id, destino_pdf=None):
-        """Genera el PDF de etiqueta del pallet y devuelve su ruta."""
         import os
-
-        from utiles.etiqueta_pallet import (
-            generar_pdf_etiqueta, generar_qr_png,
-        )
+        from utiles.etiqueta_pallet import generar_pdf_etiqueta, generar_qr_png
 
         pallet = Pallet.get_by_id(pallet_id)
         total = totales_pallet(pallet_id)
         destinos = totales_por_destino(pallet_id)
         qr_png = generar_qr_png(pallet.codigo)
         ruta = generar_pdf_etiqueta(
-            pallet.codigo, total, destinos, qr_png,
-            destino_pdf=destino_pdf,
+            pallet.codigo, total, destinos, qr_png, destino_pdf=destino_pdf
         )
         try:
             os.startfile(ruta)
@@ -408,18 +445,13 @@ class ArmadoPalletsController(ControladorBase):
     def on_click_btn_etiqueta(self, *args, **kwargs):
         pallet_id = self.view.pallet_actual_id()
         if not pallet_id:
-            showAlert(
-                "Sistema",
-                "Seleccione o cree un pallet para ver su etiqueta.",
-            )
+            showAlert("Sistema", "Seleccione o cree un pallet para ver su etiqueta.")
             return
         dialogo = self.dialogo_etiqueta(pallet_id)
         if dialogo is None:
             showAlert("Sistema", "El pallet seleccionado ya no existe.")
             return
-        dialogo.btn_pdf.clicked.connect(
-            lambda: self.pdf_etiqueta(dialogo.pallet_actual_id())
-        )
+        dialogo.btn_pdf.clicked.connect(lambda: self.pdf_etiqueta(dialogo.pallet_actual_id()))
         dialogo.btn_cerrar.clicked.connect(dialogo.Cerrar)
         dialogo.exec_()
 
@@ -441,15 +473,14 @@ class ArmadoPalletsController(ControladorBase):
                 d.get("cliente") or "Sin cliente",
                 d.get("lugar_entrega") or "Sin lugar",
                 d.get("cantidad", 0),
-            )
-            for d in destinos
+            ) for d in destinos
         )
         showAlert(
             "Sistema",
             "Pallet {} preparado: {} líneas, {} cant, {} KG, {} bultos.\n\n"
             "{}\n\nSiguiente paso: valide la carga del camión.".format(
-                pallet.codigo, total["lineas"], total["cantidad"],
-                total["kg"], total["bultos"], detalle,
+                pallet.codigo, total["lineas"], total["cantidad"], total["kg"],
+                total["bultos"], detalle,
             ),
         )
         self.actualizar_guias()
