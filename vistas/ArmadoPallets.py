@@ -112,8 +112,6 @@ class KpiPesoPallet(QFrame):
         "QFrame#armadoPalletsKpiPeso {"
         "  background: #f4f8ff; border: 1px solid #b8c2cc; border-radius: 8px; }"
     )
-    # Mismo cuerpo 40px para los tres estados: sólo cambia el color, para que
-    # el número no baile de tamaño al pasar de un pallet a otro.
     COLOR_NAVY = "#173f68"
     COLOR_EXCESO = "#b91c1c"
     COLOR_DISPONIBLE = "#15803d"
@@ -166,23 +164,19 @@ class KpiPesoPallet(QFrame):
         layout.addWidget(self.lbl_limite)
 
     def mostrar(self, kg, limite_kg=None):
-        """Actualiza el KPI con el peso actual y el límite configurado."""
         self.lbl_valor.setText(formato_kg(kg))
         estado = estado_limite_kg(kg, limite_kg)
         if estado is None:
-            # Todavía no hay límite configurado: sólo el KG actual, en navy.
             self.lbl_limite.setText("")
             self.lbl_valor.setStyleSheet(self.ESTILO_VALOR.format(self.COLOR_NAVY))
             return
         texto, excede = estado
         self.lbl_limite.setText(texto)
-        # El rojo/verde del tema sólo aparece cuando hay límite configurado.
         self.lbl_valor.setStyleSheet(self.ESTILO_VALOR.format(
             self.COLOR_EXCESO if excede else self.COLOR_DISPONIBLE
         ))
 
     def texto_peso_actual(self):
-        """Peso mostrado tal cual lo ve el operador: ``115.62 KG``."""
         return "{} KG".format(self.lbl_valor.text())
 
     def texto_limite(self):
@@ -205,8 +199,6 @@ class ArmadoPalletsView(VistaBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # KG conocido por pallet. Permite que el KPI se actualice al cambiar
-        # de chip sin esperar a que el controlador vuelva a consultar la base.
         self._kg_por_pallet = {}
         self._kg_actual = a_decimal(0)
         self._limite_kg_actual = None
@@ -293,9 +285,9 @@ class ArmadoPalletsView(VistaBase):
         self.grilla_contenido.setColumnHidden(
             self.CABECERAS_CONTENIDO.index("ID"), True
         )
-        self.grilla_contenido.setMaximumHeight(300)
         self.grilla_contenido.setMinimumHeight(180)
-        layout_pallet.addWidget(self.grilla_contenido)
+        self.grilla_contenido.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        layout_pallet.addWidget(self.grilla_contenido, 1)
 
         self.lbl_totales = QLabel("Pallet: 0 líneas · 0 cant · 0 KG · 0 bultos")
         self.lbl_totales.setObjectName("armadoPalletsTotales")
@@ -305,7 +297,6 @@ class ArmadoPalletsView(VistaBase):
         self.lbl_destinos.setObjectName("armadoPalletsDestinos")
         self.lbl_destinos.setWordWrap(True)
         layout_pallet.addWidget(self.lbl_destinos)
-        layout_pallet.addStretch(1)
         divisor.addWidget(grp_pallet)
 
         divisor.setStretchFactor(0, 3)
@@ -354,10 +345,6 @@ class ArmadoPalletsView(VistaBase):
     def cargar_pallets(self, pallets, seleccionado=None):
         pallets = list(pallets)
         ids_cargados = {int(pallet_id) for pallet_id, _codigo in pallets}
-        # Se conservan los KG ya conocidos de los pallets que siguen en pantalla:
-        # si no, volver a un chip ya visitado pintaría "0 KG" mientras el
-        # controlador vuelve a consultar la base. Lo que sí se descarta es el
-        # peso de los pallets de otra carga, que ya no corresponde.
         self._kg_por_pallet = {
             pallet_id: kg for pallet_id, kg in self._kg_por_pallet.items()
             if pallet_id in ids_cargados
@@ -373,13 +360,10 @@ class ArmadoPalletsView(VistaBase):
 
     def _pintar_kpi(self, pallet_id):
         kg = self._kg_por_pallet.get(int(pallet_id), 0) if pallet_id else 0
-        # Se guarda el Decimal y no el texto ya formateado: 115.625 se muestra
-        # redondeado pero el valor real no debe perder precisión.
         self._kg_actual = a_decimal(kg)
         self.kpi_peso.mostrar(self._kg_actual, self._limite_kg_actual)
 
     def kg_pallet_actual(self):
-        """KG mostrado en el KPI, como Decimal."""
         return self._kg_actual
 
     def cantidad_pallets(self):
@@ -423,8 +407,6 @@ class ArmadoPalletsView(VistaBase):
         else:
             self.lbl_destinos.setText("Pallet vacío: agregue líneas desde la mercadería pendiente.")
         pallet_id = self.pallet_actual_id()
-        # El límite pertenece al pallet actual: sin pallet elegido sólo
-        # tiene sentido mostrar el KG.
         self._limite_kg_actual = limite_kg if pallet_id else None
         if pallet_id:
             self._kg_por_pallet[pallet_id] = a_decimal(totales.get("kg"))
