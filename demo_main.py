@@ -65,6 +65,14 @@ def main() -> int:
 
     prepare_demo_database()
 
+    # ``create_tables(..., safe=True)`` no altera tablas SQLite existentes.
+    # Un demo creado antes del contexto operativo de pallets necesita incorporar
+    # esas columnas antes de que la UI consulte fecha/ruta/chofer/equipo.
+    from modelos.ModeloBase import db
+    from utiles.demo_pallet_schema import asegurar_contexto_pallet_demo
+
+    asegurar_contexto_pallet_demo(db)
+
     from PyQt5.QtWidgets import QApplication
     from utiles.tema import aplicar_tema
     from controladores.Main import MainController

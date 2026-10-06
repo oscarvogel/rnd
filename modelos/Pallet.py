@@ -43,12 +43,19 @@ class Pallet(ModeloBase):
     creado = peewee.DateField(default=date.today)
     cargado_por = peewee.CharField(max_length=100, default="")
     cargado_en = peewee.DateTimeField(null=True)
+    # Contexto operativo de la carga. Se guarda en el pallet para que incluso
+    # un pallet vacío pertenezca inequívocamente al reparto que lo creó.
+    fecha_reparto = peewee.DateField(null=True)
+    ruta_id = peewee.IntegerField(null=True)
+    responsable_id = peewee.IntegerField(null=True)
+    equipo_id = peewee.IntegerField(null=True)
 
     class Meta:
         db_table = "pallet"
         indexes = (
             (("codigo",), True),
             (("estado",), False),
+            (("fecha_reparto", "ruta_id", "responsable_id", "equipo_id"), False),
         )
 
     def __str__(self):
@@ -85,22 +92,59 @@ def asegurar_esquema_pallets():
     db.create_tables([Pallet, PalletDetalle], safe=True)
 
 
-def crear_pallet(codigo=None, observaciones=None, fecha=None):
-    """Crea un pallet con codigo unico legible (PLT-AAAAMMDD-NNN)."""
+def crear_pallet(
+    codigo=None,
+    observaciones=None,
+    fecha=None,
+    fecha_reparto=None,
+    ruta_id=None,
+    responsable_id=None,
+    equipo_id=None,
+):
+    """Crea un pallet con codigo unico y, cuando se conoce, su carga operativa."""
     observaciones = (observaciones or "").strip() or None
+    contexto = {
+        "fecha_reparto": fecha_reparto,
+        "ruta_id": ruta_id,
+        "responsable_id": responsable_id,
+        "equipo_id": equipo_id,
+    }
     if codigo:
         return Pallet.create(
             codigo=normalizar_codigo(codigo),
             observaciones=observaciones,
+            **contexto
         )
-    prefijo = prefijo_codigo(fecha)
+    fecha_codigo = fecha_reparto or fecha
+    prefijo = prefijo_codigo(fecha_codigo)
     secuencia = Pallet.select().where(Pallet.codigo.startswith(prefijo)).count() + 1
     while True:
         candidato = "{}-{:03d}".format(prefijo, secuencia)
         try:
-            return Pallet.create(codigo=candidato, observaciones=observaciones)
+            return Pallet.create(
+                codigo=candidato,
+                observaciones=observaciones,
+                **contexto
+            )
         except peewee.IntegrityError:
             secuencia += 1
+
+
+def pallets_para_carga(fecha_reparto, ruta_id, responsable_id, equipo_id):
+    """Devuelve sólo pallets ARMADO pertenecientes al contexto operativo dado."""
+    if not (fecha_reparto and ruta_id and responsable_id and equipo_id):
+        return []
+    return list(
+        Pallet.select()
+        .where(
+            Pallet.estado == ESTADO_ARMADO,
+            Pallet.fecha_reparto == fecha_reparto,
+            Pallet.ruta_id == int(ruta_id),
+            Pallet.responsable_id == int(responsable_id),
+            Pallet.equipo_id == int(equipo_id),
+        )
+        .order_by(Pallet.id)
+    )
 
 
 def _suma_asignada(hoja_ruta_id, excluir_pallet_id=None):
@@ -131,11 +175,7 @@ def saldo_linea(hoja_ruta_id):
 
 
 def agregar_detalle(pallet, hoja_ruta, cantidad=None, kg=None, bultos=None):
-    """Agrega (suma) cantidades de una linea a un pallet.
-
-    Cantidades None significan 'todo el saldo disponible'. Valida que no
-    se asigne mas que el saldo. Devuelve el PalletDetalle actualizado.
-    """
+    """Agrega (suma) cantidades de una linea a un pallet."""
     pallet_id = getattr(pallet, "id", pallet)
     hoja_id = getattr(hoja_ruta, "id", hoja_ruta)
     saldo = saldo_linea(hoja_id)
@@ -163,11 +203,7 @@ def agregar_detalle(pallet, hoja_ruta, cantidad=None, kg=None, bultos=None):
 
 
 def fijar_detalle(pallet, hoja_ruta, cantidad, kg, bultos):
-    """Fija (reemplaza) las cantidades de una linea en un pallet.
-
-    Permite edicion posterior: valida contra el total de la linea
-    descontando lo asignado en OTROS pallets.
-    """
+    """Fija (reemplaza) las cantidades de una linea en un pallet."""
     pallet_id = getattr(pallet, "id", pallet)
     hoja_id = getattr(hoja_ruta, "id", hoja_ruta)
     hoja = HojaDeRuta.get_by_id(hoja_id)
@@ -220,20 +256,13 @@ def composicion_pallet(pallet):
     nombres_lugar = {}
     if hojas_ids:
         hojas = list(HojaDeRuta.select().where(HojaDeRuta.id.in_(hojas_ids)))
-        lugar_ids = {
-            h.lugar_entrega_id for h in hojas if h.lugar_entrega_id
-        }
+        lugar_ids = {h.lugar_entrega_id for h in hojas if h.lugar_entrega_id}
         if lugar_ids:
             nombres_lugar = {
                 l.id: l.nombre
-                for l in LugarEntrega.select().where(
-                    LugarEntrega.id.in_(lugar_ids)
-                )
+                for l in LugarEntrega.select().where(LugarEntrega.id.in_(lugar_ids))
             }
-        lugares = {
-            h.id: nombres_lugar.get(h.lugar_entrega_id, "")
-            for h in hojas
-        }
+        lugares = {h.id: nombres_lugar.get(h.lugar_entrega_id, "") for h in hojas}
     else:
         lugares = {}
     filas = []
@@ -256,17 +285,14 @@ def composicion_pallet(pallet):
 
 
 def totales_pallet(pallet):
-    """Totales del pallet y cantidad de lineas."""
     return totales(composicion_pallet(pallet))
 
 
 def totales_por_destino(pallet):
-    """Totales del pallet agrupados por cliente/destino."""
     return agrupar_por_cliente_destino(composicion_pallet(pallet))
 
 
 def lineas_con_saldo(hoja_ids):
-    """Saldo disponible por linea para mostrar 'falta asignar'."""
     resultado = {}
     for hoja_id in hoja_ids:
         try:
@@ -277,25 +303,15 @@ def lineas_con_saldo(hoja_ids):
 
 
 def buscar_por_codigo(codigo):
-    """Recupera el pallet por codigo exacto (escaneo o ingreso manual).
-
-    Acepta el codigo pelado o el payload del QR. Devuelve None si no existe.
-    """
     from utiles.etiqueta_pallet import codigo_desde_payload
 
     codigo = codigo_desde_payload(codigo)
     if not codigo:
         return None
-    return Pallet.get_or_none(
-        peewee.fn.UPPER(Pallet.codigo) == codigo
-    )
+    return Pallet.get_or_none(peewee.fn.UPPER(Pallet.codigo) == codigo)
 
 
 def pallets_de_hoja(fecha, ruta_id):
-    """Pallets con mercaderia en las hojas de una fecha/ruta.
-
-    Son los pallets 'esperados' en el camion para ese despacho.
-    """
     hoja_ids = [
         h.id for h in HojaDeRuta.select(HojaDeRuta.id).where(
             HojaDeRuta.fecha == fecha, HojaDeRuta.ruta == ruta_id
@@ -308,13 +324,10 @@ def pallets_de_hoja(fecha, ruta_id):
         .where(PalletDetalle.hoja_ruta.in_(hoja_ids))
         .distinct()
     )
-    return list(
-        Pallet.select().where(Pallet.id.in_(pallet_ids)).order_by(Pallet.codigo)
-    )
+    return list(Pallet.select().where(Pallet.id.in_(pallet_ids)).order_by(Pallet.codigo))
 
 
 def marcar_cargado(pallet, usuario=""):
-    """Marca un pallet como cargado registrando quien y cuando."""
     pallet = Pallet.get_by_id(getattr(pallet, "id", pallet))
     pallet.estado = ESTADO_CARGADO
     pallet.cargado_por = str(usuario or "")
@@ -324,7 +337,6 @@ def marcar_cargado(pallet, usuario=""):
 
 
 def desmarcar_cargado(pallet):
-    """Devuelve un pallet a ARMADO (permite corregir la validacion)."""
     pallet = Pallet.get_by_id(getattr(pallet, "id", pallet))
     pallet.estado = ESTADO_ARMADO
     pallet.cargado_por = ""
@@ -334,11 +346,6 @@ def desmarcar_cargado(pallet):
 
 
 def puede_despachar(fecha, ruta_id):
-    """Gate de despacho por pallets (Issue #69).
-
-    Sin pallets armados no hay nada que validar: (True, [], "").
-    Con pallets, frena si quedan lineas sin asignar o pallets sin cargar.
-    """
     hoja_ids = [
         h.id for h in HojaDeRuta.select(HojaDeRuta.id).where(
             HojaDeRuta.fecha == fecha, HojaDeRuta.ruta == ruta_id
@@ -348,10 +355,7 @@ def puede_despachar(fecha, ruta_id):
     if not pallets:
         return True, [], ""
     saldos = lineas_con_saldo(hoja_ids)
-    faltan = sum(
-        1 for saldo in saldos.values()
-        if a_decimal(saldo.get("cantidad")) > 0
-    )
+    faltan = sum(1 for saldo in saldos.values() if a_decimal(saldo.get("cantidad")) > 0)
     if faltan:
         return False, [], (
             "No se puede despachar: faltan {} líneas por asignar a "

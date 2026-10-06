@@ -10,19 +10,23 @@ from modelos.EstadoHojaRuta import EstadoHojaRuta
 from modelos.HojaRuta import HojaDeRuta
 from modelos.Pallet import Pallet, PalletDetalle
 from modelos.ModeloBase import Auditoria, db
-from playhouse.migrate import MySQLMigrator, CharField, migrate, DecimalField, IntegerField, BooleanField, FloatField, TextField, TimeField, DateTimeField
+from playhouse.migrate import (
+    MySQLMigrator, CharField, migrate, DecimalField, IntegerField,
+    BooleanField, FloatField, TextField, TimeField, DateTimeField,
+)
 
 from modelos.Clientes import Localidades
+from modelos.Documentos import asegurar_esquema_documentos
 from modelos.Proveedores import ProcesoLista, Proveedor
 from pyqt5libs.pyqt5libs.utiles import LeerIni
 
+
 class MigracionBaseDatos:
-    
     migraciones = []
     colentero = IntegerField(default=0)
     colentero1 = IntegerField(default=1)
     colfloat = FloatField(default=0)
-    
+
     def __init__(self):
         database = db
         self.migraciones = []
@@ -32,16 +36,19 @@ class MigracionBaseDatos:
         self.Migrar()
 
     def MigrarVersion(self):
-        migrator = self.migrator        
+        migrator = self.migrator
         observaciones = CharField(max_length=200, default='')
         orden_servicio = CharField(max_length=12, default='')
         self.migraciones.append(migrator.add_column('cliente', 'ruta_reparto_id', self.colentero))
-        self.migraciones.append(migrator.add_foreign_key_constraint('cliente', 'ruta_reparto_id', 'rutas_reparto', 'id',
-                                   on_delete='RESTRICT', on_update='CASCADE'))
+        self.migraciones.append(migrator.add_foreign_key_constraint(
+            'cliente', 'ruta_reparto_id', 'rutas_reparto', 'id',
+            on_delete='RESTRICT', on_update='CASCADE'))
         self.migraciones.append(migrator.add_column('cliente', 'localidad_id', self.colentero))
-        self.migraciones.append(migrator.add_foreign_key_constraint('cliente', 'localidad_id', 'localidades', 'id',
-                                   on_delete='RESTRICT', on_update='CASCADE'))        
-        self.migraciones.append(migrator.add_column('hoja_de_ruta', 'nombre_cliente', CharField(max_length=100, default='')))
+        self.migraciones.append(migrator.add_foreign_key_constraint(
+            'cliente', 'localidad_id', 'localidades', 'id',
+            on_delete='RESTRICT', on_update='CASCADE'))
+        self.migraciones.append(migrator.add_column(
+            'hoja_de_ruta', 'nombre_cliente', CharField(max_length=100, default='')))
         self.RealizaMigraciones()
 
         modelos = [
@@ -63,68 +70,98 @@ class MigracionBaseDatos:
 
         self._quitar_unicidad_nombre_lugar_entrega()
 
-        # El FK se agrega después de crear lugares_entrega para instalaciones existentes.
-        migraciones_lugares = [
-            migrator.add_column(
-                'hoja_de_ruta',
-                'lugar_entrega_id',
-                IntegerField(null=True),
-            ),
+        self.migraciones = [
+            migrator.add_column('hoja_de_ruta', 'lugar_entrega_id', IntegerField(null=True)),
             migrator.add_foreign_key_constraint(
-                'hoja_de_ruta',
-                'lugar_entrega_id',
-                'lugares_entrega',
-                'id',
-                on_delete='RESTRICT',
-                on_update='CASCADE',
-            ),
+                'hoja_de_ruta', 'lugar_entrega_id', 'lugares_entrega', 'id',
+                on_delete='RESTRICT', on_update='CASCADE'),
         ]
-        self.migraciones = migraciones_lugares
         self.RealizaMigraciones()
 
         self.migraciones = [
             migrator.add_column(
-                "proveedor",
-                "metodo_importacion",
+                "proveedor", "metodo_importacion",
                 CharField(max_length=30, default="COLUMNAS"),
             ),
             migrator.add_column(
-                "pallet",
-                "cargado_por",
-                CharField(max_length=100, default=""),
+                "pallet", "cargado_por", CharField(max_length=100, default=""),
             ),
-            migrator.add_column(
-                "pallet",
-                "cargado_en",
-                DateTimeField(null=True),
-            ),
+            migrator.add_column("pallet", "cargado_en", DateTimeField(null=True)),
+            migrator.add_column("pallet", "fecha_reparto", peewee.DateField(null=True)),
+            migrator.add_column("pallet", "ruta_id", IntegerField(null=True)),
+            migrator.add_column("pallet", "responsable_id", IntegerField(null=True)),
+            migrator.add_column("pallet", "equipo_id", IntegerField(null=True)),
         ]
         self.RealizaMigraciones()
+        self._backfill_contexto_pallets()
+
         try:
             Proveedor.update(metodo_importacion="TREMBLAY").where(Proveedor.id == 15).execute()
         except Exception:
             logging.exception("No se pudo inicializar método Tremblay para proveedor 15")
 
+        # documento_pedido y sus tablas hijas son aditivas (#82) y solo se
+        # creaban al importar pedidos (ver Documentos.asegurar_esquema_documentos).
+        # La migracion siguiente altera su cliente_id, asi que la tabla tiene que
+        # existir antes: en una instalacion que nunca importo, MySQL devolvia
+        # 1146 "Table 'rnd.documento_pedido' doesn't exist" y abortaba TODO el
+        # arranque con "No se pudieron aplicar las migraciones".
+        # safe=True no toca instalaciones que ya tienen las tablas, y el modelo
+        # ya declara cliente nullable, de modo que el alter queda como no-op
+        # para las nuevas y sigue corrigiendo a las viejas que lo tengan NOT NULL.
+        asegurar_esquema_documentos()
+
         self.migraciones = [
-            migrator.alter_column_type(
-                'hoja_de_ruta',
-                'cliente_id',
-                IntegerField(null=True),
-            ),
-            migrator.alter_column_type(
-                'hoja_de_ruta',
-                'ruta_id',
-                IntegerField(null=True),
-            ),
-            migrator.alter_column_type(
-                'documento_pedido',
-                'cliente_id',
-                IntegerField(null=True),
-            ),
+            migrator.alter_column_type('hoja_de_ruta', 'cliente_id', IntegerField(null=True)),
+            migrator.alter_column_type('hoja_de_ruta', 'ruta_id', IntegerField(null=True)),
+            migrator.alter_column_type('documento_pedido', 'cliente_id', IntegerField(null=True)),
         ]
         self.RealizaMigraciones()
 
         self._crear_lugares_iniciales()
+
+    def _backfill_contexto_pallets(self):
+        """Completa contexto de pallets legacy cuando puede deducirse sin ambigüedad.
+
+        Los pallets vacíos anteriores quedan sin contexto porque no existe evidencia
+        suficiente para asignarlos con seguridad. Un pallet con detalles de más de una
+        carga también se conserva sin contexto y se registra en log para revisión.
+        """
+        try:
+            pendientes = Pallet.select().where(Pallet.fecha_reparto.is_null(True))
+            for pallet in pendientes:
+                detalles = list(
+                    PalletDetalle.select(PalletDetalle, HojaDeRuta)
+                    .join(HojaDeRuta)
+                    .where(PalletDetalle.pallet == pallet.id)
+                )
+                if not detalles:
+                    continue
+                contextos = {
+                    (
+                        detalle.hoja_ruta.fecha,
+                        int(detalle.hoja_ruta.ruta_id or 0),
+                        int(detalle.hoja_ruta.responsable_id or 0),
+                        int(detalle.hoja_ruta.equipo_asignado_id or 0),
+                    )
+                    for detalle in detalles
+                }
+                if len(contextos) != 1:
+                    logging.warning(
+                        "Pallet legacy %s tiene más de un contexto de carga; no se migra",
+                        pallet.codigo,
+                    )
+                    continue
+                fecha_reparto, ruta_id, responsable_id, equipo_id = next(iter(contextos))
+                if not (fecha_reparto and ruta_id and responsable_id and equipo_id):
+                    continue
+                pallet.fecha_reparto = fecha_reparto
+                pallet.ruta_id = ruta_id
+                pallet.responsable_id = responsable_id
+                pallet.equipo_id = equipo_id
+                pallet.save()
+        except Exception:
+            logging.exception("No se pudo completar el contexto de pallets legacy")
 
     def _quitar_unicidad_nombre_lugar_entrega(self):
         """Migra índices de lugares: misma referencia puede tener otra dirección."""
@@ -149,19 +186,14 @@ class MigracionBaseDatos:
 
         tiene_indice_actual = False
         for key_name, columnas in indices.items():
-            ordenadas = [
-                nombre for _seq, nombre in sorted(columnas, key=lambda item: item[0])
-            ]
+            ordenadas = [nombre for _seq, nombre in sorted(columnas, key=lambda item: item[0])]
             if ordenadas == ["cliente_id", "nombre", "direccion"]:
                 tiene_indice_actual = True
                 continue
             if ordenadas != ["cliente_id", "nombre"]:
                 continue
-
             seguro = key_name.replace("`", "``")
-            db.execute_sql(
-                "ALTER TABLE lugares_entrega DROP INDEX `{}`".format(seguro)
-            )
+            db.execute_sql("ALTER TABLE lugares_entrega DROP INDEX `{}`".format(seguro))
             logging.info("Eliminado índice legacy %s de lugares_entrega", key_name)
 
         if not tiene_indice_actual:
@@ -170,17 +202,10 @@ class MigracionBaseDatos:
                 "uq_lugares_entrega_cliente_nombre_direccion "
                 "(cliente_id, nombre, direccion)"
             )
-            logging.info(
-                "Creado índice por cliente+nombre+dirección en lugares_entrega"
-            )
+            logging.info("Creado índice por cliente+nombre+dirección en lugares_entrega")
 
     def _crear_lugares_iniciales(self):
-        """Preserva dirección/ruta actuales creando un destino principal inicial.
-
-        Es idempotente: sólo crea el lugar cuando el cliente aún no posee destinos.
-        No intenta fusionar clientes duplicados porque esa decisión requiere revisión
-        humana y no debe ocurrir automáticamente en una migración.
-        """
+        """Preserva dirección/ruta actuales creando un destino principal inicial."""
         try:
             for cliente in Cliente.select():
                 if LugarEntrega.select().where(LugarEntrega.cliente == cliente.id).exists():
@@ -204,7 +229,7 @@ class MigracionBaseDatos:
                 )
         except Exception:
             logging.exception("No se pudieron crear los lugares de entrega iniciales")
-                    
+
     def RealizaMigraciones(self):
         IGNORAR = {1060, 1022, 1061, 1091}
         for m in self.migraciones:
@@ -215,7 +240,7 @@ class MigracionBaseDatos:
                 if hasattr(e, "args") and e.args:
                     code = e.args[0]
                 if code in IGNORAR:
-                    logging.debug(f"Migracion ya aplicada (mysql {code}): {e}")
+                    logging.debug("Migracion ya aplicada (mysql %s): %s", code, e)
                     continue
                 ex = traceback.format_exception(sys.exc_info()[0], sys.exc_info()[1], sys.exc_info()[2])
                 self.Traceback = ''.join(ex)
