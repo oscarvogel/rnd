@@ -42,7 +42,7 @@ def base_armado():
     try:
         yield {
             "RutaReparto": RutaReparto, "HojaDeRuta": HojaDeRuta,
-            "Pallet": Pallet,
+            "Pallet": Pallet, "Empleado": Empleado, "Equipos": Equipos,
         }
     finally:
         _TEST_DB.drop_tables(modelos)
@@ -104,6 +104,8 @@ def test_vista_carga_pendientes_y_lee_seleccion(base_armado):
 
     view.cargar_pallets([(5, "PLT-20260928-001")], seleccionado=5)
     assert view.pallet_actual_id() == 5
+    assert view.cantidad_pallets() == 1
+    assert view.selector_pallets.botones[5].isChecked()
 
     view.cargar_contenido([
         {"hoja_ruta_id": 10, "producto": "Bebidas",
@@ -121,6 +123,56 @@ def test_vista_carga_pendientes_y_lee_seleccion(base_armado):
     assert "1 líneas" in view.lbl_totales.text()
     assert "Cinco Hermanos" in view.lbl_destinos.text()
     view.close()
+
+
+def test_selector_pallets_cambia_activo_con_click(base_armado):
+    from vistas.ArmadoPallets import ArmadoPalletsView
+
+    view = ArmadoPalletsView()
+    view.cargar_pallets([
+        (10, "PLT-20261006-001"),
+        (11, "PLT-20261006-002"),
+        (12, "PLT-20261006-003"),
+    ], seleccionado=10)
+
+    assert view.pallet_actual_id() == 10
+    view.selector_pallets.botones[12].click()
+    assert view.pallet_actual_id() == 12
+    assert view.selector_pallets.botones[12].isChecked()
+    assert not view.selector_pallets.botones[10].isChecked()
+    view.close()
+
+
+def test_pallets_se_filtran_por_contexto_de_carga(base_armado):
+    from modelos.Pallet import Pallet, pallets_para_carga
+
+    RutaReparto = base_armado["RutaReparto"]
+    Empleado = base_armado["Empleado"]
+    Equipos = base_armado["Equipos"]
+
+    ruta_centro = RutaReparto.create(descripcion="CENTRO")
+    ruta_norte = RutaReparto.create(descripcion="NORTE")
+    chofer_a = Empleado.create(nombre="Juan", apellido="Perez")
+    chofer_b = Empleado.create(nombre="Pedro", apellido="Gomez")
+    camion = Equipos.create(descripcion="Camion 1")
+
+    esperado = Pallet.create(
+        codigo="PLT-20261006-001", fecha_reparto=date(2026, 10, 6),
+        ruta=ruta_centro, responsable=chofer_a, equipo=camion,
+    )
+    Pallet.create(
+        codigo="PLT-20261006-002", fecha_reparto=date(2026, 10, 6),
+        ruta=ruta_norte, responsable=chofer_a, equipo=camion,
+    )
+    Pallet.create(
+        codigo="PLT-20261006-003", fecha_reparto=date(2026, 10, 6),
+        ruta=ruta_centro, responsable=chofer_b, equipo=camion,
+    )
+
+    encontrados = pallets_para_carga(
+        date(2026, 10, 6), ruta_centro.id, chofer_a.id, camion.id
+    )
+    assert [p.id for p in encontrados] == [esperado.id]
 
 
 def test_filas_pendientes_calculan_asignado():
