@@ -12,7 +12,7 @@ from modelos.Pallet import Pallet, PalletDetalle
 from modelos.ModeloBase import Auditoria, db
 from playhouse.migrate import (
     MySQLMigrator, CharField, migrate, DecimalField, IntegerField,
-    BooleanField, FloatField, TextField, TimeField, DateTimeField, DateField,
+    BooleanField, FloatField, TextField, TimeField, DateTimeField,
 )
 
 from modelos.Clientes import Localidades
@@ -86,7 +86,7 @@ class MigracionBaseDatos:
                 "pallet", "cargado_por", CharField(max_length=100, default=""),
             ),
             migrator.add_column("pallet", "cargado_en", DateTimeField(null=True)),
-            migrator.add_column("pallet", "fecha_reparto", DateField(null=True)),
+            migrator.add_column("pallet", "fecha_reparto", peewee.DateField(null=True)),
             migrator.add_column("pallet", "ruta_id", IntegerField(null=True)),
             migrator.add_column("pallet", "responsable_id", IntegerField(null=True)),
             migrator.add_column("pallet", "equipo_id", IntegerField(null=True)),
