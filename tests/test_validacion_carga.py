@@ -296,6 +296,104 @@ def test_checklist_muestra_item_carga(base_carga):
     view.close()
 
 
+def test_guardar_carga_pasa_los_pallets_a_cargado(base_carga):
+    """Reproduce el reporte del operador: tildar y Guardar no cambiaba nada.
+
+    El diálogo se cerraba pero el controlador nunca llegaba a guardar: la
+    comprobación comparaba contra el retorno de ``exec_()``, y ese retorno
+    vale ``None`` en los formularios de pyqt5libs.
+    """
+    from PyQt5.QtCore import QTimer
+
+    from modelos.Pallet import (
+        ESTADO_CARGADO, agregar_detalle, crear_pallet, puede_despachar,
+    )
+
+    fecha = date(2026, 9, 28)
+    ruta = base_carga["RutaReparto"].create(descripcion="CENTRO")
+    hoja = _hoja(base_carga["HojaDeRuta"], fecha, ruta.id)
+    pallet = crear_pallet()
+    agregar_detalle(pallet.id, hoja.id)
+
+    controller = _controlador(base_carga, fecha, ruta.id)
+    abrir = controller.abrir_validar_carga.__wrapped__.__wrapped__
+
+    capturados = {}
+    dialogo_carga_real = controller.dialogo_carga
+
+    def capturar_dialogo():
+        dialogo = dialogo_carga_real()
+        capturados["dialogo"] = dialogo
+        return dialogo
+
+    def operador_presiona_guardar():
+        """Lo que hace el operador en la pantalla: tildar todo y Guardar."""
+        dialogo = capturados["dialogo"]
+        for indice in range(dialogo.lst_pallets.count()):
+            dialogo.lst_pallets.item(indice).setCheckState(Qt.Checked)
+        dialogo.btn_guardar.click()
+
+    controller.dialogo_carga = capturar_dialogo
+    QTimer.singleShot(0, operador_presiona_guardar)
+    abrir(controller)
+
+    guardado = base_carga["Pallet"].get_by_id(pallet.id)
+    assert guardado.estado == ESTADO_CARGADO, (
+        "el operador tildó el pallet y presionó Guardar, pero quedó en {}".format(
+            guardado.estado
+        )
+    )
+    assert guardado.cargado_en is not None
+
+    ok, pendientes, _mensaje = puede_despachar(fecha, ruta.id)
+    assert ok and not pendientes, "con el pallet cargado la hoja debería despachar"
+
+
+def test_cancelar_carga_no_guarda_nada(base_carga):
+    """Contraprueba: con Cancelar el pallet tiene que seguir ARMADO.
+
+    Corrige en la dirección opuesta a la anterior: cambiar la comprobación
+    por result() no debe convertir a Cancelar en un guardado.
+    """
+    from PyQt5.QtCore import QTimer
+
+    from modelos.Pallet import ESTADO_ARMADO, agregar_detalle, crear_pallet
+
+    fecha = date(2026, 9, 28)
+    ruta = base_carga["RutaReparto"].create(descripcion="CENTRO")
+    hoja = _hoja(base_carga["HojaDeRuta"], fecha, ruta.id)
+    pallet = crear_pallet()
+    agregar_detalle(pallet.id, hoja.id)
+
+    controller = _controlador(base_carga, fecha, ruta.id)
+    abrir = controller.abrir_validar_carga.__wrapped__.__wrapped__
+
+    capturados = {}
+    dialogo_carga_real = controller.dialogo_carga
+
+    def capturar_dialogo():
+        dialogo = dialogo_carga_real()
+        capturados["dialogo"] = dialogo
+        return dialogo
+
+    def operador_presiona_cancelar():
+        dialogo = capturados["dialogo"]
+        for indice in range(dialogo.lst_pallets.count()):
+            dialogo.lst_pallets.item(indice).setCheckState(Qt.Checked)
+        dialogo.btn_cancelar.click()
+
+    controller.dialogo_carga = capturar_dialogo
+    QTimer.singleShot(0, operador_presiona_cancelar)
+    abrir(controller)
+
+    guardado = base_carga["Pallet"].get_by_id(pallet.id)
+    assert guardado.estado == ESTADO_ARMADO, (
+        "con Cancelar no se debe guardar nada, pero quedó en {}".format(
+            guardado.estado
+        )
+    )
+
+
 def test_doble_clic_carga_navega_segun_faltante(base_carga, monkeypatch):
     from vistas.ValidacionHojaRuta import ValidacionHojaRutaView
     from utiles.carga_camion import resultado_con_carga
