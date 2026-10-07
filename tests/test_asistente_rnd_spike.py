@@ -261,6 +261,44 @@ def test_spike_entrega_contexto_de_pantalla_a_minimax(monkeypatch):
     assert "Bandeja de pedidos (BandejaPedidosView)" in capturado["system"]
 
 
+def test_conocimiento_explica_pallets_armados_y_cargados(monkeypatch):
+    """El asistente debe poder explicar la diferencia entre ARMADO y CARGADO.
+
+    Sin esto, la consulta tipica del operador (los pallets estan armados y el
+    checklist dice que no estan validados) queda sin respuesta, porque la base
+    canonica no tenia nada de pallets.
+    """
+    capturado = _capturar_system(
+        monkeypatch,
+        "Los pallets estan armados, por que dice que no estan validados?",
+    )
+    system = capturado["messages"][0]["content"]
+
+    assert "Confirmar preparación no cambia el estado" in system
+    assert "Validar carga del camión" in system
+    assert "Marcar todos" in system
+    assert "CARGADO" in system
+
+
+def test_guia_y_base_canonica_describen_el_flujo_de_pallets():
+    """La guia es para el operador; la base canonica es para el asistente.
+
+    El asistente carga unicamente la base canonica, asi que documentar el
+    flujo solo en la guia no alcanza para que pueda responder sobre el.
+    """
+    guia = Path("docs/guia_usuario.md").read_text(encoding="utf-8")
+    base = Path("docs/asistente_rnd_conocimiento_tecnico.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "## Armado de pallets" in guia
+    assert "## Validar carga del camión" in guia
+    assert "Confirmar preparación no cambia el estado" in guia
+
+    assert "Confirmar preparación no cambia el estado" in base
+    assert "Marcar todos" in base
+
+
 def test_manuales_humanos_quedaron_alineados_con_pdf_ia():
     manual = Path("docs/manual_usuario_importacion_hoja_ruta.md").read_text(
         encoding="utf-8"
