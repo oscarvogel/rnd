@@ -240,8 +240,9 @@ ningún archivo modificado en el working tree de RND. Por eso
 direcciones: con el fix pasa, y revirtiendo el `return` falla con
 `AssertionError: exec_() devolvio None`.
 
-El `main` de la librería todavía no incluye el fix. Queda pendiente mergearlo y
-revisar los otros proyectos que la comparten.
+El `master` de la librería ya incluye el fix (merge `2f4c5ed`). Queda pendiente
+auditar y actualizar el submódulo de cada proyecto que la consume, porque cada
+uno tiene su propio puntero.
 
 ## Pendientes
 
@@ -249,9 +250,10 @@ revisar los otros proyectos que la comparten.
 - [ ] Decidir si el límite debería variar por tipo de producto o por destino, en lugar de un único valor por pallet.
 - [ ] Llevar los colores del KPI al tema (`temas/vogel2026.qss`) en lugar de estilos en línea, como el resto de la pantalla, para que el cambio de tema siga funcionando.
 - [ ] Evaluar una barra de progreso contra el límite: con un solo número, el operador tiene que hacer la resta a ojo.
-- [x] **#146** Corregir `Formulario.exec_()` en `pyqt5libs` para que devuelva `QDialog.exec_(self)`. Hecho en el submódulo `oscarvogel/pyqt5libs`: commit `1c7e11b` en la rama `fix/formulario-exec-devuelve-resultado`, con test de contrato en `tests/test_pyqt5libs_contrato.py`.
-- [ ] **#146 (parte 2)** Mergear `fix/formulario-exec-devuelve-resultado` en el `main` de `oscarvogel/pyqt5libs`. Hasta que eso ocurra, el `main` de la librería sigue con el bug y **los demás proyectos (PyFE, ceramica, forestal, FGPY, dante) no lo tienen**. RND ya lo tiene porque su puntero de submódulo apunta al commit.
-- [ ] Revisar los mismos patrones en los demás proyectos que comparten la librería: cada uno tiene su propio puntero de submódulo y hay que probarlos antes de actualizarlo.
+- [x] **#146** Corregir `Formulario.exec_()` en `pyqt5libs` para que devuelva `QDialog.exec_(self)`. Hecho en el submódulo `oscarvogel/pyqt5libs`: commit `1c7e11b`, con test de contrato en `tests/test_pyqt5libs_contrato.py`.
+- [x] Mergearlo en el `master` de `oscarvogel/pyqt5libs`: merge `2f4c5ed`. El merge también trajo `903dd7e`, que RND ya usaba desde su puntero de submódulo pero nunca había llegado a `master` de la librería.
+- [ ] **Auditar y actualizar el submódulo en cada proyecto consumidor** (PyFE, ceramica, forestal, FGPY, dante). Cada uno tiene su propio puntero: hasta actualizarlo siguen con el bug. Los pasos están en `oscarvogel/pyqt5libs#80`. **El riesgo no es una regresión, es activar código que nunca se ejecutó.**
+- [ ] Decidir qué hacer con el commit local `b815558` del `master` de `oscarvogel/pyqt5libs` (`wip: preservar cambios locales pre-alineamiento a 21d0292`). No está pusheado y difiere de `origin/master` en `Formulario.py`. El merge se hizo sobre `origin/master` justamente para no pisarlo. Por el mensaje parece una foto anterior al alineamiento con `21d0292`, pero eso hay que confirmarlo antes de descartarlo.
 - [ ] **#147** Botón "Marcar todos como cargados" en *Validar carga*, con confirmación. Hoy con 20 pallets son 20 acciones (tildar o escanear una por una).
 - [ ] **#148** Documentar en `docs/guia_usuario.md` el flujo completo: armar → confirmar preparación → validar carga → marcar LISTA. Hoy la guía no menciona "Validar carga" en ningún lado, así que el asistente no tiene forma de explicar este paso.
 
@@ -260,5 +262,7 @@ revisar los otros proyectos que la comparten.
 - Issue: #144 — Mejorar selección de pallets y acotar por carga activa.
 - PR: #143 — Pallets por carga con selector visual.
 - Issue: #146 — `Formulario.exec_()` descarta el resultado y rompe el guardado de diálogos.
+- pyqt5libs `1c7e11b`, merge `2f4c5ed` — `Formulario.exec_()` devuelve el código del diálogo.
+- pyqt5libs #80 — aviso y pasos para los proyectos que consumen la librería.
 - Issue: #147 — Botón "Marcar todos como cargados" en Validar carga.
 - Issue: #148 — Documentar el flujo de pallets en la guía de usuario.
