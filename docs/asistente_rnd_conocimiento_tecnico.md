@@ -1,6 +1,6 @@
 # Base de conocimiento canónica del Asistente RND
 
-**Revisión funcional:** 24/09/2026
+**Revisión funcional:** 07/10/2026
 
 Este documento es la fuente de verdad operativa del Asistente RND. Describe el
 comportamiento que está implementado actualmente en el código. El asistente no
@@ -19,8 +19,10 @@ Cuando una respuesta contradiga este documento, debe prevalecer este documento.
 - Si el conocimiento no alcanza para responder una pregunta concreta de RND,
   decirlo claramente.
 - Distinguir entre **Importación de pedidos**, **Pedidos para organizar**,
-  **Asignar chofer y camión**, **Ver Hoja de Ruta** y
-  **Validar hoja de ruta**. Son etapas distintas.
+  **Asignar chofer y camión**, **Ver Hoja de Ruta**, **Armado de pallets**,
+  **Validar carga** y **Validar hoja de ruta**. Son etapas distintas.
+- Distinguir siempre entre un pallet `ARMADO` y un pallet `CARGADO`. No son
+  sinónimos.
 
 ## 1. Flujo operativo actual
 
@@ -33,6 +35,11 @@ según corresponda.**
 No todos los pasos cambian de ventana automáticamente. Por ejemplo,
 **Cargar hoja** en Asignar chofer y camión recarga la combinación fecha+ruta en
 esa misma pantalla.
+
+Si se utiliza paletizado, el camino agrega dos etapas antes de poder despachar:
+**Armado de pallets** y **Validar carga del camión**. La primera agrupa la
+mercadería en pallets; la segunda registra que cada pallet fue subido al camión.
+Armar pallets no implica haber cargado el camión.
 
 ## 2. Formatos que RND puede importar
 
@@ -389,6 +396,53 @@ Una hoja DESPACHADA no retrocede automáticamente.
 Si faltan chofer o camión, la validación permite volver a
 **Resolver chofer / camión**.
 
+### Pallets: armado y validación de carga
+
+Cuando se armaron pallets, el checklist agrega dos requisitos:
+
+- **Mercadería asignada a pallets**: no puede quedar ninguna línea con saldo sin
+  asignar.
+- **Carga del camión validada**: todos los pallets esperados deben estar
+  `CARGADO`.
+
+Si nunca se armaron pallets, ambos requisitos son informativos y no bloquean
+nada.
+
+Un pallet tiene dos estados distintos:
+
+- `ARMADO`: el pallet existe y tiene mercadería en el piso.
+- `CARGADO`: el pallet fue subido al camión.
+
+**Confirmar preparación no cambia el estado.** En **Armado de pallets** ese botón
+sólo muestra el resumen del pallet: el pallet sigue `ARMADO`. Es correcto que el
+requisito de carga siga pendiente después de confirmar preparación, y no implica
+volver a armar los pallets.
+
+El pallet pasa a `CARGADO` únicamente en **Validar carga del camión**, que se
+abre con el botón **Validar carga** o con doble clic sobre el requisito `Carga
+del camión validada`. Ahí se marca cada pallet de tres formas:
+
+- tildando el ítem de la lista;
+- escaneando o escribiendo el código en el campo **Código** y presionando Enter
+  (el campo se limpia solo, para poder seguir escaneando);
+- con **Marcar todos**, que tilda la lista completa previa confirmación con la
+  cantidad de pallets afectados.
+
+Sólo al presionar **Guardar** se escribe: los tildados quedan `CARGADO`, los
+destildados vuelven a `ARMADO`, y queda registrado quién cargó cada pallet y
+cuándo. **Cancelar** no guarda nada y conserva los estados.
+
+Un pallet `CARGADO` deja de aparecer en **Armado de pallets**, porque esa pantalla
+muestra únicamente los pallets `ARMADO`. No se perdió: sigue visible en
+**Validar carga** y en el checklist.
+
+### Cómo se resuelve un requisito pendiente
+
+En **Validar hoja de ruta**, un doble clic sobre la fila PENDIENTE lleva
+directamente a la pantalla donde se corrige. Si el pendiente es la carga y no
+quedan líneas sin asignar, abre **Validar carga**; si quedan líneas sin asignar,
+abre **Armado de pallets**.
+
 ## 17. Clientes, códigos de proveedor y lugares de entrega
 
 En **Clientes** se administran los datos del cliente y sus relaciones.
@@ -463,7 +517,27 @@ combinación.
 ### “No puedo marcar LISTA”
 
 Abrir la validación y revisar el checklist: pedidos, fecha, ruta, recursos,
-cliente/lugar, comprobante y cantidades.
+cliente/lugar, comprobante y cantidades. Si hubo armado de pallets, revisar
+también los dos requisitos de pallets.
+
+### “Los pallets están armados y el checklist dice que no están cargados”
+
+Son dos estados y dos pasos distintos. **Confirmar preparación** deja el pallet
+en `ARMADO`; no lo marca como cargado. Falta abrir **Validar carga**, marcar los
+pallets y presionar **Guardar**. El armado está bien y no hay que repetirlo.
+
+### “No puedo confirmar la salida a reparto”
+
+Es el mismo bloqueo del checklist. Mientras quede un requisito PENDIENTE no se
+puede marcar LISTA ni despachar. Con doble clic sobre la fila pendiente se va a
+la pantalla donde se corrige.
+
+### “Marqué los pallets y presioné Guardar pero no cambió nada”
+
+Comprobar que se presionó **Guardar** y no **Cancelar**, y que la aplicación esté
+actualizada a la versión que incluye la corrección del guardado en la validación
+de carga. Si al cerrar el diálogo el checklist se actualizó, el guardado ocurrió
+y lo que sigue pendiente es otro requisito.
 
 ## 20. Asistente RND
 
@@ -485,6 +559,10 @@ No decir:
 - “En Productos se puede modificar producto, KG, bultos u observaciones”.
 - “Hay que crear un cliente distinto para cada lugar de entrega”.
 - “Si se puede imprimir, la hoja ya está LISTA”.
+- “Los pallets armados ya están cargados en el camión”.
+- “Confirmar preparación marca el pallet como cargado”.
+- “Armado de pallets muestra también los pallets que ya están cargados”.
+- “Tildar y Cancelar en Validar carga guarda el estado”.
 
 Si una guía histórica contradice cualquiera de estas reglas, la guía histórica
 está desactualizada.
