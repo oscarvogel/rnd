@@ -219,6 +219,38 @@ def test_dialogo_validar_carga():
     dialogo.close()
 
 
+def test_marcar_todos_tilda_la_lista_completa():
+    from vistas.ValidarCarga import ValidarCargaDialog
+
+    dialogo = ValidarCargaDialog()
+    dialogo.cargar_pallets([
+        {"id": 1, "codigo": "PLT-001", "cargado": True, "lineas": 2},
+        {"id": 2, "codigo": "PLT-002", "cargado": False, "lineas": 1},
+        {"id": 3, "codigo": "PLT-003", "cargado": False, "lineas": 1},
+    ])
+    assert dialogo.cantidad_sin_tildar() == 2
+
+    dialogo.marcar_todos()
+
+    assert dialogo.cantidad_sin_tildar() == 0
+    assert dialogo.seleccion() == {1: True, 2: True, 3: True}
+    assert "3/3" in dialogo.lbl_progreso.text()
+    dialogo.close()
+
+
+def test_marcar_todos_no_hace_nada_si_no_falta_ninguno():
+    """Con la lista ya tildada no se pregunta nada, para no molestar."""
+    from vistas.ValidarCarga import ValidarCargaDialog
+
+    dialogo = ValidarCargaDialog()
+    dialogo.cargar_pallets([
+        {"id": 1, "codigo": "PLT-001", "cargado": True, "lineas": 1},
+        {"id": 2, "codigo": "PLT-002", "cargado": True, "lineas": 1},
+    ])
+    assert dialogo.cantidad_sin_tildar() == 0
+    dialogo.close()
+
+
 # --- Gate de despacho en el controlador ---
 
 def _controlador(base_carga, fecha, ruta_id):
@@ -392,6 +424,82 @@ def test_cancelar_carga_no_guarda_nada(base_carga):
             guardado.estado
         )
     )
+
+
+def test_marcar_todos_respondiendo_que_no_no_tilda(base_carga):
+    """Si el operador dice que no, la lista queda como estaba."""
+    from modelos.Pallet import agregar_detalle, crear_pallet
+
+    fecha = date(2026, 9, 28)
+    ruta = base_carga["RutaReparto"].create(descripcion="CENTRO")
+    hoja = _hoja(base_carga["HojaDeRuta"], fecha, ruta.id)
+    pallet = crear_pallet()
+    agregar_detalle(pallet.id, hoja.id)
+
+    controller = _controlador(base_carga, fecha, ruta.id)
+    controller._preguntar_marcar_todos = lambda *args: False
+    dialogo = controller.dialogo_carga()
+
+    controller.confirmar_marcar_todos(dialogo)
+
+    assert dialogo.cantidad_sin_tildar() == 1
+    assert dialogo.seleccion() == {pallet.id: False}
+    dialogo.Cerrar()
+
+
+def test_marcar_todos_y_guardar_deja_la_carga_lista(base_carga):
+    """Flujo completo del atajo: Marcar todos -> Guardar -> CARGADO.
+
+    Es el camino que va a usar el operador cuando el camión ya está cargado
+    de corrido, en lugar de veinte tildadas o veinte escaneos.
+    """
+    from PyQt5.QtCore import QTimer
+
+    from modelos.Pallet import (
+        ESTADO_CARGADO, agregar_detalle, crear_pallet, puede_despachar,
+    )
+
+    fecha = date(2026, 9, 28)
+    ruta = base_carga["RutaReparto"].create(descripcion="CENTRO")
+    hoja = _hoja(base_carga["HojaDeRuta"], fecha, ruta.id)
+    pallets = [crear_pallet() for _ in range(3)]
+    # Reparte la línea completa entre los tres pallets (5 cant / 50 KG /
+    # 5 bultos): con saldo sin asignar el despacho frena por otro motivo.
+    for pallet, (cantidad, kg, bultos) in zip(
+        pallets, [(1, 10, 1), (1, 10, 1), (3, 30, 3)]
+    ):
+        agregar_detalle(pallet.id, hoja.id, cantidad, kg, bultos)
+
+    controller = _controlador(base_carga, fecha, ruta.id)
+    controller._preguntar_marcar_todos = lambda *args: True
+    abrir = controller.abrir_validar_carga.__wrapped__.__wrapped__
+
+    capturados = {}
+    dialogo_carga_real = controller.dialogo_carga
+
+    def capturar_dialogo():
+        dialogo = dialogo_carga_real()
+        capturados["dialogo"] = dialogo
+        return dialogo
+
+    def operador_carga_el_camion():
+        dialogo = capturados["dialogo"]
+        dialogo.btn_todos.click()      # atajo, sin tildar uno por uno
+        dialogo.btn_guardar.click()
+
+    controller.dialogo_carga = capturar_dialogo
+    QTimer.singleShot(0, operador_carga_el_camion)
+    abrir(controller)
+
+    for pallet in pallets:
+        guardado = base_carga["Pallet"].get_by_id(pallet.id)
+        assert guardado.estado == ESTADO_CARGADO, (
+            "el pallet {} quedó en {}".format(pallet.codigo, guardado.estado)
+        )
+        assert guardado.cargado_en is not None
+
+    ok, pendientes, _mensaje = puede_despachar(fecha, ruta.id)
+    assert ok and not pendientes
 
 
 def test_doble_clic_carga_navega_segun_faltante(base_carga, monkeypatch):

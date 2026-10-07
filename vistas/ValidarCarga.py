@@ -48,8 +48,14 @@ class ValidarCargaDialog(VistaBase):
 
         botones = QHBoxLayout()
         botones.addStretch(1)
+        self.btn_todos = self.CreaBoton("Marcar todos", imagen_str="save.png")
+        self.btn_todos.setToolTip(
+            "Tilda todos los pallets de una vez, para cuando el camión "
+            "ya está cargado por completo."
+        )
         self.btn_cancelar = self.CreaBoton("Cancelar", imagen_str="close.png")
         self.btn_guardar = self.CreaBoton("Guardar", imagen_str="save.png")
+        botones.addWidget(self.btn_todos)
         botones.addWidget(self.btn_cancelar)
         botones.addWidget(self.btn_guardar)
         layout.addLayout(botones)
@@ -83,6 +89,23 @@ class ValidarCargaDialog(VistaBase):
         self.lbl_progreso.setText(
             "Cargados {}/{} pallets.".format(cargados, total)
         )
+
+    def cantidad_sin_tildar(self):
+        """Pallets de la lista que todavía no están tildados."""
+        return sum(
+            1 for indice in range(self.lst_pallets.count())
+            if self.lst_pallets.item(indice).checkState() != Qt.Checked
+        )
+
+    def marcar_todos(self):
+        """Tilda todos los pallets de la lista y refresca el progreso."""
+        self.lst_pallets.blockSignals(True)
+        try:
+            for indice in range(self.lst_pallets.count()):
+                self.lst_pallets.item(indice).setCheckState(Qt.Checked)
+        finally:
+            self.lst_pallets.blockSignals(False)
+        self.actualizar_progreso()
 
     def seleccion(self):
         """Devuelve {pallet_id: cargado_bool} según lo tildado."""

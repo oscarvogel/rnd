@@ -324,6 +324,35 @@ class ValidacionHojaRutaController(ControladorBase):
                 if pallet.estado == "CARGADO":
                     desmarcar_cargado(pallet.id)
 
+    def _preguntar_marcar_todos(self, dialogo, faltantes):
+        """Confirmación de 'Marcar todos'. Separado para poder testearlo.
+
+        Es un método aparte y no la llamada a QMessageBox dentro del flujo,
+        porque el botón no persiste nada: sólo tilda. Lo que queda registrado
+        como CARGADO con usuario y fecha ocurre al presionar Guardar.
+        """
+        return QMessageBox.question(
+            dialogo,
+            "Marcar todos como cargados",
+            (
+                "Se van a tildar {0} pallets.\n\n"
+                "Al presionar Guardar quedan como CARGADO, con tu usuario y "
+                "la fecha de hoy.\n\n"
+                "Usalo cuando el camión ya esté cargado por completo.\n\n"
+                "¿Continuar?"
+            ).format(faltantes),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        ) == QMessageBox.Yes
+
+    def confirmar_marcar_todos(self, dialogo):
+        """Tilda toda la lista previa confirmación del operador."""
+        faltantes = dialogo.cantidad_sin_tildar()
+        if not faltantes:
+            return
+        if self._preguntar_marcar_todos(dialogo, faltantes):
+            dialogo.marcar_todos()
+
     @reconnect_if_needed
     @inicializar_y_capturar_excepciones
     def abrir_validar_carga(self, *args, **kwargs):
@@ -340,6 +369,9 @@ class ValidacionHojaRutaController(ControladorBase):
             )
             return
         dialogo = self.dialogo_carga()
+        dialogo.btn_todos.clicked.connect(
+            lambda: self.confirmar_marcar_todos(dialogo)
+        )
         dialogo.btn_guardar.clicked.connect(dialogo.accept)
         dialogo.btn_cancelar.clicked.connect(dialogo.Cerrar)
         dialogo.exec_()
