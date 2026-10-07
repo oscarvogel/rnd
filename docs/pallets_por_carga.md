@@ -217,11 +217,14 @@ el resultado de `exec_()` decide si se guarda.
 - [ ] Decidir si el límite debería variar por tipo de producto o por destino, en lugar de un único valor por pallet.
 - [ ] Llevar los colores del KPI al tema (`temas/vogel2026.qss`) en lugar de estilos en línea, como el resto de la pantalla, para que el cambio de tema siga funcionando.
 - [ ] Evaluar una barra de progreso contra el límite: con un solo número, el operador tiene que hacer la resta a ojo.
-- [ ] Corregir `Formulario.exec_()` en `pyqt5libs` para que devuelva `QDialog.exec_(self)`. Es la causa raíz y afecta a los demás proyectos que comparten la librería (PyFE, ceramica, forestal, dante). **No se hizo a propósito:** `pyqt5libs/` no está versionado en este repositorio, así que el cambio no quedaría registrado ni sería reversible con git. Hay que decidir antes cómo se administra esa librería.
-- [ ] Botón "Marcar todos como cargados" en *Validar carga*, con confirmación. Hoy con 20 pallets son 20 acciones (tildar o escanear una por una).
-- [ ] Documentar en `docs/guia_usuario.md` el flujo completo: armar → confirmar preparación → validar carga → marcar LISTA. Hoy la guía no menciona "Validar carga" en ningún lado, así que el asistente no tiene forma de explicar este paso.
+- [ ] **#146** Corregir `Formulario.exec_()` en `pyqt5libs` para que devuelva `QDialog.exec_(self)`. Es la causa raíz y afecta a los demás proyectos que comparten la librería (PyFE, ceramica, forestal, dante). **No se hizo a propósito:** `pyqt5libs/` no está versionado en este repositorio, así que el cambio no quedaría registrado ni sería reversible con git. Hay que decidir antes cómo se administra esa librería.
+- [ ] **#147** Botón "Marcar todos como cargados" en *Validar carga*, con confirmación. Hoy con 20 pallets son 20 acciones (tildar o escanear una por una).
+- [ ] **#148** Documentar en `docs/guia_usuario.md` el flujo completo: armar → confirmar preparación → validar carga → marcar LISTA. Hoy la guía no menciona "Validar carga" en ningún lado, así que el asistente no tiene forma de explicar este paso.
 
 ## Referencias
 
 - Issue: #144 — Mejorar selección de pallets y acotar por carga activa.
 - PR: #143 — Pallets por carga con selector visual.
+- Issue: #146 — `Formulario.exec_()` descarta el resultado y rompe el guardado de diálogos.
+- Issue: #147 — Botón "Marcar todos como cargados" en Validar carga.
+- Issue: #148 — Documentar el flujo de pallets en la guía de usuario.
