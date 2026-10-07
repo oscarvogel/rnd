@@ -211,13 +211,47 @@ afectado**: todos usan `QDialog` directo y no pasan por `Formulario`.
 `ValidarCargaDialog` era el único diálogo de RND derivado de `VistaBase` donde
 el resultado de `exec_()` decide si se guarda.
 
+### Corrección de la causa raíz en pyqt5libs
+
+La primera vez que se evaluó este bug se concluyó que `pyqt5libs/` no estaba
+versionado, porque `git ls-files` no lista el contenido de un submódulo. **Esa
+conclusión era incorrecta:** `.gitmodules` lo declara como submódulo de
+`https://github.com/oscarvogel/pyqt5libs`, así que el cambio sí queda registrado
+y es reversible.
+
+Con esa corrección cambió la decisión: la causa raíz se arregló en la librería,
+en la rama `fix/formulario-exec-devuelve-resultado` (commit `1c7e11b`), y el
+puntero de submódulo de RND quedó apuntando a ese commit.
+
+Antes de aplicarlo se auditaron todos los `exec_()` de RND. La conclusión fue
+que **ningún código de RND consumía el retorno de un `exec_()` de formulario**
+en ese momento: el único que lo hacía era Validar carga, que ya había pasado a
+leer `result()`. Los demás candidatos son `QDialog` plano, cuyo `exec_()` ya
+devolvía el resultado: `ConfiguracionDBView`, `CredentialDialog`,
+`MigracionProgressDialog` y los diálogos construidos con `QDialog(...)` en
+`ArmadoPallets` y `BandejaPedidos`. Por eso el fix no cambió ningún
+comportamiento observable en RND: la suite pasó de 309 a 313 tests, todos en
+verde, sin modificar ninguno de los anteriores.
+
+Como RND depende de un submódulo, un cambio de biblioteca puede no mostrar
+ningún archivo modificado en el working tree de RND. Por eso
+`tests/test_pyqt5libs_contrato.py` fija el contrato del que RND depende:
+`exec_()` tiene que devolver el código del diálogo. Verificado en las dos
+direcciones: con el fix pasa, y revirtiendo el `return` falla con
+`AssertionError: exec_() devolvio None`.
+
+El `main` de la librería todavía no incluye el fix. Queda pendiente mergearlo y
+revisar los otros proyectos que la comparten.
+
 ## Pendientes
 
 - [ ] Pantalla o parámetro para configurar `KG_LIMITE_PALLET`. Hoy el KPI ya lee el valor, pero no hay forma de cargarlo desde la interfaz.
 - [ ] Decidir si el límite debería variar por tipo de producto o por destino, en lugar de un único valor por pallet.
 - [ ] Llevar los colores del KPI al tema (`temas/vogel2026.qss`) en lugar de estilos en línea, como el resto de la pantalla, para que el cambio de tema siga funcionando.
 - [ ] Evaluar una barra de progreso contra el límite: con un solo número, el operador tiene que hacer la resta a ojo.
-- [ ] **#146** Corregir `Formulario.exec_()` en `pyqt5libs` para que devuelva `QDialog.exec_(self)`. Es la causa raíz y afecta a los demás proyectos que comparten la librería (PyFE, ceramica, forestal, dante). **No se hizo a propósito:** `pyqt5libs/` no está versionado en este repositorio, así que el cambio no quedaría registrado ni sería reversible con git. Hay que decidir antes cómo se administra esa librería.
+- [x] **#146** Corregir `Formulario.exec_()` en `pyqt5libs` para que devuelva `QDialog.exec_(self)`. Hecho en el submódulo `oscarvogel/pyqt5libs`: commit `1c7e11b` en la rama `fix/formulario-exec-devuelve-resultado`, con test de contrato en `tests/test_pyqt5libs_contrato.py`.
+- [ ] **#146 (parte 2)** Mergear `fix/formulario-exec-devuelve-resultado` en el `main` de `oscarvogel/pyqt5libs`. Hasta que eso ocurra, el `main` de la librería sigue con el bug y **los demás proyectos (PyFE, ceramica, forestal, FGPY, dante) no lo tienen**. RND ya lo tiene porque su puntero de submódulo apunta al commit.
+- [ ] Revisar los mismos patrones en los demás proyectos que comparten la librería: cada uno tiene su propio puntero de submódulo y hay que probarlos antes de actualizarlo.
 - [ ] **#147** Botón "Marcar todos como cargados" en *Validar carga*, con confirmación. Hoy con 20 pallets son 20 acciones (tildar o escanear una por una).
 - [ ] **#148** Documentar en `docs/guia_usuario.md` el flujo completo: armar → confirmar preparación → validar carga → marcar LISTA. Hoy la guía no menciona "Validar carga" en ningún lado, así que el asistente no tiene forma de explicar este paso.
 
