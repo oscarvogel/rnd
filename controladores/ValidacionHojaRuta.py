@@ -342,7 +342,13 @@ class ValidacionHojaRutaController(ControladorBase):
         dialogo = self.dialogo_carga()
         dialogo.btn_guardar.clicked.connect(dialogo.accept)
         dialogo.btn_cancelar.clicked.connect(dialogo.Cerrar)
-        if dialogo.exec_() != dialogo.Accepted:
+        dialogo.exec_()
+        # No se puede comparar el retorno de exec_(): Formulario.exec_() de
+        # pyqt5libs descarta el resultado de QDialog.exec_() y devuelve None,
+        # con lo que la comparacion con Accepted nunca se cumplia y el pallet
+        # tildado nunca llegaba a guardarse. result() conserva el codigo que
+        # dejo accept() (Guardar) o reject() (Cancelar / cerrar la ventana).
+        if dialogo.result() != dialogo.Accepted:
             return
         self.aplicar_validacion_carga(dialogo.seleccion())
         dialogo.Cerrar()

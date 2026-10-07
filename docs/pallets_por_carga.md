@@ -161,12 +161,65 @@ Se detectó corriendo el flujo real con el controlador conectado, no con los tes
 
 La corrección fue podar en lugar de vaciar: se conservan los KG de los pallets que siguen en pantalla y se descartan sólo los que ya no están. Queda cubierto por `test_kpi_peso_conserva_el_peso_al_recargar_pallets` y por `test_controlador_actualiza_el_kpi_al_cambiar_de_chip`.
 
+### Bug: tildar un pallet y guardar no cambiaba nada
+
+**Síntoma reportado por el operador:** en *Validar carga del camión* se tildan
+todos los pallets, se presiona **Guardar**, el diálogo se cierra y el requisito
+`Carga del camión validada` sigue en `PENDIENTE`. En consecuencia
+*Confirmar salida a reparto* tampoco se habilitaba: es el mismo bloqueo.
+
+**Causa.** El controlador comparaba el resultado del diálogo así:
+
+    if dialogo.exec_() != dialogo.Accepted:
+        return
+
+`ValidarCargaDialog` hereda de `VistaBase`, que hereda de `Formulario`, y ahí
+`exec_()` está sobrescrito:
+
+    def exec_(self):
+        if self.centraform:
+            self.Center()
+        QDialog.exec_(self)      # <-- descarta el valor de retorno
+
+`QDialog.exec_()` devuelve el código del diálogo, pero el sobreescrito **no lo
+devuelve**: `exec_()` retorna `None`. Entonces `None != Accepted` siempre es
+cierto y el controlador salía **antes** de `aplicar_validacion_carga()`.
+
+Por eso el fallo era tan silencioso: el diálogo se cerraba con normalidad, no
+había excepción ni alerta, y la base no se escribía nunca. El requisito quedaba
+pendiente sin explicación.
+
+**Corrección.** No se puede usar el retorno de `exec_()` en estos formularios;
+se lee `result()`, que conserva el código que dejaron `accept()` (Guardar) o
+`reject()` (Cancelar / cerrar la ventana):
+
+    dialogo.exec_()
+    if dialogo.result() != dialogo.Accepted:
+        return
+
+**Verificación.** Se reprodujo con el flujo real antes de tocar producción: un
+test maneja el `QDialog` de verdad, tilda los ítems y presiona el botón Guardar
+con un `QTimer`, como el operador. Con el código anterior falla con
+`AssertionError: ... pero quedó en ARMADO` — por el assert del estado, no por un
+error de Qt. Después de la corrección pasa, y la contraprueba
+`test_cancelar_carga_no_guarda_nada` verifica la dirección opuesta: con Cancelar
+el pallet sigue `ARMADO`. Suite completa: 303 pasan, 1 skip.
+
+**Alcance real.** El mismo patrón roto aparece en 5 lugares más
+(`ArmadoPallets`, `BandejaPedidos` x3, `ConfiguracionDB`), pero **ninguno está
+afectado**: todos usan `QDialog` directo y no pasan por `Formulario`.
+`ValidarCargaDialog` era el único diálogo de RND derivado de `VistaBase` donde
+el resultado de `exec_()` decide si se guarda.
+
 ## Pendientes
 
 - [ ] Pantalla o parámetro para configurar `KG_LIMITE_PALLET`. Hoy el KPI ya lee el valor, pero no hay forma de cargarlo desde la interfaz.
 - [ ] Decidir si el límite debería variar por tipo de producto o por destino, en lugar de un único valor por pallet.
 - [ ] Llevar los colores del KPI al tema (`temas/vogel2026.qss`) en lugar de estilos en línea, como el resto de la pantalla, para que el cambio de tema siga funcionando.
 - [ ] Evaluar una barra de progreso contra el límite: con un solo número, el operador tiene que hacer la resta a ojo.
+- [ ] Corregir `Formulario.exec_()` en `pyqt5libs` para que devuelva `QDialog.exec_(self)`. Es la causa raíz y afecta a los demás proyectos que comparten la librería (PyFE, ceramica, forestal, dante). **No se hizo a propósito:** `pyqt5libs/` no está versionado en este repositorio, así que el cambio no quedaría registrado ni sería reversible con git. Hay que decidir antes cómo se administra esa librería.
+- [ ] Botón "Marcar todos como cargados" en *Validar carga*, con confirmación. Hoy con 20 pallets son 20 acciones (tildar o escanear una por una).
+- [ ] Documentar en `docs/guia_usuario.md` el flujo completo: armar → confirmar preparación → validar carga → marcar LISTA. Hoy la guía no menciona "Validar carga" en ningún lado, así que el asistente no tiene forma de explicar este paso.
 
 ## Referencias
 
