@@ -78,22 +78,40 @@ class MainController(ControladorBase):
                 self._programar_actualizaciones()
         return lRetVal
 
-    def _ejecutar_migraciones_con_feedback(self):
-        migracion = MigracionBaseDatos()
-        dialogo = MigracionProgressDialog(self.view)
-        temporizador = QTimer(dialogo)
-        temporizador.setInterval(100)
+    def _ejecutar_migraciones_con_feedback(self, umbral_ms=1200):
+        import time
 
-        def comprobar_fin():
+        migracion = MigracionBaseDatos()
+        # Las migraciones son idempotentes y verifican antes de tocar nada:
+        # en régimen no emiten DDL y terminan rápido. El modal sólo aparece
+        # si el hilo sigue vivo pasado el umbral (migración real pendiente
+        # o red muy lenta), para no molestar en cada login.
+        inicio = time.monotonic()
+        while True:
             hilo = getattr(migracion, "thread", None)
             if hilo is None or not hilo.is_alive():
-                temporizador.stop()
-                dialogo.finalizar()
+                break
+            if (time.monotonic() - inicio) * 1000 >= umbral_ms:
+                break
+            hilo.join(timeout=0.05)
+            QApplication.processEvents()
 
-        temporizador.timeout.connect(comprobar_fin)
-        temporizador.start()
-        QTimer.singleShot(0, comprobar_fin)
-        dialogo.exec_()
+        hilo = getattr(migracion, "thread", None)
+        if hilo is not None and hilo.is_alive():
+            dialogo = MigracionProgressDialog(self.view)
+            temporizador = QTimer(dialogo)
+            temporizador.setInterval(100)
+
+            def comprobar_fin():
+                hilo_actual = getattr(migracion, "thread", None)
+                if hilo_actual is None or not hilo_actual.is_alive():
+                    temporizador.stop()
+                    dialogo.finalizar()
+
+            temporizador.timeout.connect(comprobar_fin)
+            temporizador.start()
+            QTimer.singleShot(0, comprobar_fin)
+            dialogo.exec_()
         migracion.esperar_migracion()
 
         error = getattr(migracion, "error", None)
@@ -147,6 +165,7 @@ class MainController(ControladorBase):
             self.view.ventana_menu_lateral = ABMEquiposController()
         else:
             return
+        self.view.marcar_dashboard_sucio()
         self.view.ventana_menu_lateral.run()
 
     def ArmaMenu(self):

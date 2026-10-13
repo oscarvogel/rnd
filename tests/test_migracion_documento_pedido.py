@@ -70,18 +70,21 @@ def _tipo_sql(campo):
     return peewee.Context().sql(tipo).query()[0]
 
 
-def _describe(modelo):
+def _describe(modelo, forzar_no_nulas=()):
     """Filas de DESCRIBE derivadas de los metadatos reales del modelo.
 
     Se calculan desde el modelo en vez de hardcodearlos: es lo que MySQL
-    devolveria de verdad para esa tabla.
+    devolveria de verdad para esa tabla. ``forzar_no_nulas`` simula columnas
+    legacy que en el modelo actual ya son nullable (ej. documento_pedido
+    antes de #89).
     """
     filas = []
     for campo in modelo._meta.sorted_fields:
+        nulo = "NO" if campo.column_name in forzar_no_nulas else ("YES" if campo.null else "NO")
         filas.append((
             campo.column_name,
             _tipo_sql(campo),
-            "YES" if campo.null else "NO",
+            nulo,
             "PRI" if campo.primary_key else "",
             campo.default,
             "",
@@ -131,6 +134,12 @@ class MySQLSimulado(peewee.MySQLDatabase):
         self.tablas = set()
         self.ddl = []
         self._por_tabla = {tabla(m): m for m in MODELOS_MIGRADOS}
+        # Simula la instalación vieja de #89: en el modelo actual
+        # documento_pedido.cliente_id ya es nullable, pero en las bases
+        # legacy era NOT NULL y la migración debe corregirlo una vez.
+        self.columnas_legacy_no_nulas = {
+            (tabla(DocumentoPedido), "cliente_id"),
+        }
 
     # -- superficie que peewee / playhouse necesitan -------------------
     def get_tables(self, schema=None):
@@ -142,8 +151,13 @@ class MySQLSimulado(peewee.MySQLDatabase):
     def execute_sql(self, sql, params=None):
         describe = _RE_DESCRIBE.search(sql) if isinstance(sql, str) else None
         if describe:
-            modelo = self._por_tabla.get(describe.group(1))
-            return _CursorVacio(_describe(modelo) if modelo else ())
+            nombre = describe.group(1)
+            modelo = self._por_tabla.get(nombre)
+            forzar = {
+                columna for (tabla, columna) in self.columnas_legacy_no_nulas
+                if tabla == nombre
+            }
+            return _CursorVacio(_describe(modelo, forzar) if modelo else ())
 
         indices = _RE_SHOW_INDEX.search(sql) if isinstance(sql, str) else None
         if indices:
@@ -250,3 +264,21 @@ def test_migrar_sigue_corrigiendo_cliente_id_de_instalaciones_viejas(mysql):
     ]
     assert len(alters) == 1, alters
     assert "cliente_id" in alters[0]
+
+
+def test_migrar_no_reconstruye_tablas_si_ya_estan_nullable(mysql):
+    """En régimen no debe emitir MODIFY: era lo que demoraba cada login.
+
+    Con las columnas ya nullable (DESCRIBE dice YES), `alter_column_type`
+    se omite porque en MySQL reconstruye la tabla aunque ya esté correcta.
+    """
+    mysql.columnas_legacy_no_nulas = set()
+
+    migracion = modulo_migraciones.MigracionBaseDatos()
+    migracion.esperar_migracion()
+
+    assert migracion.error is None, "La migracion fallo: {}".format(
+        repr(migracion.error)
+    )
+    modifies = [sql for sql in mysql.ddl if "MODIFY" in sql.upper()]
+    assert modifies == [], modifies
