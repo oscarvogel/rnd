@@ -136,7 +136,65 @@ def test_demo_packaging_includes_assistant_knowledge_and_ai_env():
     iss = (root / "installer" / "RND_Demo.iss").read_text(encoding="utf-8")
 
     assert "../docs/asistente_rnd_conocimiento_tecnico.md" in spec
-    assert '"MINIMAX_API_KEY"' in build
-    assert '"RND_PDF_AI_API_KEY"' in build
     assert 'dist\\RND Demo\\.env' in build
     assert 'Source: "..\\dist\\RND Demo\\*"' in iss
+
+
+def test_demo_installer_never_packages_a_credential():
+    """El instalador de la demo es publico: no puede llevar claves reales.
+
+    Este test antes afirmaba lo contrario. Exigia que el build escribiera
+    MINIMAX_API_KEY en dist\\RND Demo\\.env, lo cual fijaba la filtracion como
+    contrato. Anyadir la proteccion sin tocarlo dejaba la suite en rojo y
+    empujaba a revertir el arreglo.
+    """
+    build = (ROOT / "scripts" / "build_demo_installer.ps1").read_text(encoding="utf-8")
+
+    # La lista blanca del build no puede incluir ninguna credencial.
+    blanca = re.search(r"\$allowed = @\((.*?)\)", build, re.S)
+    assert blanca, "No se encontro la lista blanca de variables IA"
+    assert "MINIMAX_API_KEY" not in blanca.group(1)
+    assert "RND_PDF_AI_API_KEY" not in blanca.group(1)
+    assert "RND_PDF_AI_URL" in blanca.group(1)
+
+    # Tampoco puede nombrarlas como algo que se escribe en el .env de la demo.
+    escritura = re.search(r"\$order = @\((.*?)\)", build, re.S)
+    assert escritura, "No se encontro el orden de escritura del .env de la demo"
+    assert "MINIMAX_API_KEY" not in escritura.group(1)
+    assert "RND_PDF_AI_API_KEY" not in escritura.group(1)
+
+    # Y el build se verifica a si mismo antes de generar el instalador.
+    assert "ABORTADO: la configuracion IA trae" in build
+    assert "Values.ContainsKey($prohibida)" in build
+
+
+def test_demo_installer_requires_the_proxy_url_not_a_key():
+    build = (ROOT / "scripts" / "build_demo_installer.ps1").read_text(encoding="utf-8")
+
+    assert 'ContainsKey("RND_PDF_AI_URL")' in build
+    assert "RND_PDF_AI_TOKEN" in build
+
+
+def test_proxy_keeps_the_provider_credential_out_of_the_docroot():
+    """El proxy es lo unico que puede ver la clave que paga la IA.
+
+    Si el secreto quedara bajo public_html, cualquiera que lo pida por HTTP
+    se llevaria la credencial. Por eso la ruta sale con ../
+    """
+    deploy = ROOT / "deploy" / "rnd-ia"
+    proxy = (deploy / "proxy.php").read_text(encoding="utf-8")
+
+    assert "__DIR__ . '/../rnd-ia-secreto.php'" in proxy
+    assert (deploy / "rnd-ia-secreto.php.ejemplo").is_file()
+    assert (deploy / ".htaccess").is_file()
+
+    # El ejemplo se puede publicar: nunca trae una clave real.
+    ejemplo = (deploy / "rnd-ia-secreto.php.ejemplo").read_text(encoding="utf-8")
+    assert "PEGAR_AQUI_LA_CLAVE" in ejemplo
+    assert "MINIMAX_API_KEY" not in ejemplo
+    assert "sk-" not in ejemplo
+
+    # OpenRouter: la politica de datos se fuerza en el proxy y no depende de
+    # que alguien la haya activado en el panel de la cuenta.
+    assert "'data_collection'] = 'deny'" in proxy
+    assert "'zdr'] = true" in proxy

@@ -53,15 +53,22 @@ function Get-DemoAiConfig {
     if (-not $source) {
         throw @"
 No se encontro configuracion IA para el DEMO.
-Cree $RepoRoot\demo_ai.secrets.env (recomendado) o use el .env local con:
-MINIMAX_API_KEY=...
+Cree $RepoRoot\demo_ai.secrets.env (recomendado) con:
+RND_PDF_AI_URL=https://vogelconsultoria.com.ar/rnd-ia/proxy.php
 "@
     }
 
+    # Estas son las UNICAS variables que pueden viajar dentro del instalador.
+    #
+    # MINIMAX_API_KEY y RND_PDF_AI_API_KEY quedan deliberadamente afuera. El
+    # instalador de la demo se descarga desde un link publico: una credencial
+    # real escrita en dist\RND Demo\.env queda instalada, en texto plano, en
+    # la maquina de cada cliente. La clave real vive en el servidor, detras
+    # del proxy (deploy/rnd-ia). RND_PDF_AI_TOKEN es un interruptor para
+    # apagar la demo, no una credencial.
     $allowed = @(
-        "MINIMAX_API_KEY",
-        "RND_PDF_AI_API_KEY",
         "RND_PDF_AI_URL",
+        "RND_PDF_AI_TOKEN",
         "RND_PDF_AI_MODEL",
         "RND_PDF_AI_TIMEOUT"
     )
@@ -85,8 +92,8 @@ MINIMAX_API_KEY=...
         }
     }
 
-    if (-not $values.ContainsKey("MINIMAX_API_KEY") -and -not $values.ContainsKey("RND_PDF_AI_API_KEY")) {
-        throw "La configuracion IA no contiene MINIMAX_API_KEY ni RND_PDF_AI_API_KEY."
+    if (-not $values.ContainsKey("RND_PDF_AI_URL")) {
+        throw "La configuracion IA no contiene RND_PDF_AI_URL (la URL del proxy de la demo)."
     }
 
     return [pscustomobject]@{
@@ -102,21 +109,32 @@ function Write-DemoAiEnv {
     )
 
     $order = @(
-        "MINIMAX_API_KEY",
-        "RND_PDF_AI_API_KEY",
         "RND_PDF_AI_URL",
+        "RND_PDF_AI_TOKEN",
         "RND_PDF_AI_MODEL",
         "RND_PDF_AI_TIMEOUT"
     )
     $lines = @(
         "# RND DEMO - configuracion IA incluida por build_demo_installer.ps1"
         "# No editar durante la demostracion."
+        "# No contiene credenciales: la clave real vive en el servidor."
     )
     foreach ($name in $order) {
         if ($Values.ContainsKey($name)) {
             $lines += ("{0}={1}" -f $name, $Values[$name])
         }
     }
+
+    # Barrera del build. Se chequea $Values (la causa) y no el texto ya
+    # escrito (el sintoma): como las credenciales se filtran en
+    # Get-DemoAiConfig, nunca llegan a las lineas, asi que una comprobacion
+    # sobre el texto escrito no podria dispararse nunca.
+    foreach ($prohibida in @("MINIMAX_API_KEY", "RND_PDF_AI_API_KEY")) {
+        if ($Values.ContainsKey($prohibida)) {
+            throw "ABORTADO: la configuracion IA trae $prohibida. El instalador es publico."
+        }
+    }
+
     $lines | Set-Content -LiteralPath $Destination -Encoding UTF8
 }
 
@@ -198,7 +216,7 @@ try {
 
     Write-DemoAiEnv -Values $DemoAiConfig.Values -Destination $StagedDemoEnv
     Write-Host "[RND] Configuracion IA DEMO incluida desde $($DemoAiConfig.Source)." -ForegroundColor Cyan
-    Write-Host "[RND] Solo se empaquetan variables IA; no se copia el .env completo." -ForegroundColor Cyan
+    Write-Host "[RND] Solo URL/modelo/token: el instalador no lleva credenciales." -ForegroundColor Cyan
 
     # ISCC tambien reporta por stderr; mismo cuidado que con PyInstaller.
     $ErrorActionPreference = "Continue"

@@ -6,8 +6,12 @@ lista de filas normalizadas que luego pasan por la vista previa y las mismas
 validaciones del importador Excel.
 
 Configuracion por variables de entorno:
-- RND_PDF_AI_URL: endpoint OpenAI-compatible de chat/completions.
+- RND_PDF_AI_URL: endpoint OpenAI-compatible de chat/completions. Si se
+  apunta a otro host, la credencial deja de ser obligatoria y se puede usar
+  el proxy de la demo (deploy/rnd-ia), que guarda la clave en el servidor.
 - RND_PDF_AI_API_KEY: credencial del servicio.
+- RND_PDF_AI_TOKEN: token del proxy de la demo. No es un secreto: viaja en
+  el ejecutable y sirve como interruptor para apagar la demostracion.
 - RND_PDF_AI_MODEL: modelo con vision habilitada.
 - RND_PDF_AI_TIMEOUT: timeout por pagina en segundos (opcional, default 120).
 
@@ -150,15 +154,20 @@ def _clave_nombre(nombre: str) -> str:
 def _configuracion() -> tuple[str, str, str, int]:
     # RND permite sobreescribir proveedor/modelo, pero por defecto reutiliza
     # la configuracion MiniMax-M3 que ya usamos en otros servicios Vogel.
-    url = (
+    #
+    # RND_PDF_AI_URL tiene dos usos distintos y el orden importa: si apunta a
+    # otro host (el proxy de la demo) es un servicio externo que no necesita
+    # credencial local; si no, seguimos hablando con MiniMax directo.
+    url_explicita = (
         _texto(os.getenv("RND_PDF_AI_URL"))
         or _texto(os.getenv("GROUP_SUMMARY_AI_CHAT_URL"))
-        or "https://api.minimax.io/v1/chat/completions"
     )
+    url = url_explicita or "https://api.minimax.io/v1/chat/completions"
     api_key = (
         _texto(os.getenv("RND_PDF_AI_API_KEY"))
         or _texto(os.getenv("MINIMAX_API_KEY"))
         or _texto(os.getenv("GROUP_SUMMARY_AI_API_KEY"))
+        or _texto(os.getenv("RND_PDF_AI_TOKEN"))
     )
     model = (
         _texto(os.getenv("RND_PDF_AI_MODEL"))
@@ -169,6 +178,15 @@ def _configuracion() -> tuple[str, str, str, int]:
     timeout_raw = _texto(os.getenv("RND_PDF_AI_TIMEOUT") or "120")
 
     if not api_key:
+        # Sin credencial hay dos motivos distintos y el mensaje cambia:
+        # en un equipo de desarrollo es una falta de configuracion; en una
+        # instalacion que habla con el proxy es simplemente que la IA no
+        # esta disponible, y RND sigue operando sin ella.
+        if url_explicita:
+            raise ConfiguracionPdfIAError(
+                "La IA no esta disponible en esta instalacion. "
+                "Segui usando RND normalmente: el resto del sistema funciona sin ella."
+            )
         raise ConfiguracionPdfIAError(
             "Para importar PDF/imagen con IA falta la API key. "
             "Configure RND_PDF_AI_API_KEY o MINIMAX_API_KEY y vuelva a intentar."

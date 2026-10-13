@@ -118,6 +118,63 @@ def test_configuracion_reutiliza_minimax_api_key():
     assert timeout == 120
 
 
+def test_configuracion_acepta_proxy_de_demo_sin_credencial_real():
+    """El ejecutable de la demo no lleva claves: habla contra el proxy.
+
+    Es el escenario que quedo posible despues de sacar la clave del instalador:
+    la URL del proxy reemplaza a MiniMax y el token va en su lugar.
+    """
+    with patch.dict(
+        os.environ,
+        {
+            "RND_PDF_AI_URL": "https://vogelconsultoria.com.ar/rnd-ia/proxy.php",
+            "RND_PDF_AI_TOKEN": "demo-2026",
+        },
+        clear=True,
+    ):
+        url, api_key, model, timeout = _configuracion()
+
+    assert url == "https://vogelconsultoria.com.ar/rnd-ia/proxy.php"
+    assert api_key == "demo-2026"
+    assert model == "MiniMax-M3"
+
+
+def test_sin_credencial_con_proxy_el_error_no_pide_configurar_una_api_key():
+    """Con proxy configurado, el mensaje es para el usuario final.
+
+    El mensaje anterior decia "Configure RND_PDF_AI_API_KEY" al cliente de la
+    demo, que no tiene ninguna consola donde configurar nada. Y la IA es
+    opcional: RND sigue operando sin ella.
+    """
+    with patch.dict(
+        os.environ,
+        {"RND_PDF_AI_URL": "https://vogelconsultoria.com.ar/rnd-ia/proxy.php"},
+        clear=True,
+    ):
+        with pytest.raises(ConfiguracionPdfIAError) as exc:
+            _configuracion()
+
+    mensaje = str(exc.value)
+    assert "no esta disponible" in mensaje
+    assert "MINIMAX_API_KEY" not in mensaje
+    assert "RND_PDF_AI_API_KEY" not in mensaje
+
+
+def test_la_credencial_real_gana_al_token_del_proxy():
+    """Si hay una key real, se usa antes que el token interruptor."""
+    with patch.dict(
+        os.environ,
+        {
+            "MINIMAX_API_KEY": "secreto-real",
+            "RND_PDF_AI_TOKEN": "demo-2026",
+        },
+        clear=True,
+    ):
+        _url, api_key, _model, _timeout = _configuracion()
+
+    assert api_key == "secreto-real"
+
+
 def test_advertencia_string_no_se_parte_en_caracteres_y_faltantes_desmarcables():
     data = {
         "documento": {

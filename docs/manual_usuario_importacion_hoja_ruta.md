@@ -291,6 +291,13 @@ En **Ver Hoja de Ruta**, **Imprimir PDF** exige:
 
 Poder imprimir no significa por sí mismo que la hoja esté marcada LISTA.
 
+El botón **Lista para Sergio** genera otro PDF con fecha, ruta, chofer, camión y
+una sección por cliente/destino. Dentro de cada sección, los números de factura
+se agrupan por proveedor. Este resumen ayuda a revisar qué boletas corresponden
+a cada entrega; el chofer continúa llevando las facturas originales. Si una
+factura legacy no tiene proveedor guardado, se muestra como **Proveedor sin
+identificar**.
+
 ---
 
 ## 12. Problemas frecuentes

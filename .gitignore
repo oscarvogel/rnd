@@ -19,6 +19,8 @@ installer/.production_build_state
 
 # Local configuration and secrets
 .env
+deploy/rnd-ia/rnd-ia-secreto.php
+deploy/rnd-ia/estado/
 .env.*
 !.env.example
 *.secrets.*

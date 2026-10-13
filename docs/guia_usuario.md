@@ -319,6 +319,12 @@ Para imprimir deben estar completos:
 
 La posibilidad de imprimir es independiente del estado LISTA.
 
+En **Ver Hoja de Ruta**, **Lista para Sergio** genera un resumen imprimible por
+cliente/destino con los números de factura agrupados por proveedor, además de la
+fecha, ruta, chofer y camión. Las facturas originales siguen siendo la
+documentación que lleva el chofer. Los comprobantes antiguos sin proveedor
+registrado aparecen como **Proveedor sin identificar**.
+
 ## Buenas prácticas
 
 - Seleccione proveedor y fecha antes del archivo.
