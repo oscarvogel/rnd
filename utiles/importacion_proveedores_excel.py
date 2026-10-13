@@ -18,6 +18,34 @@ METODO_TIO_PUJIO = "TIO_PUJIO"
 METODO_DETALLE_VENTAS = "DETALLE_VENTAS"
 METODO_TREMBLAY = "TREMBLAY"
 
+# Única fuente de verdad para el combo de la ficha del proveedor
+# (vistas.ABMProveedores): sólo estos métodos están habilitados.
+METODOS_IMPORTACION = (
+    (METODO_COLUMNAS, "Columnas configurables (Excel / PDF / imagen)"),
+    (METODO_TREMBLAY, "Tremblay (informe de despacho)"),
+    (METODO_TIO_PUJIO, "Tío Pujio (Control de Pedidos)"),
+    (METODO_DETALLE_VENTAS, "Detalle de ventas"),
+)
+
+# Valores históricos guardados a mano que deben seguir funcionando.
+ALIAS_METODO_IMPORTACION = {
+    "PUJIO": METODO_TIO_PUJIO,
+}
+
+
+def normalizar_metodo_importacion(valor):
+    """Devuelve el código canónico del método o "" si es desconocido.
+
+    Tolera minúsculas, espacios/guiones y los alias históricos (ej. el
+    "pujio" que quedó guardado en proveedores) para no romper la
+    importación de datos ya cargados.
+    """
+    codigo = re.sub(r"[\s\-]+", "_", str(valor or "").strip().upper())
+    codigo = ALIAS_METODO_IMPORTACION.get(codigo, codigo)
+    if codigo in dict(METODOS_IMPORTACION):
+        return codigo
+    return ""
+
 COLUMNAS_NORMALIZADAS = [
     "codigo_cliente",
     "detalle_cliente",
@@ -367,7 +395,7 @@ def normalizar_archivo_pedidos(archivo_entrada, progreso=None, metodo=None):
         )
         return _guardar_temporal(filas)
 
-    metodo = (metodo or "").strip().upper()
+    metodo = normalizar_metodo_importacion(metodo) or (metodo or "").strip().upper()
     if metodo == METODO_COLUMNAS:
         return None
     if metodo == METODO_TREMBLAY:

@@ -25,6 +25,7 @@ from pyqt5libs.pyqt5libs.utiles import inicializar_y_capturar_excepciones, openF
 from utiles.importacion_proveedores_excel import (
     METODO_COLUMNAS,
     normalizar_archivo_pedidos,
+    normalizar_metodo_importacion,
 )
 from utiles.importacion_tremblay_excel import procesar_archivo_tremblay_excel
 from utiles.importacion_tremblay_pdf import procesar_pdf_despacho
@@ -110,7 +111,11 @@ class ImportacionPedidosController(ControladorBase):
             )
         except peewee.DoesNotExist:
             return None
-        return str(proveedor.metodo_importacion or METODO_COLUMNAS).strip().upper()
+        crudo = str(proveedor.metodo_importacion or "").strip().upper()
+        # Acepta alias históricos ("pujio" -> "TIO_PUJIO"); lo desconocido
+        # se devuelve tal cual para que el dispatcher avise con el error
+        # "Método de importación desconocido" en vez de importar mal.
+        return normalizar_metodo_importacion(crudo) or crudo or METODO_COLUMNAS
 
 
     def _reconectar_db_para_lectura(self):
