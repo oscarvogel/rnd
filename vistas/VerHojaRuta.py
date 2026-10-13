@@ -98,6 +98,11 @@ class VerHojaRutaView(VistaBase):
         self.btn_continuar.setCursor(Qt.PointingHandCursor)
         self.btn_continuar.setEnabled(False)
         self.btn_armar = self.CreaBoton("Armar pallets", imagen_str="edit.png")
+        self.btn_lista_facturas = self.CreaBoton(
+            "Lista para Sergio", imagen_str="printing.png"
+        )
+        self.btn_lista_facturas.setProperty("role", "secondary")
+        self.btn_lista_facturas.setEnabled(False)
         self.btn_imprimir = self.CreaBoton("Vista previa PDF", imagen_str="printing.png")
         self.btn_imprimir.setProperty("role", "secondary")
         self.btn_imprimir.setEnabled(False)
@@ -112,6 +117,7 @@ class VerHojaRutaView(VistaBase):
         layout_botones.addStretch(1)
         layout_botones.addWidget(self.btn_continuar)
         layout_botones.addWidget(self.btn_armar)
+        layout_botones.addWidget(self.btn_lista_facturas)
         layout_botones.addWidget(self.btn_imprimir)
         layout_botones.addWidget(self.btn_cerrar)
         layoutPpal.addLayout(layout_botones)
@@ -158,6 +164,7 @@ class VerHojaRutaView(VistaBase):
         self.btn_continuar.setEnabled(puede_continuar)
         self.btn_continuar.setVisible(permitir_continuar)
         self.btn_imprimir.setEnabled(bool(pedidos) and recursos_completos)
+        self.btn_lista_facturas.setEnabled(bool(pedidos) and recursos_completos)
 
         if not recursos_completos:
             self.btn_continuar.setText("Asignar recursos antes de continuar")

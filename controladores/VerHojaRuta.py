@@ -95,6 +95,7 @@ class VerHojaRutaController(ControladorBase):
         self.view.grilla_datos.doubleClicked.connect(self.on_click_btn_modificar)
         self.view.btn_continuar.clicked.connect(self.ir_validacion)
         self.view.btn_armar.clicked.connect(self.ir_armado)
+        self.view.btn_lista_facturas.clicked.connect(self.imprimir_lista_facturas)
     
     def _nombre_responsable(self, recurso_id, generico_id):
         recurso_id = int(recurso_id or 0)
@@ -327,6 +328,46 @@ class VerHojaRutaController(ControladorBase):
 
         except Exception as e:
             showAlert("Error", "Ocurrió un error al generar el reporte: {}".format(e))
+
+    @inicializar_y_capturar_excepciones
+    def imprimir_lista_facturas(self, *args, **kwargs):
+        from utiles.Reportes import (
+            GeneradorPDFHojaRuta,
+            construir_lista_facturas_compacta,
+        )
+
+        if not self.recursos_completos_actual:
+            showAlert(
+                "Datos incompletos",
+                "Asigne un chofer y un camión válidos antes de generar la lista.",
+            )
+            return
+
+        try:
+            fecha = self.view.fecha_reparto.valor()
+            ruta_id = self.view.cbo_ruta_reparto.valor()
+            hojas = list(HojaDeRuta.select().where(
+                HojaDeRuta.fecha == fecha,
+                HojaDeRuta.ruta == ruta_id,
+            ))
+            if not hojas:
+                showAlert("Sin datos", "No hay pedidos para esta fecha y ruta.")
+                return
+
+            entregas = construir_lista_facturas_compacta(hojas)
+            nombre_ruta = str(self.view.cbo_ruta_reparto.currentText() or ruta_id)
+            GeneradorPDFHojaRuta(orientation="L").generar_lista_facturas(
+                entregas=entregas,
+                fecha_reporte=fecha.strftime("%d/%m/%Y"),
+                nombre_ruta=nombre_ruta,
+                responsable=self.responsable_actual,
+                equipo=self.equipo_actual,
+            )
+        except Exception as e:
+            showAlert(
+                "Error",
+                "No se pudo generar la lista de facturas: {}".format(e),
+            )
     
     @inicializar_y_capturar_excepciones
     def on_click_btn_agregar(self, *args, **kwargs):

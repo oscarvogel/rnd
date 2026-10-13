@@ -123,6 +123,233 @@ def construir_descargas_pallets(hojas):
     return resultado
 
 
+def _resolver_facturas_por_hoja(hojas):
+    """Resuelve (proveedor, factura) por hoja preservando el orden.
+
+    Comprende comprobantes legacy sin documento asociado. Lo usan ambos
+    builders para no duplicar la lógica de documentos.
+    """
+    from modelos.Clientes import LugarEntrega
+    from modelos.Documentos import (
+        DocumentoPedido,
+        DocumentoPedidoDetalle,
+        DocumentoPedidoHojaRuta,
+        asegurar_esquema_documentos,
+    )
+    from modelos.Proveedores import Proveedor
+
+    hojas = sorted(list(hojas), key=lambda h: int(h.id))
+    if not hojas:
+        return [], {}, {}
+
+    asegurar_esquema_documentos()
+    por_id = {int(h.id): h for h in hojas}
+    vinculos = list(
+        DocumentoPedidoHojaRuta.select(
+            DocumentoPedidoHojaRuta,
+            DocumentoPedidoDetalle,
+            DocumentoPedido,
+        )
+        .join(DocumentoPedidoDetalle)
+        .join(DocumentoPedido)
+        .where(DocumentoPedidoHojaRuta.hoja_ruta.in_(list(por_id)))
+        .order_by(DocumentoPedidoHojaRuta.id)
+    )
+
+    proveedor_ids = {
+        int(v.detalle.documento.proveedor_id)
+        for v in vinculos
+        if v.detalle.documento.proveedor_id
+    }
+    proveedores = ({
+        int(p.id): p.razon_social
+        for p in Proveedor.select().where(Proveedor.id.in_(list(proveedor_ids)))
+    } if proveedor_ids else {})
+
+    lugar_ids = {
+        int(h.lugar_entrega_id)
+        for h in hojas
+        if getattr(h, "lugar_entrega_id", None)
+    }
+    lugares = ({
+        int(l.id): l
+        for l in LugarEntrega.select().where(LugarEntrega.id.in_(list(lugar_ids)))
+    } if lugar_ids else {})
+
+    por_hoja = {int(h.id): [] for h in hojas}
+    vinculos_por_hoja = {}
+    for vinculo in vinculos:
+        vinculos_por_hoja.setdefault(int(vinculo.hoja_ruta_id), []).append(vinculo)
+
+    for hoja in hojas:
+        hoja_id = int(hoja.id)
+        vinculos_hoja = vinculos_por_hoja.get(hoja_id, [])
+        if not vinculos_hoja:
+            # Conserva comprobantes de instalaciones legacy sin migrar.
+            numero = str(getattr(hoja, "comprobante", "") or "").strip()
+            if numero:
+                por_hoja[hoja_id].append(("Proveedor sin identificar", numero))
+            continue
+        for vinculo in vinculos_hoja:
+            documento = vinculo.detalle.documento
+            numero = str(
+                documento.numero_factura
+                or documento.comprobante_origen
+                or getattr(hoja, "comprobante", "")
+                or ""
+            ).strip()
+            if not numero:
+                continue
+            proveedor_id = int(documento.proveedor_id or 0)
+            proveedor = proveedores.get(proveedor_id, "Proveedor sin identificar")
+            por_hoja[hoja_id].append((proveedor, numero))
+
+    return hojas, por_hoja, lugares
+
+
+def construir_lista_facturas(hojas):
+    """Agrupa las facturas de una hoja por cliente/destino y proveedor."""
+    hojas, por_hoja, lugares = _resolver_facturas_por_hoja(hojas)
+    if not hojas:
+        return []
+
+    entregas = {}
+
+    def entrega_para(hoja):
+        cliente_id = int(getattr(hoja, "cliente_id", 0) or 0)
+        lugar_id = int(getattr(hoja, "lugar_entrega_id", 0) or 0)
+        clave = (cliente_id, lugar_id)
+        if clave not in entregas:
+            lugar = lugares.get(lugar_id)
+            entregas[clave] = {
+                "cliente": getattr(hoja, "nombre_cliente", "") or "Cliente",
+                "lugar": getattr(lugar, "nombre", "") or "",
+                "direccion": getattr(lugar, "direccion", "") or "",
+                "proveedores": {},
+                "_orden": len(entregas),
+            }
+        return entregas[clave]
+
+    for hoja in hojas:
+        entrega = entrega_para(hoja)
+        for proveedor, numero in por_hoja[int(hoja.id)]:
+            entrega["proveedores"].setdefault(proveedor, set()).add(numero)
+
+    resultado = []
+    for entrega in sorted(entregas.values(), key=lambda x: x["_orden"]):
+        grupos = []
+        for proveedor in sorted(entrega["proveedores"], key=str.casefold):
+            grupos.append({
+                "proveedor": proveedor,
+                "facturas": sorted(
+                    entrega["proveedores"][proveedor], key=str.casefold
+                ),
+            })
+        if grupos:
+            resultado.append({
+                "cliente": entrega["cliente"],
+                "lugar": entrega["lugar"],
+                "direccion": entrega["direccion"],
+                "proveedores": grupos,
+            })
+    return resultado
+
+
+def pallets_por_hoja(hoja_ids):
+    """Mapea hoja de ruta -> códigos de pallet ordenados (UNA query).
+
+    Las hojas sin PalletDetalle quedan fuera del dict (el reporte muestra
+    "—"). Reutiliza el patrón de construir_descargas_pallets.
+    """
+    from modelos.Pallet import Pallet, PalletDetalle
+
+    ids = [int(i) for i in dict.fromkeys(hoja_ids or []) if i]
+    if not ids:
+        return {}
+    por_hoja = {}
+    detalles = (
+        PalletDetalle.select(PalletDetalle, Pallet)
+        .join(Pallet)
+        .where(PalletDetalle.hoja_ruta.in_(ids))
+        .order_by(Pallet.codigo, PalletDetalle.id)
+    )
+    for detalle in detalles:
+        # OJO: ids crudos, nunca los objetos (evitan SELECT por fila).
+        por_hoja.setdefault(int(detalle.hoja_ruta_id), set()).add(
+            detalle.pallet.codigo
+        )
+    return {
+        hoja_id: sorted(codigos)
+        for hoja_id, codigos in por_hoja.items()
+    }
+
+
+def construir_lista_facturas_compacta(hojas):
+    """Una fila por cliente con sus facturas y sus pallets.
+
+    Misma resolución de documentos que construir_lista_facturas, pero
+    fusionando los destinos del mismo cliente: el destino une los
+    distintos "lugar - dirección" con " / " y el pallet une los códigos
+    donde están sus hojas ("Sin pallet" si nada está paletizado).
+    """
+    hojas, por_hoja, lugares = _resolver_facturas_por_hoja(hojas)
+    if not hojas:
+        return []
+
+    clientes = {}
+    orden = []
+    for hoja in hojas:
+        hoja_id = int(hoja.id)
+        cid = int(getattr(hoja, "cliente_id", 0) or 0)
+        nombre = getattr(hoja, "nombre_cliente", "") or ""
+        clave = cid if cid else ("N:" + nombre)
+        if clave not in clientes:
+            clientes[clave] = {
+                "cliente": nombre or "Cliente",
+                "destinos": [],
+                "proveedores": {},
+                "hojas": [],
+            }
+            orden.append(clave)
+        cliente = clientes[clave]
+        cliente["hojas"].append(hoja_id)
+        lugar = lugares.get(int(getattr(hoja, "lugar_entrega_id", 0) or 0))
+        destino = getattr(lugar, "nombre", "") or ""
+        direccion = getattr(lugar, "direccion", "") or ""
+        if direccion:
+            destino = "{} - {}".format(destino, direccion) if destino else direccion
+        if destino and destino not in cliente["destinos"]:
+            cliente["destinos"].append(destino)
+        for proveedor, numero in por_hoja[hoja_id]:
+            cliente["proveedores"].setdefault(proveedor, set()).add(numero)
+
+    pallets = pallets_por_hoja([int(h.id) for h in hojas])
+
+    resultado = []
+    for numero, clave in enumerate(orden, start=1):
+        cliente = clientes[clave]
+        grupos = []
+        for proveedor in sorted(cliente["proveedores"], key=str.casefold):
+            facturas = sorted(cliente["proveedores"][proveedor], key=str.casefold)
+            if facturas:
+                grupos.append({"proveedor": proveedor, "facturas": facturas})
+        if not grupos:
+            continue
+        pallets_cliente = []
+        for hoja_id in cliente["hojas"]:
+            for codigo in pallets.get(hoja_id, []):
+                if codigo not in pallets_cliente:
+                    pallets_cliente.append(codigo)
+        resultado.append({
+            "numero": numero,
+            "cliente": cliente["cliente"],
+            "destino": " / ".join(cliente["destinos"]),
+            "proveedores": grupos,
+            "pallets": sorted(pallets_cliente),
+        })
+    return resultado
+
+
 class GeneradorPDFHojaRuta(FPDF):
     def __init__(self, orientation="P", unit="mm", format="A4"):
         super().__init__(orientation, unit, format)
@@ -139,11 +366,12 @@ class GeneradorPDFHojaRuta(FPDF):
         self.cell(0, 7, _texto_pdf(self.empresa_nombre), 0, 1, "C")
         self.set_font("Arial", "", 8)
         self.cell(0, 5, _texto_pdf(self.empresa_info), 0, 1, "C")
+        mitad = (self.w - self.l_margin - self.r_margin) / 2
         self.set_font("Arial", "B", 9)
-        self.cell(95, 5, _texto_pdf("Fecha: {}".format(self.fecha_reporte)), 0, 0, "L")
-        self.cell(95, 5, _texto_pdf("Ruta: {}".format(self.nombre_ruta)), 0, 1, "R")
-        self.cell(95, 5, _texto_pdf("Chofer: {}".format(self.responsable)), 0, 0, "L")
-        self.cell(95, 5, _texto_pdf("Camión: {}".format(self.equipo)), 0, 1, "R")
+        self.cell(mitad, 5, _texto_pdf("Fecha: {}".format(self.fecha_reporte)), 0, 0, "L")
+        self.cell(mitad, 5, _texto_pdf("Ruta: {}".format(self.nombre_ruta)), 0, 1, "R")
+        self.cell(mitad, 5, _texto_pdf("Chofer: {}".format(self.responsable)), 0, 0, "L")
+        self.cell(mitad, 5, _texto_pdf("Camión: {}".format(self.equipo)), 0, 1, "R")
         self.ln(3)
 
     def footer(self):
@@ -320,6 +548,140 @@ class GeneradorPDFHojaRuta(FPDF):
                 self.cell(25, 6, _numero(getattr(h, "cantidad", 0)), 1, 0, "R")
                 self.cell(30, 6, _numero(getattr(h, "cantidad_bultos", 0)), 1, 1, "R")
             self.ln(3)
+
+    @staticmethod
+    def _envolver(pdf, texto, ancho_mm):
+        """Parte un texto en líneas que entran en ancho_mm (fuente actual)."""
+        texto = _texto_pdf(texto)
+        palabras = texto.split()
+        lineas, actual = [], ""
+        for palabra in palabras:
+            candidato = (actual + " " + palabra).strip()
+            if pdf.get_string_width(candidato) <= ancho_mm - 2:
+                actual = candidato
+            else:
+                if actual:
+                    lineas.append(actual)
+                actual = palabra
+        if actual:
+            lineas.append(actual)
+        return lineas or [""]
+
+    def _cabecera_tabla_facturas(self, anchos):
+        self.set_font("Arial", "B", 8)
+        self.set_fill_color(232, 236, 241)
+        for ancho, titulo in zip(
+            anchos,
+            ("N°", "Cliente", "Destino", "Proveedor", "Factura(s) a entregar", "Pallet"),
+        ):
+            self.cell(ancho, 7, _texto_pdf(titulo), 1, 0, "C", fill=True)
+        self.ln()
+        self.set_fill_color(255, 255, 255)
+
+    def _fila_tabla_facturas(self, celdas, anchos, alto_linea=5):
+        """Dibuja una fila con bloques de texto independientes por columna.
+
+        Cada celda calcula sus líneas y la fila toma la altura máxima, como
+        en el mapa de recorrido: textos largos nunca invaden la columna
+        vecina. Devuelve True si entró en la página actual.
+        """
+        self.set_font("Arial", "", 8)
+        bloques = [self._envolver(self, texto, ancho) for texto, ancho in zip(celdas, anchos)]
+        altura = max(7, max(len(lineas) for lineas in bloques) * alto_linea)
+        if self.get_y() + altura > self.h - 18:
+            return False
+        x0, y0 = self.get_x(), self.get_y()
+        x = x0
+        for ancho in anchos:
+            self.rect(x, y0, ancho, altura)
+            x += ancho
+        for i, (ancho, lineas) in enumerate(zip(anchos, bloques)):
+            alineacion = "C" if i in (0, 5) else "L"
+            negrita = i in (0, 1)
+            if negrita:
+                self.set_font("Arial", "B", 8)
+            x_col = x0 + sum(anchos[:i])
+            self.set_xy(x_col + 1, y0 + max(1, (altura - len(lineas) * alto_linea) / 2))
+            for linea in lineas:
+                self.cell(ancho - 2, alto_linea, linea, 0, 1, alineacion)
+                self.set_x(x_col + 1)
+            if negrita:
+                self.set_font("Arial", "", 8)
+        self.set_xy(x0, y0 + altura)
+        return True
+
+    def generar_lista_facturas(
+        self, entregas, fecha_reporte, nombre_ruta, responsable, equipo
+    ):
+        """Hoja de control apaisada: una fila por cliente.
+
+        Recibe la salida de construir_lista_facturas_compacta (con
+        "numero", "cliente", "destino", "proveedores" y "pallets").
+        """
+        self.fecha_reporte = str(fecha_reporte)
+        self.nombre_ruta = str(nombre_ruta)
+        self.responsable = str(responsable)
+        self.equipo = str(equipo)
+        self.alias_nb_pages()
+        self.set_margins(10, 12, 10)
+        self.add_page()
+        self._titulo("LISTA DE FACTURAS PARA REPARTO")
+
+        anchos = (12, 58, 70, 42, 60, 35)
+
+        if not entregas:
+            self.set_font("Arial", "", 10)
+            self.multi_cell(0, 7, _texto_pdf(
+                "No hay facturas con número para los destinos de esta hoja. "
+                "Revise la importación de documentos."
+            ))
+        else:
+            self._cabecera_tabla_facturas(anchos)
+            for entrega in entregas:
+                proveedores = entrega.get("proveedores", [])
+                if len(proveedores) == 1:
+                    texto_proveedor = proveedores[0]["proveedor"]
+                    texto_facturas = ", ".join(proveedores[0]["facturas"])
+                else:
+                    texto_proveedor = " / ".join(p["proveedor"] for p in proveedores)
+                    texto_facturas = " / ".join(
+                        "{}: {}".format(p["proveedor"], ", ".join(p["facturas"]))
+                        for p in proveedores
+                    )
+                pallets = entrega.get("pallets") or []
+                celdas = (
+                    str(entrega.get("numero", "")).zfill(2),
+                    entrega.get("cliente", ""),
+                    entrega.get("destino", ""),
+                    texto_proveedor,
+                    texto_facturas,
+                    ", ".join(pallets) if pallets else "Sin pallet",
+                )
+                if not self._fila_tabla_facturas(celdas, anchos):
+                    self.add_page()
+                    self._cabecera_tabla_facturas(anchos)
+                    self._fila_tabla_facturas(celdas, anchos)
+
+        self.set_font("Arial", "I", 8)
+        self.multi_cell(0, 5, _texto_pdf(
+            "Las facturas originales continúan siendo la documentación que "
+            "lleva el chofer. Esta hoja es un resumen de control."
+        ))
+
+        output_dir = "documentacion"
+        os.makedirs(output_dir, exist_ok=True)
+        fecha_archivo = str(fecha_reporte).replace("/", "-")
+        ruta_archivo = "".join(
+            c if c.isalnum() or c in "-_" else "_"
+            for c in str(nombre_ruta or "ruta")
+        ).strip("_") or "ruta"
+        ruta_salida = os.path.join(
+            output_dir,
+            "ListaFacturas_{}_{}.pdf".format(fecha_archivo, ruta_archivo),
+        )
+        self.output(ruta_salida)
+        messagebox.showinfo("Éxito", "PDF generado en: {}".format(ruta_salida))
+        os.startfile(ruta_salida)
 
     def generar_reporte(self, hoja_ruta_query, fecha_reporte, nombre_ruta, responsable, equipo):
         self.fecha_reporte = str(fecha_reporte)
