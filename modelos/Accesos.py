@@ -44,7 +44,7 @@ class Acceso(ModeloBase):
             try:
                 formula = Formula.get(Formula.for_valid == for_valid)
             except:
-                Ventanas.showAlert("Sistema", "{} no establecido".format(for_valid))
+                cls._alertar_permiso_no_definido(for_valid)
                 return False
             data = cls.select().where(Acceso.for_id == formula.for_id,
                                       Acceso.usu_id == usu_id)
@@ -52,3 +52,21 @@ class Acceso(ModeloBase):
                 return True
             else:
                 return False
+
+    @staticmethod
+    def _alertar_permiso_no_definido(for_valid):
+        """Avisa de un permiso sin fórmula, sólo desde el hilo gráfico.
+
+        Las consultas del dashboard corren en QThreadPool: crear ahí un
+        QMessageBox corrompe Qt. Fuera del hilo gráfico se niega en
+        silencio (la tarjeta se oculta, igual que con la BD caída).
+        """
+        try:
+            from PyQt5.QtCore import QThread
+            from PyQt5.QtWidgets import QApplication
+            app = QApplication.instance()
+            if app is None or QThread.currentThread() != app.thread():
+                return
+        except Exception:
+            return
+        Ventanas.showAlert("Sistema", "{} no establecido".format(for_valid))

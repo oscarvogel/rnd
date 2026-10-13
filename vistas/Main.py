@@ -1,5 +1,7 @@
 # coding=utf-8
 
+import time
+
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QEvent, QTimer, Qt
 from PyQt5.QtWidgets import QMainWindow, qApp
@@ -20,6 +22,13 @@ from vistas.shell.Encabezado import EncabezadoView
 class MainView(QMainWindow):
     LanzarExcepciones = True
 
+    # La recarga automática al recuperar el foco disparaba 5 consultas
+    # remotas por cada diálogo cerrado o alt-tab ("recalcula cada ratito").
+    # Sólo recalcula si se abrió un módulo desde la última vez (los datos
+    # pueden haber cambiado) o si pasó el intervalo de resguardo; el botón
+    # Actualizar y la carga inicial/recarga explícita no pasan por acá.
+    INTERVALO_RECARGA_AUTO_DASHBOARD = 60.0
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # ``botones`` se conserva por compatibilidad con codigo existente
@@ -29,6 +38,8 @@ class MainView(QMainWindow):
         self.botones = []
         self.ventana_menu_lateral = None
         self.dashboard = None
+        self._ultima_recarga_auto_dashboard = 0.0
+        self._dashboard_sucio = True
         self.initUi()
         self.showMaximized()
 
@@ -108,16 +119,31 @@ class MainView(QMainWindow):
             QTimer.singleShot(0, self._recargar_dashboard_si_visible)
         return super().event(event)
 
+    def marcar_dashboard_sucio(self):
+        """Indica que se abrió un módulo y los datos pueden haber cambiado."""
+        self._dashboard_sucio = True
+
     def _recargar_dashboard_si_visible(self):
         dashboard = getattr(self, "dashboard", None)
         if dashboard is None:
             return
         try:
-            if dashboard.isVisible():
-                dashboard.recargar()
+            if not dashboard.isVisible():
+                return
         except RuntimeError:
             # La ventana puede estar cerrándose mientras llega el evento Qt.
             return
+        ahora = time.monotonic()
+        if (
+            not self._dashboard_sucio
+            and ahora - self._ultima_recarga_auto_dashboard < self.INTERVALO_RECARGA_AUTO_DASHBOARD
+        ):
+            # Foco/diálogos/alt-tab sin trabajo intermedio: no hay nada
+            # nuevo que mostrar y cada recarga son 5 consultas remotas.
+            return
+        self._ultima_recarga_auto_dashboard = ahora
+        self._dashboard_sucio = False
+        dashboard.recargar()
 
 
     # Prefijos de paquete probados en orden al resolver el modulo del
@@ -254,6 +280,7 @@ class MainView(QMainWindow):
                 return
             target = dato_menu.for_id.for_arch
             clase = self._resolver_clase_menu(target)
+            self.marcar_dashboard_sucio()
             self.ventana_menu_lateral = clase()
             self.ventana_menu_lateral.run()
         except DoesNotExist:
@@ -289,6 +316,7 @@ class MainView(QMainWindow):
             return
         try:
             clase = self._resolver_clase_menu(Archivo)
+            self.marcar_dashboard_sucio()
             self.ventana = clase()
             self.ventana.run()
         except Exception as exc:
@@ -312,6 +340,7 @@ class MainView(QMainWindow):
             dato_menu, permitido = self._leer_opcion_menu(boton.id)
             if permitido:
                 target = dato_menu.for_id.for_arch
+                self.marcar_dashboard_sucio()
                 self.ventana_menu_lateral = self._resolver_clase_menu(target)()
                 self.ventana_menu_lateral.run()
         except DoesNotExist:
