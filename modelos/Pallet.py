@@ -147,6 +147,43 @@ def pallets_para_carga(fecha_reparto, ruta_id, responsable_id, equipo_id):
     )
 
 
+def _sumas_asignadas(hoja_ids):
+    """Suma lo ya paletizado por hoja en UNA query (GROUP BY).
+
+    ``lineas_con_saldo`` se llama en cada refresco de ArmadoPallets con
+    todas las hojas del día: hacerlo de a una (get_by_id + SUM por hoja)
+    eran 2N roundtrips contra el MySQL remoto por cada artículo movido.
+    """
+    ids = [int(i) for i in dict.fromkeys(hoja_ids or []) if i]
+    ceros = {
+        "cantidad": a_decimal(0),
+        "kg": a_decimal(0),
+        "bultos": a_decimal(0),
+    }
+    resultado = {i: dict(ceros) for i in ids}
+    if not ids:
+        return resultado
+    consulta = (
+        PalletDetalle.select(
+            PalletDetalle.hoja_ruta,
+            peewee.fn.COALESCE(peewee.fn.SUM(PalletDetalle.cantidad), 0).alias("cantidad"),
+            peewee.fn.COALESCE(peewee.fn.SUM(PalletDetalle.kg), 0).alias("kg"),
+            peewee.fn.COALESCE(peewee.fn.SUM(PalletDetalle.bultos), 0).alias("bultos"),
+        )
+        .where(PalletDetalle.hoja_ruta.in_(ids))
+        .group_by(PalletDetalle.hoja_ruta)
+    )
+    for fila in consulta:
+        # OJO: usar el id crudo, nunca fila.hoja_ruta (dispararía un SELECT
+        # por fila para traer el objeto relacionado).
+        resultado[int(fila.hoja_ruta_id)] = {
+            "cantidad": a_decimal(fila.cantidad),
+            "kg": a_decimal(fila.kg),
+            "bultos": a_decimal(fila.bultos),
+        }
+    return resultado
+
+
 def _suma_asignada(hoja_ruta_id, excluir_pallet_id=None):
     consulta = PalletDetalle.select(
         peewee.fn.COALESCE(peewee.fn.SUM(PalletDetalle.cantidad), 0).alias("cantidad"),
@@ -242,31 +279,37 @@ def quitar_detalle(pallet, hoja_ruta):
 
 
 def composicion_pallet(pallet):
-    """Lineas del pallet con datos derivados de la HojaDeRuta (sin duplicar)."""
+    """Lineas del pallet con datos derivados de la HojaDeRuta (sin duplicar).
+
+    Una sola pasada: el JOIN ya trae cada hoja con su detalle, así que los
+    nombres de lugar se resuelven con un único IN. (Antes el mismo JOIN se
+    ejecutaba dos veces y las hojas se volvían a pedir por separado.)
+    """
     from modelos.Clientes import LugarEntrega
 
     pallet_id = getattr(pallet, "id", pallet)
-    consulta = (
+    detalles = list(
         PalletDetalle.select(PalletDetalle, HojaDeRuta)
         .join(HojaDeRuta)
         .where(PalletDetalle.pallet == pallet_id)
         .order_by(PalletDetalle.id)
     )
-    hojas_ids = [d.hoja_ruta_id for d in consulta.clone()]
+    lugar_ids = {
+        hoja.lugar_entrega_id
+        for detalle in detalles
+        for hoja in (detalle.hoja_ruta,)
+        if hoja.lugar_entrega_id
+    }
     nombres_lugar = {}
-    if hojas_ids:
-        hojas = list(HojaDeRuta.select().where(HojaDeRuta.id.in_(hojas_ids)))
-        lugar_ids = {h.lugar_entrega_id for h in hojas if h.lugar_entrega_id}
-        if lugar_ids:
-            nombres_lugar = {
-                l.id: l.nombre
-                for l in LugarEntrega.select().where(LugarEntrega.id.in_(lugar_ids))
-            }
-        lugares = {h.id: nombres_lugar.get(h.lugar_entrega_id, "") for h in hojas}
-    else:
-        lugares = {}
+    if lugar_ids:
+        nombres_lugar = {
+            lugar.id: lugar.nombre
+            for lugar in LugarEntrega.select().where(
+                LugarEntrega.id.in_(lugar_ids)
+            )
+        }
     filas = []
-    for detalle in consulta:
+    for detalle in detalles:
         hoja = detalle.hoja_ruta
         filas.append({
             "detalle_id": detalle.id,
@@ -274,7 +317,7 @@ def composicion_pallet(pallet):
             "cliente_id": getattr(hoja, "cliente_id", None),
             "cliente": getattr(hoja, "nombre_cliente", "") or "",
             "lugar_entrega_id": getattr(hoja, "lugar_entrega_id", None),
-            "lugar_entrega": lugares.get(hoja.id, ""),
+            "lugar_entrega": nombres_lugar.get(hoja.lugar_entrega_id, ""),
             "producto": hoja.producto or "",
             "comprobante": hoja.comprobante or "",
             "cantidad": a_decimal(detalle.cantidad),
@@ -293,12 +336,52 @@ def totales_por_destino(pallet):
 
 
 def lineas_con_saldo(hoja_ids):
+    """Saldos de varias líneas con DOS queries en total.
+
+    Trae las hojas en un IN y lo asignado en un GROUP BY, en vez de un
+    get_by_id + SUM por hoja. Mismo resultado que llamar a saldo_linea
+    por cada una; las inexistentes se omiten igual que antes.
+    """
+    ids = [int(i) for i in dict.fromkeys(hoja_ids or []) if i]
+    if not ids:
+        return {}
+    asignados = _sumas_asignadas(ids)
+    hojas = {h.id: h for h in HojaDeRuta.select().where(HojaDeRuta.id.in_(ids))}
     resultado = {}
-    for hoja_id in hoja_ids:
-        try:
-            resultado[hoja_id] = saldo_linea(hoja_id)
-        except HojaDeRuta.DoesNotExist:
+    for hoja_id in ids:
+        hoja = hojas.get(hoja_id)
+        if hoja is None:
             continue
+        asignado = asignados[hoja_id]
+        resultado[hoja_id] = {
+            "cantidad": saldo_disponible(hoja.cantidad, asignado["cantidad"]),
+            "kg": saldo_disponible(hoja.kg, asignado["kg"]),
+            "bultos": saldo_disponible(hoja.cantidad_bultos, asignado["bultos"]),
+        }
+    return resultado
+
+
+def lineas_por_pallet(pallet_ids):
+    """Cantidad de líneas por pallet en UNA query (COUNT + GROUP BY).
+
+    Para resúmenes ("Líneas en pallets: N") sin traer la composición
+    completa de cada pallet.
+    """
+    ids = [int(i) for i in dict.fromkeys(pallet_ids or []) if i]
+    resultado = {i: 0 for i in ids}
+    if not ids:
+        return resultado
+    consulta = (
+        PalletDetalle.select(
+            PalletDetalle.pallet,
+            peewee.fn.COUNT(PalletDetalle.id).alias("lineas"),
+        )
+        .where(PalletDetalle.pallet.in_(ids))
+        .group_by(PalletDetalle.pallet)
+    )
+    for fila in consulta:
+        # OJO: id crudo, nunca fila.pallet (traería el objeto con un SELECT).
+        resultado[int(fila.pallet_id)] = int(fila.lineas)
     return resultado
 
 

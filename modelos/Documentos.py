@@ -122,12 +122,25 @@ class DocumentoPedidoHojaRuta(ModeloBase):
         )
 
 
+_ESQUEMA_DOCUMENTOS_VERIFICADO = []
+
+
 def asegurar_esquema_documentos():
-    """Crea solo las tablas nuevas si no existen; no altera tablas legacy."""
+    """Crea solo las tablas nuevas si no existen; no altera tablas legacy.
+
+    Se invoca en cada refresco (bandeja, armado de pallets, importación):
+    el CREATE...IF NOT EXISTS cuesta 3 consultas al information_schema
+    por llamada contra el MySQL remoto, así que una vez verificado en
+    este proceso y sobre esta conexión no se repite. Las tablas sólo se
+    crean, nunca se borran, por lo que el caché es seguro.
+    """
+    if any(actual is db for actual in _ESQUEMA_DOCUMENTOS_VERIFICADO):
+        return
     db.create_tables(
         [DocumentoPedido, DocumentoPedidoDetalle, DocumentoPedidoHojaRuta],
         safe=True,
     )
+    _ESQUEMA_DOCUMENTOS_VERIFICADO.append(db)
 
 
 def obtener_o_crear_documento(

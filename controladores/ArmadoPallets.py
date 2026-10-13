@@ -14,6 +14,7 @@ from modelos.Pallet import (
     composicion_pallet,
     crear_pallet,
     lineas_con_saldo,
+    lineas_por_pallet,
     pallets_para_carga,
     quitar_detalle,
     totales_pallet,
@@ -22,7 +23,12 @@ from modelos.Pallet import (
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.pyqt5libs.Ventanas import showAlert
 from pyqt5libs.pyqt5libs.utiles import inicializar_y_capturar_excepciones
-from utiles.pallets import a_decimal, limite_kg_configurable
+from utiles.pallets import (
+    a_decimal,
+    agrupar_por_cliente_destino,
+    limite_kg_configurable,
+    totales,
+)
 from vistas.ArmadoPallets import ArmadoPalletsView
 
 
@@ -222,19 +228,22 @@ class ArmadoPalletsController(ControladorBase):
                 limite_kg=limite,
             )
             return
+        # Una sola composición: antes se calculaba 3 veces (contenido +
+        # totales + destinos) y cada cálculo repetía el JOIN.
         filas = composicion_pallet(pallet_id)
         self.view.cargar_contenido(filas)
         self.view.mostrar_totales(
-            totales_pallet(pallet_id), totales_por_destino(pallet_id),
+            totales(filas), agrupar_por_cliente_destino(filas),
             limite_kg=limite,
         )
 
-    def actualizar_guias(self):
+    def actualizar_guias(self, saldos=None):
         pendientes = self.view.grilla_pendientes.rowCount()
         if not self.hojas_actuales:
             self.view.mostrar_estado("Sin mercadería para la fecha y ruta seleccionadas.")
         else:
-            saldos = lineas_con_saldo([h.id for h in self.hojas_actuales])
+            if saldos is None:
+                saldos = lineas_con_saldo([h.id for h in self.hojas_actuales])
             sin_saldo = sum(
                 1 for hoja_id in saldos
                 if a_decimal(saldos[hoja_id].get("cantidad")) <= 0
@@ -251,7 +260,10 @@ class ArmadoPalletsController(ControladorBase):
                     "confirme la preparación o valide la carga."
                 )
         pallets = self._pallets_contexto()
-        total_lineas = sum(len(composicion_pallet(p.id)) for p in pallets)
+        # Conteo en una query en vez de la composición completa por pallet.
+        total_lineas = sum(
+            lineas_por_pallet([p.id for p in pallets]).values()
+        )
         self.view.mostrar_resumen(
             "Fecha: {} · Pallets armados: {} · Líneas en pallets: {}".format(
                 self.view.fecha_reparto.valor(), self.view.cantidad_pallets(), total_lineas
@@ -305,6 +317,7 @@ class ArmadoPalletsController(ControladorBase):
     def on_click_btn_agregar(self, *args, **kwargs):
         agregados, errores = self.agregar_lineas(self.view.ids_pendientes_seleccionados())
         self.refrescar_contenido()
+        # cargar_mercaderia_sin_alertas ya actualiza las guías al final.
         self.cargar_mercaderia_sin_alertas()
         if errores:
             showAlert(
@@ -313,9 +326,7 @@ class ArmadoPalletsController(ControladorBase):
                     len(errores), "\n".join(errores[:5])
                 ),
             )
-        elif agregados:
-            self.actualizar_guias()
-        else:
+        elif not agregados:
             showAlert("Sistema", "Seleccione al menos una línea con saldo disponible.")
 
     @inicializar_y_capturar_excepciones
@@ -373,7 +384,7 @@ class ArmadoPalletsController(ControladorBase):
         referencias = referencias_por_hojas(fecha_ids)
         saldos = lineas_con_saldo(fecha_ids)
         self.view.cargar_pendientes(self.filas_pendientes(self.hojas_actuales, referencias, saldos))
-        self.actualizar_guias()
+        self.actualizar_guias(saldos)
 
     @inicializar_y_capturar_excepciones
     @reconnect_if_needed
