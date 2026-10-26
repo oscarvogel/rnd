@@ -45,6 +45,7 @@ imp.grid_datos.AgregaItem([True, 'Cinco Hermanos', 'DEMO-COL-001', 'Bebidas', '1
 imp.grid_datos.AgregaItem([True, 'Ceferino', 'DEMO-COL-002', 'Alimentos', '8', '95', '8', 'Importación demo'])
 imp.lbl_resultado_titulo.setText('Vista previa lista para revisar')
 imp.lbl_resultado_detalle.setText('Verificá los datos antes de presionar Grabar pedidos.')
+imp.grupo_resultado.setVisible(True)
 save(imp, '01_importar_vista_previa.png', 1180, 850)
 
 # Captura 2 — bandeja de pedidos para organizar, con facturas del ejemplo.

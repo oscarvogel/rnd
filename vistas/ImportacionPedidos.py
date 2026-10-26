@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QGroupBox,
     QProgressBar,
+    QSizePolicy,
 )
 from modelos.Proveedores import ValidaProveedor
 from pyqt5libs.libs.vistas.VistaBase import VistaBase
@@ -64,26 +65,30 @@ class ImportacionPedidosView(VistaBase):
     def initUi(self):
         self.setWindowTitle("Preparar pedidos para reparto")
         self.resize(1180, 720)
+        self._previa_ampliada = False
+        self._resultado_disponible = False
         layoutPpal = QVBoxLayout(self)
-        layoutPpal.setSpacing(12)
+        layoutPpal.setContentsMargins(8, 8, 8, 8)
+        layoutPpal.setSpacing(8)
 
         titulo = QLabel("Importar pedidos")
         titulo.setObjectName("importacionTitulo")
         titulo.setProperty("role", "title")
         layoutPpal.addWidget(titulo)
 
-        bajada = QLabel(
-            "Seguí estos pasos. RND te indicará qué archivo cargar, mostrará una vista previa "
-            "y al finalizar te llevará al siguiente paso del reparto."
+        self.bajada = QLabel(
+            "RND te guía paso a paso: qué archivo cargar, la vista previa para revisar "
+            "y el siguiente paso del reparto."
         )
-        bajada.setWordWrap(True)
-        bajada.setObjectName("importacionBajada")
-        layoutPpal.addWidget(bajada)
+        self.bajada.setWordWrap(True)
+        self.bajada.setObjectName("importacionBajada")
+        layoutPpal.addWidget(self.bajada)
 
         self.avance = BarraProgresoImportacion()
         layoutPpal.addWidget(self.avance)
 
-        grupo_origen = QGroupBox("1. Elegir origen y fecha de reparto")
+        self.grupo_origen = QGroupBox("1. Elegir origen y fecha de reparto")
+        grupo_origen = self.grupo_origen
         grupo_origen.setObjectName("importacionPasoOrigen")
         layout_origen = QVBoxLayout(grupo_origen)
         fila_origen = QHBoxLayout()
@@ -104,6 +109,7 @@ class ImportacionPedidosView(VistaBase):
         layoutPpal.addWidget(grupo_origen)
 
         grupo_archivo = QGroupBox("2. Seleccionar archivo")
+        self.grupo_archivo = grupo_archivo
         grupo_archivo.setObjectName("importacionPasoArchivo")
         layout_archivo = QVBoxLayout(grupo_archivo)
         fila_archivo = QHBoxLayout()
@@ -137,8 +143,7 @@ class ImportacionPedidosView(VistaBase):
         layout_archivo.addLayout(fila_opciones)
 
         nota_opciones = QLabel(
-            "Excel: podés indicar filas si hace falta. PDF/imagen: RND extrae los pedidos con IA "
-            "y luego usa esta misma vista previa para que los revises antes de grabar."
+            "PDF/imagen: RND extrae los pedidos con IA y los muestra en esta misma vista previa."
         )
         nota_opciones.setWordWrap(True)
         nota_opciones.setObjectName("importacionNotaTecnica")
@@ -155,16 +160,26 @@ class ImportacionPedidosView(VistaBase):
         self.lbl_previa = QLabel("Todavía no se cargó ningún archivo.")
         self.lbl_previa.setWordWrap(True)
         fila_previa.addWidget(self.lbl_previa, stretch=1)
+        self.btn_ampliar = Boton(
+            texto="Ampliar vista previa",
+            tooltip="Ocultar los pasos 1 y 2 para ver más filas de la vista previa",
+        )
+        self.btn_ampliar.setCheckable(True)
+        self.btn_ampliar.clicked.connect(self.alternar_vista_previa)
+        fila_previa.addWidget(self.btn_ampliar)
         layout_previa.addLayout(fila_previa)
 
         self.grid_datos = Grilla()
         self.grid_datos.columnasHabilitadas = [0,]
         self.grid_datos.permiteagregar = False
+        self.grid_datos.setMinimumHeight(160)
+        self.grid_datos.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout_previa.addWidget(self.grid_datos)
         layoutPpal.addWidget(grupo_previa, stretch=1)
 
         self.grupo_resultado = QGroupBox("4. Resultado")
         self.grupo_resultado.setObjectName("importacionResultado")
+        self.grupo_resultado.setVisible(False)
         layout_resultado = QVBoxLayout(self.grupo_resultado)
         self.lbl_resultado_titulo = QLabel("Listo para comenzar")
         self.lbl_resultado_titulo.setObjectName("importacionResultadoTitulo")
@@ -192,12 +207,34 @@ class ImportacionPedidosView(VistaBase):
     def mostrar_ayuda_proveedor(self, texto):
         self.lbl_ayuda_proveedor.setText(texto)
 
+    def alternar_vista_previa(self):
+        """Oculta los pasos 1 y 2 para que la grilla de vista previa gane alto.
+
+        En pantallas chicas la grilla queda con una o dos filas visibles; este
+        interruptor deja solo la vista previa ocupando la ventana.
+        """
+        self._previa_ampliada = not self._previa_ampliada
+        ampliada = self._previa_ampliada
+        for widget in (self.bajada, self.grupo_origen, self.grupo_archivo):
+            widget.setVisible(not ampliada)
+        self.grupo_resultado.setVisible(self._resultado_disponible and not ampliada)
+        if ampliada:
+            self.btn_ampliar.setText("Reducir vista previa")
+            self.btn_ampliar.setToolTip("Volver a mostrar los pasos 1 y 2")
+        else:
+            self.btn_ampliar.setText("Ampliar vista previa")
+            self.btn_ampliar.setToolTip("Ocultar los pasos 1 y 2 para ver más filas de la vista previa")
+        self.btn_ampliar.setChecked(ampliada)
+        return ampliada
+
     def mostrar_previa(self, cantidad):
         self.lbl_previa.setText(
             "Se leyeron {} registros. Revisá la grilla y desmarcá cualquier fila que no quieras grabar.".format(cantidad)
         )
 
     def mostrar_resultado(self, resumen):
+        self._resultado_disponible = True
+        self.grupo_resultado.setVisible(not self._previa_ampliada)
         self.lbl_resultado_titulo.setText(resumen.titulo)
         self.lbl_resultado_detalle.setText(resumen.detalle)
         if resumen.siguiente_accion == "revisar_pendientes":
