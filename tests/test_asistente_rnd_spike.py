@@ -305,7 +305,81 @@ def test_manuales_humanos_quedaron_alineados_con_pdf_ia():
     )
     guia = Path("docs/guia_usuario.md").read_text(encoding="utf-8")
 
-    assert "RND acepta:" in manual
-    assert "No es necesario convertir el PDF manualmente a Excel." in manual
+    assert "RND admite" in manual
+    assert "PDF e imágenes se procesan con IA" in manual
+    assert "No hace falta convertirlos manualmente a Excel." in manual
     assert "PDF e imágenes se procesan con IA" in guia
     assert "No hace falta convertirlos manualmente a Excel." in guia
+
+
+def test_manual_markdown_docx_y_pdf_estan_alineados():
+    """El markdown, el builder del DOCX y el builder del PDF cuentan lo mismo.
+
+    Los tres archivos guardan el texto del manual por separado. Cuando se
+    actualiza uno y los otros dos no, el PDF que se manda al cliente queda viejo
+    sin que ningun test lo note: por eso se comparan capitulos, figuras y las
+    capturas que cada builder usa.
+    """
+    manual = Path("docs/manual_usuario_importacion_hoja_ruta.md").read_text(
+        encoding="utf-8"
+    )
+    docx = Path("docs/manual_hoja_ruta/build_manual.py").read_text(encoding="utf-8")
+    pdf = Path("docs/manual_hoja_ruta/build_pdf.py").read_text(encoding="utf-8")
+
+    capitulos = [
+        "1. Importar y revisar el archivo",
+        "2. Organizar los pedidos en una ruta",
+        "3. Asignar chofer y camión",
+        "4. Armar pallets y validar la carga",
+        "5. Revisar la hoja e imprimir",
+        "6. El PDF de reparto",
+        "7. Si algo no aparece o no permite continuar",
+    ]
+    figuras = [
+        "Figura 1. Importación con vista previa",
+        "Figura 2. Bandeja de pedidos agrupada por factura",
+        "Figura 3. Asignación de recursos para una fecha y ruta",
+        "Figura 4. Armado de pallets",
+        "Figura 5. Validación de la carga",
+        "Figura 6. Hoja en estado LISTA",
+        "Figura 7. Ejemplo del PDF de reparto",
+    ]
+    capturas = [
+        "01_importar_vista_previa.png",
+        "02_pedidos_para_organizar.png",
+        "03_asignar_chofer_camion.png",
+        "04_armado_pallets.png",
+        "05_validar_carga.png",
+        "06_ver_hoja_ruta.png",
+        "07_hoja_de_ruta_impresa.png",
+    ]
+
+    for capitulo in capitulos:
+        assert capitulo in manual, capitulo
+        assert capitulo in docx, capitulo
+        assert capitulo in pdf, capitulo
+
+    for figura in figuras:
+        assert figura in manual, figura
+        assert figura in docx, figura
+        assert figura in pdf, figura
+
+    # El circuito completo, con el paso de pallets y el de despacho.
+    for texto in (
+        "Confirmar preparación no cambia el estado",
+        "Validar carga",
+        "Marcar todos",
+        "CARGADO",
+        "Confirmar salida a reparto",
+        "DESPACHADA",
+    ):
+        assert texto in manual, texto
+        assert texto in docx, texto
+        assert texto in pdf, texto
+
+    for captura in capturas:
+        assert captura in docx, captura
+        assert captura in pdf, captura
+        assert (
+            Path("docs/manual_hoja_ruta/capturas") / captura
+        ).exists(), captura

@@ -1,0 +1,35 @@
+# Proteccion de la carpeta del proxy de IA.
+# Sube este archivo DENTRO de public_html/rnd-ia/ junto a proxy.php.
+
+# Sin listado de directorios: no se pueden ver los archivos de estado.
+Options -Indexes
+
+# Enruta /.htaccess directo (mod_rewrite de Apache con AllowOverride).
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(estado|.*\.log|.*\.txt)$ - [F,L]
+</IfModule>
+
+# El estado del rate limit (contadores y accesos.log) nunca se descarga.
+# Apache 2.4
+<IfModule mod_authz_core.c>
+    <FilesMatch "\.(log|txt)$">
+        Require all denied
+    </FilesMatch>
+    <FilesMatch "^\.">
+        Require all denied
+    </FilesMatch>
+</IfModule>
+
+# Apache 2.2
+<IfModule !mod_authz_core.c>
+    <FilesMatch "\.(log|txt)$">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+</IfModule>
+
+# El proxy es el unico endpoint publico de esta carpeta.
+<Files "proxy.php">
+    Require all granted
+</Files>

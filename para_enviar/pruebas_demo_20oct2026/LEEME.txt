@@ -1,0 +1,130 @@
+PRUEBAS DEL DEMO DE RND  ·  Paquete de prueba
+==============================================
+RND · Circuito de reparto · 20 de octubre de 2026
+
+
+1. INSTALADOR
+-------------
+Descarga la última versión desde:
+
+  https://github.com/oscarvogel/vogel-releases/releases/download/rnd-demo/setup_rnd_demo.exe
+
+Es el mismo link de siempre y siempre apunta a la última build, así que no hace
+falta que te pasen otro.
+
+El DEMO corre sobre su propia base (SQLite): no toca la base real ni los datos
+de producción. Podés trabajar tranquilo.
+
+
+2. MANUAL
+---------
+  manual_usuario_RND_20oct2026.pdf    -> leelo en pantalla, es el paso a paso
+  manual_usuario_RND_20oct2026.docx   -> el mismo, por si querés imprimirlo o editarlo
+
+IMPORTANTE: si te mandaron un PDF del manual antes (14/10), descartalo. Este lo
+reemplaza y agrega el paso de pallets, que es el que libera el checklist de la
+hoja de ruta.
+
+
+3. LAS CUATRO PLANILLAS DE EJEMPLO
+----------------------------------
+No busques archivos: estas son las cuatro planillas de prueba, una por cada
+método de importación. Cada una va con su proveedor.
+
+  01_proveedor_tremblay.xlsx        ->  Proveedor Demo - Tremblay
+  02_proveedor_tio_pujio.xlsx       ->  Proveedor Demo - Tio Pujio
+  03_proveedor_detalle_ventas.xlsx  ->  Proveedor Demo - Detalle Ventas
+  04_proveedor_columnas.xlsx        ->  Proveedor Demo - Columnas
+
+Ojo: el proveedor define el método de importación. Si subís el archivo de Tío
+Pujio con el proveedor Tremblay, no importa (o importa mal, que es peor).
+
+En la aplicación, estas mismas planillas se generan solas en la carpeta
+demo_importaciones, al lado del programa. Si no las encontrás, usá las de acá.
+
+Los datos del demo ya vienen cargados: clientes, lugares de entrega, rutas
+(CENTRO y NORTE), choferes (Juan Gómez, Carlos Benítez) y camiones. No hace
+falta dar de alta nada.
+
+
+4. EL CIRCUITO A PROBAR (de punta a punta)
+------------------------------------------
+  1. Importar pedidos
+     Elegí Proveedor/origen y Fecha reparto, cargá una de las planillas,
+     revisá la vista previa y presioná Grabar pedidos.
+
+  2. Pedidos para organizar
+     Con el botón Editar, asociá el remito a mano y dejá cliente, lugar de
+     entrega y ruta correctos. Después marcá las facturas, elegí la Ruta
+     destino y presioná Organizar seleccionados.
+
+  3. Asignar chofer y camión
+     Cargar datos de hoja, elegí chofer y camión reales, Guardar asignación.
+
+  4. Armar pallets y validar la carga
+     Está en el capítulo 4 del manual. Si no armás pallets, el circuito se
+     completa igual y ese ítem del checklist queda como informativo.
+
+  5. Validar hoja de ruta
+     Revisá el checklist y presioná Marcar LISTA.
+
+  6. Confirmar salida a reparto
+     La hoja queda en estado DESPACHADA.
+
+  7. Imprimir PDF
+     Si llega, probá también el botón Lista para Sergio.
+
+
+5. TRES ACLARACIONES QUE AHORRAN TIEMPO
+---------------------------------------
+  a) "Orden de despacho" no es un documento. El despacho es el ESTADO de la
+     hoja: EN_PREPARACION -> LISTA -> DESPACHADA. Se llega con el botón
+     "Confirmar salida a reparto".
+
+  b) Pallets: "Confirmar preparación" NO cambia el estado. El pallet sigue
+     ARMADO; pasa a CARGADO recién en "Validar carga". Y un pallet ya CARGADO
+     deja de aparecer en "Armado de pallets": no se perdió, sigue visible en
+     "Validar carga" y en el checklist.
+
+  c) El checklist se resuelve con doble clic sobre el renglón pendiente:
+     RND te abre directo la pantalla donde se corrige.
+
+  d) El remito NO viene en los archivos: hay que cargarlo a mano en el paso 2.
+     Es parte de la prueba, no un error.
+
+
+6. QUÉ NECESITO DE VUELTA
+-------------------------
+Respondeme con esta lista, aunque sea en 4 líneas:
+
+  1. Instalador: OK / falla (qué pasa)
+  2. Importación (qué proveedor y archivo usaste): OK / falla
+  3. Remito manual en Pedidos para organizar: OK / falla
+  4. Organizar en ruta: OK / falla
+  5. Asignar chofer y camión: OK / falla
+  6. Pallets (armar + validar carga): OK / falla / no lo hice
+  7. Marcar LISTA: OK / falla
+  8. Confirmar salida a reparto (DESPACHADA): OK / falla
+  9. Imprimir PDF: OK / falla
+  10. Adjunto: PDF de la hoja generada + un pantallazo de la bandeja con el
+      remito asociado
+  11. Tiempo total que te llevó: ___ minutos
+
+Si algo no te deja seguir, un pantallazo del mensaje de error vale más que
+una descripción, y lo reviso el mismo día.
+
+El punto 11 no es menor: me sirve para saber si el circuito es usable o si
+hay que recortar pasos.
+
+
+7. FECHA
+--------
+Propongo el VIERNES 23/10 a las 17:00. Si se complica, decímelo y lo
+corremos, pero necesito una fecha cerrada.
+
+Si te trabás en un paso, no hace falta que esperes a tener todo andando:
+avisame y lo resolvemos por videollamada de 15 minutos. Resolver en vivo vale
+más que tres mails.
+
+¡Gracias!
+Oscar Vogel
