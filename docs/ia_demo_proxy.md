@@ -54,19 +54,24 @@ demo sigue operando, solo pierde esa funcion.
 
 ## Estado del instalador publicado
 
-Version `2026.10.07.02`, publicada sobre la release fija `rnd-demo` con el
-mismo link de siempre.
+Version `2026.10.27.01`, publicada sobre la release fija `rnd-demo` con el
+mismo link de siempre. Esta build incluye el cruce de remitos de Tio Pujio
+con pedidos (#150).
 
 | | |
 |---|---|
-| SHA256 | `eb5a7c0e8b5411aae6d704e7e8abae16b993c288b81421d9861097c992c2fcce` |
-| Tamano | 76.076.840 bytes |
-| Subido | 2026-10-07 21:25 UTC |
+| SHA256 | `3f4cdceb3df1947e40ee2c59c445a6a084e65cc9e64a0defbd314f72692496c2` |
+| Tamano | 76.130.840 bytes |
+| Subido | 2026-10-27 11:09 UTC |
 | Link | https://github.com/oscarvogel/vogel-releases/releases/download/rnd-demo/setup_rnd_demo.exe |
 
-**Verificado instalando el `.exe` de verdad**, no leyendo el codigo. Se
-instalo en una carpeta temporal en silencio, se leyo el `.env` que quedo en
-disco y se desinstalo. El `.env` instalado contiene unicamente:
+Verificado contra el asset publicado: el SHA256 local coincide con el digest
+de GitHub y el bundle de PyInstaller incluye `controladores.RemitosTioPujio`,
+`vistas.RemitosTioPujio` y `utiles.remitos_tio_pujio`. La grabacion de remitos
+se probo en una base DEMO SQLite aislada, sin tocar produccion.
+
+El build conserva la misma politica de configuracion IA: el `.env` que se
+empaqueta contiene unicamente:
 
 ```
 RND_PDF_AI_URL=https://vogelconsultoria.com.ar/rnd-ia/proxy.php
@@ -76,9 +81,7 @@ RND_PDF_AI_TIMEOUT=120
 ```
 
 Sin `MINIMAX_API_KEY`, sin `RND_PDF_AI_API_KEY`, sin `MYSQL_PASSWORD`, sin
-`RND_DB_PASSWORD`, sin prefijos de clave. El SHA256 del asset publicado
-coincide con el del archivo verificado, asi que lo que hay en el link es
-exactamente lo que se probo.
+`RND_DB_PASSWORD`, sin prefijos de clave.
 
 El token viaja en el ejecutable a proposito: no es un secreto, es el
 interruptor para apagar la demostracion. El servidor todavia tiene
