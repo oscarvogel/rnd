@@ -54,21 +54,22 @@ demo sigue operando, solo pierde esa funcion.
 
 ## Estado del instalador publicado
 
-Version `2026.10.27.01`, publicada sobre la release fija `rnd-demo` con el
+Version `2026.10.27.02`, publicada sobre la release fija `rnd-demo` con el
 mismo link de siempre. Esta build incluye el cruce de remitos de Tio Pujio
-con pedidos (#150).
+con pedidos (#150): boton en Pedidos para organizar, autodeteccion del
+proveedor, mensajes de estado e iconos en los botones.
 
 | | |
 |---|---|
-| SHA256 | `3f4cdceb3df1947e40ee2c59c445a6a084e65cc9e64a0defbd314f72692496c2` |
-| Tamano | 76.130.840 bytes |
-| Subido | 2026-10-27 11:09 UTC |
+| SHA256 | `f21df931fd6500ef4a1f85107fb34904a4d58e5994ca469b8d306ece980481ca` |
+| Tamano | 76.126.272 bytes |
+| Subido | 2026-10-27 14:37 UTC |
 | Link | https://github.com/oscarvogel/vogel-releases/releases/download/rnd-demo/setup_rnd_demo.exe |
 
 Verificado contra el asset publicado: el SHA256 local coincide con el digest
-de GitHub y el bundle de PyInstaller incluye `controladores.RemitosTioPujio`,
-`vistas.RemitosTioPujio` y `utiles.remitos_tio_pujio`. La grabacion de remitos
-se probo en una base DEMO SQLite aislada, sin tocar produccion.
+de GitHub, el bundle de PyInstaller incluye los modulos del cruce y la suite
+completa paso con 391 tests. La grabacion de remitos se probo en una base
+DEMO SQLite aislada, sin tocar produccion.
 
 El build conserva la misma politica de configuracion IA: el `.env` que se
 empaqueta contiene unicamente:
