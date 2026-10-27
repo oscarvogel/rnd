@@ -123,7 +123,22 @@ class ImportacionPedidosView(VistaBase):
         )
         self.btn_examinar.setProperty("role", "primary")
         fila_archivo.addWidget(self.btn_examinar)
+        self.btn_remitos = Boton(
+            texto="Importar remitos",
+            imagen=imagen("79354_excel_icon.png"),
+            tooltip="Cruzar el Informe de Remitos con los pedidos ya importados",
+        )
+        self.btn_remitos.setProperty("role", "secondary")
+        fila_archivo.addWidget(self.btn_remitos)
         layout_archivo.addLayout(fila_archivo)
+
+        lbl_remitos = QLabel(
+            "Remitos: usá el mismo Control de Pedidos y el Informe de Remitos. "
+            "El cruce se hace después de grabar los pedidos."
+        )
+        lbl_remitos.setWordWrap(True)
+        lbl_remitos.setObjectName("importacionNotaTecnica")
+        layout_archivo.addWidget(lbl_remitos)
 
         fila_opciones = QHBoxLayout()
         lbl_hoja = Etiqueta(texto="Hoja:")
