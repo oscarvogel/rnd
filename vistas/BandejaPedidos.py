@@ -1,9 +1,16 @@
 # coding=utf-8
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QSize, Qt
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDateEdit, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
+from pyqt5libs.pyqt5libs.utiles import imagen
+
+
+def _aplicar_icono(boton, archivo, tamano=16):
+    boton.setIcon(QIcon(imagen(archivo)))
+    boton.setIconSize(QSize(tamano, tamano))
 
 
 class BandejaPedidosView(QWidget):
@@ -42,6 +49,7 @@ class BandejaPedidosView(QWidget):
         self.solo_pendientes.setChecked(True)
         filtros.addWidget(self.solo_pendientes)
         self.btn_actualizar = QPushButton("Actualizar")
+        _aplicar_icono(self.btn_actualizar, "iconfinder_reload_46828.png")
         filtros.addWidget(self.btn_actualizar)
 
         filtros.addWidget(QLabel("Factura:"))
@@ -55,11 +63,13 @@ class BandejaPedidosView(QWidget):
         self.btn_editar_factura = QPushButton("Editar")
         self.btn_editar_factura.setProperty("role", "secondary")
         self.btn_editar_factura.setToolTip("Editar cliente, lugar, ruta y remito de la factura seleccionada")
+        _aplicar_icono(self.btn_editar_factura, "edit.png")
         filtros.addWidget(self.btn_editar_factura)
 
         self.btn_productos = QPushButton("Productos")
         self.btn_productos.setProperty("role", "secondary")
         self.btn_productos.setToolTip("Revisar y corregir las líneas de producto de la factura")
+        _aplicar_icono(self.btn_productos, "detalle.png")
         filtros.addWidget(self.btn_productos)
 
         self.btn_remitos = QPushButton("Importar remitos")
@@ -67,11 +77,16 @@ class BandejaPedidosView(QWidget):
         self.btn_remitos.setToolTip(
             "Cruzar el Informe de Remitos con los pedidos ya grabados"
         )
+        _aplicar_icono(self.btn_remitos, "79354_excel_icon.png")
         filtros.addWidget(self.btn_remitos)
 
         self.btn_seleccionar_todo = QPushButton("Seleccionar todo")
         self.btn_seleccionar_todo.setProperty("role", "secondary")
         self.btn_seleccionar_todo.setToolTip("Seleccionar o deseleccionar todos los pedidos visibles")
+        _aplicar_icono(
+            self.btn_seleccionar_todo,
+            "iconfinder_icon-81-document-add_314445.png",
+        )
         self.btn_seleccionar_todo.clicked.connect(self.alternar_seleccion_todos)
         filtros.addWidget(self.btn_seleccionar_todo)
         filtros.addStretch(1)
@@ -100,9 +115,11 @@ class BandejaPedidosView(QWidget):
         pie.addWidget(self.cbo_ruta)
         self.btn_organizar = QPushButton("Organizar seleccionados")
         self.btn_organizar.setProperty("role", "primary")
+        _aplicar_icono(self.btn_organizar, "ruta_reparto.png", 18)
         pie.addWidget(self.btn_organizar)
         self.btn_siguiente = QPushButton("Asignar chofer y camión")
         self.btn_siguiente.setEnabled(False)
+        _aplicar_icono(self.btn_siguiente, "maquinas.png", 18)
         pie.addWidget(self.btn_siguiente)
         raiz.addLayout(pie)
 
