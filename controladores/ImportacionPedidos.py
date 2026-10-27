@@ -24,7 +24,6 @@ from pyqt5libs.pyqt5libs.Ventanas import showAlert
 from pyqt5libs.pyqt5libs.utiles import inicializar_y_capturar_excepciones, openFileNameDialog
 from utiles.importacion_proveedores_excel import (
     METODO_COLUMNAS,
-    METODO_TIO_PUJIO,
     normalizar_archivo_pedidos,
     normalizar_metodo_importacion,
 )
@@ -88,7 +87,6 @@ class ImportacionPedidosController(ControladorBase):
 
     def conectarWidgets(self):
         self.view.btn_examinar.clicked.connect(self.seleccionar_archivo)
-        self.view.btn_remitos.clicked.connect(self.importar_remitos)
         self.view.btn_importar.clicked.connect(self.importar_pedidos)
         self.view.btn_cerrar.clicked.connect(self.view.Cerrar)
         self.view.btn_grabar.clicked.connect(self.on_click_btn_grabar)
@@ -237,34 +235,6 @@ class ImportacionPedidosController(ControladorBase):
 
         if not self._preparar_archivo(cArchivo):
             return
-
-    @inicializar_y_capturar_excepciones
-    def importar_remitos(self, *args, **kwargs):
-        """Abre el cruce del Informe de Remitos con los pedidos importados."""
-        proveedor_id = self.view.empresa_proveedora.valor()
-        if not proveedor_id:
-            showAlert("Sistema", "Primero seleccione el proveedor / origen")
-            return
-        if self._metodo_importacion_proveedor() != METODO_TIO_PUJIO:
-            showAlert(
-                "Sistema",
-                "El cruce de remitos está disponible para Tío Pujio.",
-            )
-            return
-
-        archivo_pedidos = ""
-        if self.archivo_origen:
-            extension = str(self.archivo_origen).lower().rsplit(".", 1)[-1]
-            if extension in {"xls", "xlsx"}:
-                archivo_pedidos = self.archivo_origen
-
-        from controladores.RemitosTioPujio import RemitosTioPujioController
-
-        self.ventana_remitos = RemitosTioPujioController(
-            proveedor_id=proveedor_id,
-            archivo_pedidos=archivo_pedidos,
-        )
-        self.ventana_remitos.exec_(valida_ingreso=False)
 
     def _preparar_archivo(self, archivo_origen):
         """Convierte el archivo externo a un Excel legible por la vista previa.

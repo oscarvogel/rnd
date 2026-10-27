@@ -100,3 +100,11 @@ def test_seleccionar_todo_con_filtro_afecta_solo_facturas_visibles():
 
     assert set(view.claves_seleccionadas()) == {"D1", "D2"}
     view.close()
+
+
+def test_bandeja_tiene_boton_importar_remitos():
+    _app()
+    view = BandejaPedidosView()
+    assert view.btn_remitos.text() == "Importar remitos"
+    assert "grabados" in view.btn_remitos.toolTip()
+    view.close()

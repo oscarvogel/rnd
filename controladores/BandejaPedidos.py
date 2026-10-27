@@ -37,10 +37,12 @@ class BandejaPedidosController(ControladorBase):
 
     def conectarWidgets(self):
         self.view.btn_actualizar.clicked.connect(self.cargar_pedidos)
+        self.view.fecha.dateChanged.connect(self.cargar_pedidos)
         self.view.solo_pendientes.toggled.connect(self.cargar_pedidos)
         self.view.btn_organizar.clicked.connect(self.organizar_seleccion)
         self.view.btn_editar_factura.clicked.connect(self.editar_factura_actual)
         self.view.btn_productos.clicked.connect(self.editar_productos_actual)
+        self.view.btn_remitos.clicked.connect(self.importar_remitos)
         self.view.tabla.doubleClicked.connect(self.editar_factura_actual)
         self.view.btn_siguiente.clicked.connect(self.ir_asignacion)
 
@@ -76,6 +78,16 @@ class BandejaPedidosController(ControladorBase):
         self._facturas = facturas
         self.view.cargar_facturas(facturas, self.empleado_generico, self.camion_generico)
         self.actualizar_totales()
+
+    @reconnect_if_needed
+    @inicializar_y_capturar_excepciones
+    def importar_remitos(self, *args, **kwargs):
+        """Cruza remitos sobre pedidos que ya estan grabados en la bandeja."""
+        from controladores.RemitosTioPujio import RemitosTioPujioController
+
+        self.ventana_remitos = RemitosTioPujioController()
+        self.ventana_remitos.exec_(valida_ingreso=False)
+        self.cargar_pedidos()
 
     def _convertir(self, h, referencia=None):
         referencia = referencia or {}

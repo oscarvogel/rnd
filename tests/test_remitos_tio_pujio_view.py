@@ -85,6 +85,12 @@ def test_vista_muestra_estados_de_revision():
     view.close()
 
 
+def test_controlador_puede_abrirse_sin_proveedor_predefinido():
+    controller = RemitosTioPujioController()
+    assert controller.proveedor_id == 0
+    controller.view.close()
+
+
 def test_controlador_solo_habilita_grabar_si_hay_asignados_nuevos():
     controller = RemitosTioPujioController(proveedor_id=16)
     assert controller._hay_para_grabar() is False
@@ -95,6 +101,45 @@ def test_controlador_solo_habilita_grabar_si_hay_asignados_nuevos():
     controller.resultados = [_resultado(ESTADO_ASIGNADO, "ya estaba asociado")]
     assert controller._hay_para_grabar() is False
 
+    controller.view.close()
+
+
+def test_controlador_muestra_todo_guardado_si_no_hay_nuevos():
+    controller = RemitosTioPujioController(proveedor_id=16)
+    controller.resultados = [_resultado(ESTADO_ASIGNADO, "ya estaba asociado")]
+
+    controller._actualizar_estado_mensaje()
+    controller._actualizar_estado_grabar()
+
+    assert "ya estaban asociados" in controller.view.lbl_estado.text()
+    assert controller.view.btn_grabar.text() == "Todo guardado"
+    assert not controller.view.btn_grabar.isEnabled()
+    controller.view.close()
+
+
+def test_controlador_muestra_mensaje_de_remitos_pendientes():
+    controller = RemitosTioPujioController(proveedor_id=16)
+    controller.resultados = [_resultado(ESTADO_ASIGNADO)]
+
+    controller._actualizar_estado_mensaje()
+    controller._actualizar_estado_grabar()
+
+    assert "para grabar" in controller.view.lbl_estado.text()
+    assert controller.view.btn_grabar.text() == "Grabar remitos"
+    assert controller.view.btn_grabar.isEnabled()
+    controller.view.close()
+
+
+def test_resumen_avisa_cuando_no_hay_cambios():
+    controller = RemitosTioPujioController(proveedor_id=16)
+    controller._pedidos_archivo = 1
+    controller._pedidos_sistema = 1
+
+    texto = controller._texto_resumen(
+        [_resultado(ESTADO_ASIGNADO, "ya estaba asociado")]
+    )
+
+    assert "No hay cambios pendientes" in texto
     controller.view.close()
 
 

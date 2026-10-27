@@ -40,6 +40,13 @@ COLORES_ESTADO = {
 
 COLOR_YA_ASOCIADO = QColor("#e0f2fe")
 
+COLORES_MENSAJE = {
+    "info": ("#e0f2fe", "#075985"),
+    "pendiente": ("#fef3c7", "#92400e"),
+    "ok": ("#dcfce7", "#166534"),
+    "error": ("#fee2e2", "#991b1b"),
+}
+
 
 class RemitosTioPujioView(VistaBase):
     COLUMNAS = [
@@ -130,12 +137,19 @@ class RemitosTioPujioView(VistaBase):
         )
         self.btn_cruzar.setProperty("role", "primary")
         fila_acciones.addWidget(self.btn_cruzar)
-        self.lbl_resumen = QLabel(
-            "Seleccioná los dos archivos y presioná «Leer y cruzar»."
-        )
+        self.lbl_resumen = QLabel("Todavía no se cruzaron los archivos.")
         self.lbl_resumen.setWordWrap(True)
         fila_acciones.addWidget(self.lbl_resumen, stretch=1)
         raiz.addLayout(fila_acciones)
+
+        self.lbl_estado = QLabel("")
+        self.lbl_estado.setWordWrap(True)
+        self.lbl_estado.setObjectName("remitosEstado")
+        raiz.addWidget(self.lbl_estado)
+        self.set_estado(
+            "Seleccioná los dos archivos y presioná «Leer y cruzar».",
+            "info",
+        )
 
         self.tabla = QTableWidget(0, len(self.COLUMNAS))
         self.tabla.setObjectName("dataGrid")
@@ -180,8 +194,19 @@ class RemitosTioPujioView(VistaBase):
     def set_resumen(self, texto):
         self.lbl_resumen.setText(str(texto or ""))
 
-    def set_grabar_habilitado(self, habilitado):
+    def set_estado(self, texto, tipo="info"):
+        fondo, color = COLORES_MENSAJE.get(tipo, COLORES_MENSAJE["info"])
+        self.lbl_estado.setText(str(texto or ""))
+        self.lbl_estado.setStyleSheet(
+            "QLabel { background-color: %s; color: %s; padding: 8px 10px; "
+            "border-radius: 4px; }" % (fondo, color)
+        )
+
+    def set_grabar_habilitado(self, habilitado, texto=None, tooltip=None):
         self.btn_grabar.setEnabled(bool(habilitado))
+        self.btn_grabar.setText(texto or "Grabar remitos")
+        if tooltip is not None:
+            self.btn_grabar.setToolTip(tooltip)
 
     def limpiar_resultados(self):
         self.tabla.setRowCount(0)

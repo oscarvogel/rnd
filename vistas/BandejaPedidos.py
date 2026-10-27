@@ -62,6 +62,13 @@ class BandejaPedidosView(QWidget):
         self.btn_productos.setToolTip("Revisar y corregir las líneas de producto de la factura")
         filtros.addWidget(self.btn_productos)
 
+        self.btn_remitos = QPushButton("Importar remitos")
+        self.btn_remitos.setProperty("role", "secondary")
+        self.btn_remitos.setToolTip(
+            "Cruzar el Informe de Remitos con los pedidos ya grabados"
+        )
+        filtros.addWidget(self.btn_remitos)
+
         self.btn_seleccionar_todo = QPushButton("Seleccionar todo")
         self.btn_seleccionar_todo.setProperty("role", "secondary")
         self.btn_seleccionar_todo.setToolTip("Seleccionar o deseleccionar todos los pedidos visibles")
