@@ -1,7 +1,9 @@
 from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QBrush, QColor
 from PyQt5.QtWidgets import (
     QButtonGroup, QFrame, QGroupBox, QGridLayout, QHBoxLayout, QLabel,
-    QPushButton, QSizePolicy, QSplitter, QTableWidget, QVBoxLayout, QWidget,
+    QPushButton, QSizePolicy, QSplitter, QStyledItemDelegate, QTableWidget,
+    QVBoxLayout, QWidget,
 )
 from modelos.Clientes import cboRutaReparto
 from pyqt5libs.libs.vistas.VistaBase import VistaBase
@@ -9,6 +11,23 @@ from pyqt5libs.pyqt5libs.Etiquetas import Etiqueta
 from pyqt5libs.pyqt5libs.Fechas import Fecha
 from pyqt5libs.pyqt5libs.Grillas import Grilla
 from utiles.pallets import a_decimal, estado_limite_kg, formato_kg
+
+
+class FilaColorDelegate(QStyledItemDelegate):
+    """Dibuja el fondo de cada item segun su BackgroundRole.
+
+    El QSS global define ``background-color``/``alternate-background-color``
+    en QTableWidget y eso hace que Qt ignore lo que se carga con
+    ``QTableWidgetItem.setBackground()``. Este delegate recupera el color
+    de la fila sin tocar el tema; la seleccion y el hover se siguen
+    dibujando encima.
+    """
+
+    def paint(self, painter, option, index):
+        color = index.data(Qt.BackgroundRole)
+        if isinstance(color, (QColor, QBrush)):
+            painter.fillRect(option.rect, color)
+        super().paint(painter, option, index)
 
 
 class PalletSelector(QWidget):
@@ -197,6 +216,10 @@ class ArmadoPalletsView(VistaBase):
         "KG", "Bultos", "ID",
     ]
 
+    COLOR_FILA_NORMAL = QColor("#ffffff")
+    COLOR_COMPROBANTE_CARGADO = QColor("#d7f0dd")
+    COLOR_LINEA_CARGADA = QColor("#eef1f4")
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._kg_por_pallet = {}
@@ -241,11 +264,22 @@ class ArmadoPalletsView(VistaBase):
         layout_pend = QVBoxLayout(grp_pendientes)
         self.lbl_ayuda_pendientes = QLabel(
             "Seleccione una o más líneas y agréguelas al pallet. "
-            "El saldo descuenta lo ya asignado a otros pallets."
+            "El saldo descuenta lo ya asignado a otros pallets.<br>"
+            "<span style='background:#d7f0dd;'>&nbsp;&nbsp;&nbsp;&nbsp;</span> "
+            "Comprobante cargado por completo · "
+            "<span style='background:#eef1f4;'>&nbsp;&nbsp;&nbsp;&nbsp;</span> "
+            "Línea cargada (falta el resto del comprobante)."
         )
         self.lbl_ayuda_pendientes.setWordWrap(True)
         layout_pend.addWidget(self.lbl_ayuda_pendientes)
+        self.lbl_pendientes_cargados = QLabel("Comprobantes cargados: 0 de 0")
+        self.lbl_pendientes_cargados.setObjectName("armadoPalletsPendientesCargados")
+        self.lbl_pendientes_cargados.setStyleSheet("font-weight: 700;")
+        layout_pend.addWidget(self.lbl_pendientes_cargados)
         self.grilla_pendientes = Grilla()
+        self.grilla_pendientes.setItemDelegate(
+            FilaColorDelegate(self.grilla_pendientes)
+        )
         self.grilla_pendientes.ArmaCabeceras(list(self.CABECERAS_PENDIENTES))
         self.grilla_pendientes.setSelectionMode(QTableWidget.ExtendedSelection)
         self.grilla_pendientes.setColumnHidden(
@@ -333,14 +367,44 @@ class ArmadoPalletsView(VistaBase):
     def cargar_pendientes(self, filas):
         self.grilla_pendientes.limpiarGrilla()
         for fila in filas:
+            comprobante_cargado = bool(fila.get("comprobante_cargado"))
+            if comprobante_cargado:
+                color = self.COLOR_COMPROBANTE_CARGADO
+            elif fila.get("cargado"):
+                color = self.COLOR_LINEA_CARGADA
+            else:
+                color = self.COLOR_FILA_NORMAL
             self.grilla_pendientes.AgregaItem([
                 str(fila.get("cliente") or ""), str(fila.get("comprobante") or ""),
                 str(fila.get("factura") or ""), str(fila.get("producto") or ""),
                 str(fila.get("total") or ""), str(fila.get("asignado") or ""),
                 str(fila.get("saldo") or ""), str(fila.get("saldo_kg") or ""),
                 str(fila.get("saldo_bultos") or ""), str(fila.get("hoja_ruta_id") or ""),
-            ])
+            ], backgroundColor=color)
+            if comprobante_cargado:
+                self.grilla_pendientes.item(
+                    self.grilla_pendientes.rowCount() - 1, 1
+                ).setToolTip("Comprobante cargado por completo")
         self.grilla_pendientes.resizeColumnsToContents()
+        self._actualizar_resumen_cargados(filas)
+
+    def _actualizar_resumen_cargados(self, filas):
+        comprobantes = {
+            (f.get("cliente"), f.get("comprobante"))
+            for f in filas if f.get("comprobante")
+        }
+        cargados = {
+            (f.get("cliente"), f.get("comprobante"))
+            for f in filas
+            if f.get("comprobante") and f.get("comprobante_cargado")
+        }
+        self.lbl_pendientes_cargados.setText(
+            "Comprobantes cargados: {} de {}".format(len(cargados), len(comprobantes))
+        )
+        color = "#15803d" if comprobantes and len(cargados) == len(comprobantes) else ""
+        self.lbl_pendientes_cargados.setStyleSheet(
+            "font-weight: 700; color: {};".format(color) if color else "font-weight: 700;"
+        )
 
     def cargar_pallets(self, pallets, seleccionado=None):
         pallets = list(pallets)

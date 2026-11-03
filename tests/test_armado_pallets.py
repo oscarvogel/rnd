@@ -225,6 +225,62 @@ def test_filas_pendientes_calculan_asignado():
     assert filas[0]["saldo"] == Decimal("4")
 
 
+def test_filas_pendientes_marcan_comprobantes_cargados():
+    from types import SimpleNamespace
+    from controladores.ArmadoPallets import ArmadoPalletsController
+
+    hojas = [
+        SimpleNamespace(id=1, nombre_cliente="A", comprobante="F-1",
+                        producto="P", cantidad=Decimal("10")),
+        SimpleNamespace(id=2, nombre_cliente="A", comprobante="F-1",
+                        producto="Q", cantidad=Decimal("5")),
+        SimpleNamespace(id=3, nombre_cliente="B", comprobante="F-2",
+                        producto="P", cantidad=Decimal("7")),
+    ]
+    filas = ArmadoPalletsController.filas_pendientes(
+        hojas, {},
+        {
+            1: {"cantidad": 0, "kg": 0, "bultos": 0},
+            2: {"cantidad": 0, "kg": 0, "bultos": 0},
+            3: {"cantidad": 2, "kg": 10, "bultos": 1},
+        },
+    )
+    assert [f["cargado"] for f in filas] == [True, True, False]
+    assert [f["comprobante_cargado"] for f in filas] == [True, True, False]
+
+
+def test_vista_pinta_comprobantes_cargados(base_armado):
+    from vistas.ArmadoPallets import ArmadoPalletsView
+
+    view = ArmadoPalletsView()
+    view.cargar_pendientes([
+        {"hoja_ruta_id": 1, "cliente": "A", "comprobante": "F-1", "factura": "F-1",
+         "producto": "P", "total": Decimal("10"), "asignado": Decimal("10"),
+         "saldo": Decimal("0"), "saldo_kg": Decimal("0"),
+         "saldo_bultos": Decimal("0"), "cargado": True,
+         "comprobante_cargado": True},
+        {"hoja_ruta_id": 2, "cliente": "A", "comprobante": "F-2", "factura": "F-2",
+         "producto": "Q", "total": Decimal("10"), "asignado": Decimal("2"),
+         "saldo": Decimal("8"), "saldo_kg": Decimal("40"),
+         "saldo_bultos": Decimal("8"), "cargado": False,
+         "comprobante_cargado": False},
+    ])
+    assert (
+        view.grilla_pendientes.item(0, 0).background().color()
+        == view.COLOR_COMPROBANTE_CARGADO
+    )
+    assert (
+        view.grilla_pendientes.item(1, 0).background().color()
+        == view.COLOR_FILA_NORMAL
+    )
+    assert view.grilla_pendientes.item(0, 1).toolTip() == "Comprobante cargado por completo"
+    assert view.lbl_pendientes_cargados.text() == "Comprobantes cargados: 1 de 2"
+    from vistas.ArmadoPallets import FilaColorDelegate
+
+    assert isinstance(view.grilla_pendientes.itemDelegate(), FilaColorDelegate)
+    view.close()
+
+
 def test_cargar_mercaderia_y_agregar_end_to_end(base_armado, parche_referencias):
     RutaReparto = base_armado["RutaReparto"]
     HojaDeRuta = base_armado["HojaDeRuta"]

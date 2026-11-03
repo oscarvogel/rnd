@@ -202,7 +202,22 @@ class ArmadoPalletsController(ControladorBase):
                 "saldo": saldo_cantidad,
                 "saldo_kg": a_decimal(saldo.get("kg")),
                 "saldo_bultos": a_decimal(saldo.get("bultos")),
+                "cargado": saldo_cantidad <= 0,
             })
+        # Un comprobante esta completo recien cuando todas sus lineas tienen
+        # saldo cero. La vista lo pinta distinto para que el operador vea de
+        # un vistazo que pedidos ya terminaron de cargar.
+        comprobantes_con_saldo = {}
+        for fila in filas:
+            clave = (fila["cliente"], fila["comprobante"])
+            comprobantes_con_saldo[clave] = (
+                comprobantes_con_saldo.get(clave, False) or not fila["cargado"]
+            )
+        for fila in filas:
+            clave = (fila["cliente"], fila["comprobante"])
+            fila["comprobante_cargado"] = (
+                bool(fila["comprobante"]) and not comprobantes_con_saldo[clave]
+            )
         return filas
 
     def _pallets_contexto(self):
