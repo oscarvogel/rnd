@@ -84,7 +84,7 @@ def test_ficha_ofrece_solo_metodos_habilitados():
     assert [combo.itemData(i) for i in range(combo.count())] == [
         codigo for codigo, _etiqueta in METODOS_IMPORTACION
     ]
-    assert combo.count() == 4
+    assert combo.count() == 5
 
 
 def test_ficha_muestra_alias_historico_en_su_opcion():

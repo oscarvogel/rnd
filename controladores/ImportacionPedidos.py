@@ -1,3 +1,5 @@
+import re
+
 import pandas as pd
 import peewee
 
@@ -50,6 +52,12 @@ COLUMNAS_NORMALIZADAS = {
     "Bultos": "bultos",
     "Observaciones": "observaciones",
 }
+
+
+def normalizar_cuit(valor):
+    """Devuelve solo los 11 digitos de un CUIT o "" si no tiene ese formato."""
+    digitos = re.sub(r"\D", "", str(valor or ""))
+    return digitos if len(digitos) == 11 else ""
 
 
 def valor_para_vista_previa(valor):
@@ -168,7 +176,19 @@ class ImportacionPedidosController(ControladorBase):
         cliente_obj = None
         if codigo_cliente is not None and codigo_cliente.cliente_id not in (None, 1):
             cliente_obj = codigo_cliente.cliente
-        else:
+
+        if cliente_obj is None:
+            digitos = normalizar_cuit(codigo)
+            if digitos:
+                formateado = "{}-{}-{}".format(digitos[:2], digitos[2:10], digitos[10])
+                cliente_obj = self._leer_db_con_reintento(
+                    lambda: Cliente.get_or_none(
+                        (Cliente.cuit == digitos) | (Cliente.cuit == formateado)
+                    ),
+                    "búsqueda de cliente por CUIT",
+                )
+
+        if cliente_obj is None:
             nombre = str(nombre_cliente or "").strip()
             if nombre and nombre.lower() != "nan":
                 cliente_obj = self._leer_db_con_reintento(
@@ -256,11 +276,13 @@ class ImportacionPedidosController(ControladorBase):
         )
 
         metodo = self._metodo_importacion_proveedor()
+        advertencias = []
         try:
             archivo_normalizado = normalizar_archivo_pedidos(
                 archivo_origen,
                 progreso=self._actualizar_avance_preprocesamiento,
                 metodo=metodo,
+                advertencias=advertencias,
             )
         except (ValueError, FileNotFoundError) as exc:
             self.view.avance.marcar_error("No se pudo preparar el archivo")
@@ -316,6 +338,11 @@ class ImportacionPedidosController(ControladorBase):
             "Archivo preparado. Presione ‘Cargar vista previa’ para revisar los pedidos "
             "antes de grabarlos."
         )
+        if advertencias:
+            self.view.lbl_previa.setText(
+                "\n".join(advertencias) + "\n" + self.view.lbl_previa.text()
+            )
+            showAlert("Revisar reporte", "\n\n".join(advertencias))
         return True
 
     @inicializar_y_capturar_excepciones
@@ -415,9 +442,9 @@ class ImportacionPedidosController(ControladorBase):
             row = df_datos.iloc[i]
             importa_por_defecto = True
             if self.origen_pdf_ia:
-                observaciones_ia = str(row.get("observaciones", "") or "")
+                observaciones_fila = str(row.get("observaciones", "") or "")
                 # Datos dudosos nunca quedan seleccionados automaticamente.
-                importa_por_defecto = "REVISAR IA" not in observaciones_ia.upper()
+                importa_por_defecto = "REVISAR" not in observaciones_fila.upper()
             item = [importa_por_defecto]
             item.extend(valor_para_vista_previa(valor) for valor in row.tolist())
             self.view.grid_datos.AgregaItem(item)
@@ -432,7 +459,7 @@ class ImportacionPedidosController(ControladorBase):
         if self.origen_pdf_ia:
             self.view.lbl_resultado_detalle.setText(
                 "Revise los {} registros. Puede corregir las celdas; las filas marcadas "
-                "REVISAR IA quedan desmarcadas hasta que el operador las valide.".format(total_filas)
+                "REVISAR quedan desmarcadas hasta que el operador las valide.".format(total_filas)
             )
         else:
             self.view.lbl_resultado_detalle.setText(

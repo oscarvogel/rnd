@@ -17,6 +17,7 @@ METODO_COLUMNAS = "COLUMNAS"
 METODO_TIO_PUJIO = "TIO_PUJIO"
 METODO_DETALLE_VENTAS = "DETALLE_VENTAS"
 METODO_TREMBLAY = "TREMBLAY"
+METODO_REPORTE_VIAJE = "REPORTE_VIAJE"
 
 # Única fuente de verdad para el combo de la ficha del proveedor
 # (vistas.ABMProveedores): sólo estos métodos están habilitados.
@@ -25,11 +26,14 @@ METODOS_IMPORTACION = (
     (METODO_TREMBLAY, "Tremblay (informe de despacho)"),
     (METODO_TIO_PUJIO, "Tío Pujio (Control de Pedidos)"),
     (METODO_DETALLE_VENTAS, "Detalle de ventas"),
+    (METODO_REPORTE_VIAJE, "Lario / Reporte de viaje (remitos por viaje)"),
 )
 
 # Valores históricos guardados a mano que deben seguir funcionando.
 ALIAS_METODO_IMPORTACION = {
     "PUJIO": METODO_TIO_PUJIO,
+    "LARIO": METODO_REPORTE_VIAJE,
+    "REPORTE_DE_VIAJE": METODO_REPORTE_VIAJE,
 }
 
 
@@ -376,7 +380,7 @@ def procesar_tremblay_normalizado(archivo_entrada, progreso=None):
     return _normalizar_salida_tremblay(ruta_historica, progreso=progreso)
 
 
-def normalizar_archivo_pedidos(archivo_entrada, progreso=None, metodo=None):
+def normalizar_archivo_pedidos(archivo_entrada, progreso=None, metodo=None, advertencias=None):
     """Normaliza usando el método explícito del proveedor.
 
     Si metodo es None conserva autodetección únicamente por compatibilidad.
@@ -386,6 +390,17 @@ def normalizar_archivo_pedidos(archivo_entrada, progreso=None, metodo=None):
         return None
 
     extension = os.path.splitext(str(archivo_entrada))[1].lower()
+    metodo = normalizar_metodo_importacion(metodo) or (metodo or "").strip().upper()
+
+    if metodo == METODO_REPORTE_VIAJE:
+        from utiles.importacion_reporte_viaje import procesar_reporte_viaje
+
+        return procesar_reporte_viaje(
+            archivo_entrada,
+            progreso=progreso,
+            advertencias=advertencias,
+        )
+
     if extension in {".pdf", ".png", ".jpg", ".jpeg"}:
         from utiles.importacion_pdf_ia import extraer_pedidos_pdf_ia
 
@@ -395,7 +410,6 @@ def normalizar_archivo_pedidos(archivo_entrada, progreso=None, metodo=None):
         )
         return _guardar_temporal(filas)
 
-    metodo = normalizar_metodo_importacion(metodo) or (metodo or "").strip().upper()
     if metodo == METODO_COLUMNAS:
         return None
     if metodo == METODO_TREMBLAY:

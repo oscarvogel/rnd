@@ -104,6 +104,11 @@ def ayuda_proveedor(metodo_importacion):
             "Seleccione el archivo Detalle de Ventas configurado para este proveedor. "
             "RND validará su estructura antes de importarlo."
         )
+    if metodo == "REPORTE_VIAJE":
+        return (
+            "Lario / Reporte de viaje: seleccione el PDF de remitos del viaje. "
+            "RND lee la tabla, valida el total y muestra la vista previa para revisar."
+        )
     if metodo == "COLUMNAS":
         return (
             "Seleccione el archivo recibido del proveedor. Puede ser Excel y, si corresponde, "
