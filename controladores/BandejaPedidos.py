@@ -15,7 +15,7 @@ from modelos.ParametrosSistema import ParamSist
 from pyqt5libs.libs.controladores.ControladorBase import ControladorBase
 from pyqt5libs.pyqt5libs.Ventanas import showAlert
 from pyqt5libs.pyqt5libs.utiles import inicializar_y_capturar_excepciones
-from utiles.bandeja_pedidos import FacturaBandeja, PedidoBandeja, agrupar_pedidos_por_factura, expandir_seleccion_por_factura, totales_facturas, validar_reasignacion
+from utiles.bandeja_pedidos import FacturaBandeja, PedidoBandeja, agrupar_pedidos_por_factura, expandir_seleccion_por_factura, guardar_destino_preferido, totales_facturas, validar_reasignacion
 from vistas.BandejaPedidos import BandejaPedidosView
 
 
@@ -553,6 +553,12 @@ class BandejaPedidosController(ControladorBase):
             ruta=ruta_id,
         ).where(HojaDeRuta.id.in_(ids)).execute()
 
+        if lugar is not None:
+            guardar_destino_preferido(lugar, ruta_id)
+        elif ruta_id and cliente.ruta_reparto_id != ruta_id:
+            cliente.ruta_reparto = ruta_id
+            cliente.save()
+
         if factura.documento_id:
             DocumentoPedido.update(
                 cliente=cliente_id,
@@ -563,7 +569,14 @@ class BandejaPedidosController(ControladorBase):
             for hoja_id in ids:
                 actualizar_remito_de_hoja(hoja_id, txt_remito.text().strip())
 
-        showAlert("Sistema", "Factura actualizada correctamente")
+        if lugar is not None:
+            showAlert(
+                "Sistema",
+                "Factura actualizada. El lugar de entrega quedó guardado como "
+                "principal para las próximas importaciones.",
+            )
+        else:
+            showAlert("Sistema", "Factura actualizada correctamente")
         self.cargar_pedidos()
 
     @reconnect_if_needed

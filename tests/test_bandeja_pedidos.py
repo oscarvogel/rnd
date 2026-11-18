@@ -3,7 +3,8 @@ from decimal import Decimal
 
 from utiles.bandeja_pedidos import (
     ESTADO_OBSERVADO, ESTADO_ORGANIZADO, ESTADO_PENDIENTE,
-    PedidoBandeja, expandir_seleccion_por_factura, totales_seleccion, validar_reasignacion,
+    PedidoBandeja, expandir_seleccion_por_factura, guardar_destino_preferido,
+    totales_seleccion, validar_reasignacion,
 )
 
 
@@ -69,3 +70,42 @@ def test_expandir_sin_factura_no_arrastra_otros():
     todos = [pedido(id=1, factura="", comprobante=""), pedido(id=2, factura="", comprobante="")]
     resultado = expandir_seleccion_por_factura(todos, [todos[0]])
     assert [p.id for p in resultado] == [1]
+
+class _Lugar:
+    def __init__(self, principal=False, ruta_reparto_id=None, activo=True):
+        self.principal = principal
+        self.ruta_reparto_id = ruta_reparto_id
+        self.ruta_reparto = ruta_reparto_id
+        self.activo = activo
+        self.guardados = 0
+
+    def save(self):
+        self.guardados += 1
+
+
+def test_guardar_destino_preferido_marca_principal_y_ruta():
+    lugar = _Lugar(principal=False, ruta_reparto_id=1, activo=True)
+
+    assert guardar_destino_preferido(lugar, 2) is True
+    assert lugar.principal is True
+    assert lugar.ruta_reparto_id == 2
+    assert lugar.guardados == 1
+
+
+def test_guardar_destino_preferido_sin_cambios_no_guarda():
+    lugar = _Lugar(principal=True, ruta_reparto_id=2, activo=True)
+
+    assert guardar_destino_preferido(lugar, 2) is False
+    assert lugar.guardados == 0
+
+
+def test_guardar_destino_preferido_reactiva_lugar():
+    lugar = _Lugar(principal=True, ruta_reparto_id=2, activo=False)
+
+    assert guardar_destino_preferido(lugar, 2) is True
+    assert lugar.activo is True
+    assert lugar.guardados == 1
+
+
+def test_guardar_destino_preferido_sin_lugar():
+    assert guardar_destino_preferido(None, 2) is False

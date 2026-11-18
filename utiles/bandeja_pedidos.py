@@ -57,6 +57,26 @@ def totales_seleccion(pedidos):
     }
 
 
+def guardar_destino_preferido(lugar, ruta_id):
+    """Deja el lugar elegido como principal y con la ruta usada en la factura."""
+    if lugar is None:
+        return False
+
+    cambios = False
+    if not lugar.principal:
+        lugar.principal = True
+        cambios = True
+    if ruta_id and lugar.ruta_reparto_id != ruta_id:
+        lugar.ruta_reparto_id = ruta_id
+        cambios = True
+    if not lugar.activo:
+        lugar.activo = True
+        cambios = True
+    if cambios:
+        lugar.save()
+    return cambios
+
+
 def validar_reasignacion(pedidos, ruta_id):
     if not pedidos:
         return False, "Seleccione al menos un pedido"

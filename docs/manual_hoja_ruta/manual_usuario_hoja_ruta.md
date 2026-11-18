@@ -1,4 +1,4 @@
-# Manual de usuario
+﻿# Manual de usuario
 ## Importar pedidos e imprimir la hoja de ruta
 
 **RND · Circuito de reparto · 20 de octubre de 2026**
@@ -36,6 +36,8 @@ Cuando la vista previa esté correcta, presione **Grabar pedidos**. Lea el resum
 Abra **Pedidos para organizar** desde el paso siguiente o desde el menú operativo. Seleccione la fecha y presione **Actualizar**. Cada fila representa una factura o documento completo; revise el estado, el cliente, el lugar de entrega y la ruta.
 
 Use **Editar** para corregir cliente, lugar, ruta, remito u observación general. Use **Productos** para revisar las líneas y, si hace falta, cambiar únicamente la **Cantidad a entregar**. No puede ser negativa ni superar la cantidad original.
+
+Cuando se guarda la factura con un lugar de entrega seleccionado, RND lo deja como **lugar principal** del cliente y guarda la ruta para las próximas importaciones.
 
 Marque las facturas que viajarán juntas, seleccione la **Ruta destino** y presione **Organizar seleccionados**. Espere la confirmación. Después de organizar correctamente, RND habilita **Asignar chofer y camión**.
 
