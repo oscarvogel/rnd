@@ -99,6 +99,12 @@ def prepare_demo_database() -> None:
     obere, _ = Localidades.get_or_create(descripcion="Obera", defaults={"provincia": "Misiones"})
     san_vicente, _ = Localidades.get_or_create(descripcion="San Vicente", defaults={"provincia": "Misiones"})
     puerto_rico, _ = Localidades.get_or_create(descripcion="Puerto Rico", defaults={"provincia": "Misiones"})
+    posadas, _ = Localidades.get_or_create(descripcion="Posadas", defaults={"provincia": "Misiones"})
+    puerto_iguazu, _ = Localidades.get_or_create(descripcion="Puerto Iguazu", defaults={"provincia": "Misiones"})
+    garupa, _ = Localidades.get_or_create(descripcion="Garupa", defaults={"provincia": "Misiones"})
+    eldorado, _ = Localidades.get_or_create(descripcion="Eldorado", defaults={"provincia": "Misiones"})
+    jardin_america, _ = Localidades.get_or_create(descripcion="Jardin America", defaults={"provincia": "Misiones"})
+    candelaria, _ = Localidades.get_or_create(descripcion="Candelaria", defaults={"provincia": "Misiones"})
 
     clientes = []
     for data in (
@@ -160,6 +166,8 @@ def prepare_demo_database() -> None:
         ("Proveedor Demo - Tio Pujio", "TIO_PUJIO", "30-79999992-2"),
         ("Proveedor Demo - Detalle Ventas", "DETALLE_VENTAS", "30-79999993-3"),
         ("Proveedor Demo - Columnas", "COLUMNAS", "30-79999994-4"),
+        ("Recreo", "DETALLE_VENTAS", "30-79999995-5"),
+        ("Lario", "REPORTE_VIAJE", "30-79999996-6"),
     ):
         proveedor, _ = Proveedor.get_or_create(
             razon_social=razon_social,
@@ -177,7 +185,7 @@ def prepare_demo_database() -> None:
             proveedor.metodo_importacion = metodo
             proveedor.activo = True
             proveedor.save()
-        proveedores_demo[metodo] = proveedor
+        proveedores_demo.setdefault(metodo, []).append(proveedor)
 
     # Compatibilidad con demos anteriores: el viejo "Proveedor Demo" queda como
     # Tremblay, pero ya no es el proveedor recomendado para las pruebas nuevas.
@@ -198,18 +206,18 @@ def prepare_demo_database() -> None:
         "COLUMNAS": (("CLI-001", clientes[0]), ("CLI-002", clientes[1])),
     }
     for metodo, relaciones in codigos_demo.items():
-        proveedor = proveedores_demo[metodo]
-        for codigo, cliente in relaciones:
-            relacion, _ = CodigoClienteProveedor.get_or_create(
-                codigo=codigo,
-                proveedor=proveedor,
-                defaults={"cliente": cliente},
-            )
-            if relacion.cliente_id != cliente.id:
-                relacion.cliente = cliente
-                relacion.save()
+        for proveedor in proveedores_demo.get(metodo, []):
+            for codigo, cliente in relaciones:
+                relacion, _ = CodigoClienteProveedor.get_or_create(
+                    codigo=codigo,
+                    proveedor=proveedor,
+                    defaults={"cliente": cliente},
+                )
+                if relacion.cliente_id != cliente.id:
+                    relacion.cliente = cliente
+                    relacion.save()
 
-    proveedor_columnas = proveedores_demo["COLUMNAS"]
+    proveedor_columnas = proveedores_demo["COLUMNAS"][0]
     for codigo, columna in (
         ("Cliente", "Cliente"),
         ("Nombre_Cliente", "Nombre_Cliente"),
@@ -276,6 +284,43 @@ def prepare_demo_database() -> None:
     # el destino para que la consolidacion los reutilice sin renombrar.
     lugar_san_vicente_dup = lugar(dup_cinco, "San Vicente", "Av. Libertador 450", san_vicente, ruta_norte, principal=True)
     lugar_obera_dup = lugar(dup_ceferino, "Obera", "Ruta 14 Km 980", obere, ruta_centro, principal=True)
+
+    # Clientes del Reporte de viaje de Lario para que la importacion del PDF
+    # muestre remitos resueltos por CUIT.
+    lario_clientes = (
+        ("SUPERMERCADOS NELSON S.R.L.", "30-71569257-7", "AV ZAPIOLA 5957", posadas, ruta_centro),
+        ("RANKING S.R.L.", "30-71635982-0", "AV. REP. ARGENTINA 26", puerto_iguazu, ruta_norte),
+        ("CANTERO MARGARITA OFELIA", "27-24631616-9", "DE LAS AMERICA Y VENEZUELA", garupa, ruta_centro),
+        ("S.A. IMPORTADORA Y EXPORTADORA DE LA", "30-50673003-8", "AV TOMAS GUIDO 6070", posadas, ruta_centro),
+        ("CALIFORNIA S.A.", "30-53952341-0", "CORDOBA 215", posadas, ruta_centro),
+        ("AUTOSERVICIO CEFERINO RODRIGUEZ S.H.", "30-68791728-2", "RUTA NAC. 14 KM.1260", san_vicente, ruta_norte),
+        ("AUTOSERVICIO MAYORISTA DIARCO S.A.", "30-60737179-9", "RUTA NAC.12", posadas, ruta_centro),
+        ("MAYCAR SOCIEDAD ANONIMA (VITAL)", "30-61286533-3", "RUTA NAC.12 KM 6.5", posadas, ruta_centro),
+        ("MARKWART YESSICA SILVANA", "27-33569342-1", "VILCAPUGIO Y JURAMENTO KM.10", eldorado, ruta_norte),
+        ("V-ALLES SRL", "30-71512726-8", "AV. SAN MARTIN 333 KM.6", eldorado, ruta_norte),
+        ("SILVA DANIELA DE LOS ANGELES", "27-29596433-8", "CHACRA 147 CASA 8 M.A", posadas, ruta_centro),
+        ("R.N.D. SRL * MERCADERIA *", "30-71113274-7", "CALLE 248 NRO 2377 B", posadas, ruta_centro),
+        ("RC S.R.L.", "30-71279110-8", "POLONIA 55", eldorado, ruta_norte),
+        ("EL CONDOR SRL", "30-70867397-4", "AV. BELTRAME 1307", obere, ruta_centro),
+        ("BOCANEGRA FACUNDO JAVIER", "20-29566747-9", "CASA 83 - B DOCENTE", obere, ruta_centro),
+        ("SOL DE MAYO SRL", "30-59133999-7", "AV. LIBERTAD Y CUBA", jardin_america, ruta_norte),
+        ("EL ARCO SRL", "30-70994384-3", "AV. B.ROQUE GONZALEZ ESQ. PRINGLES", candelaria, ruta_centro),
+    )
+    for nombre, cuit, direccion, localidad, ruta in lario_clientes:
+        cliente, _ = Cliente.get_or_create(
+            cuit=cuit,
+            defaults={
+                "razon_social": nombre,
+                "direccion": direccion,
+                "telefono": "03743-400000",
+                "contacto": "Cliente demo Lario",
+                "activo": True,
+                "observaciones": "Cliente demo para importar el Reporte de viaje de Lario",
+                "localidad": localidad,
+                "ruta_reparto": ruta,
+            },
+        )
+        lugar(cliente, localidad.descripcion, direccion, localidad, ruta, principal=True)
 
     concepto, _ = ConceptoLiquidacion.get_or_create(
         descripcion="Chofer",
