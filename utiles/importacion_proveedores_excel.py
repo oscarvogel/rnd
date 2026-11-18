@@ -401,6 +401,15 @@ def normalizar_archivo_pedidos(archivo_entrada, progreso=None, metodo=None, adve
             advertencias=advertencias,
         )
 
+    if metodo == METODO_DETALLE_VENTAS and extension == ".pdf":
+        from utiles.importacion_factura_recreo import procesar_factura_recreo
+
+        return procesar_factura_recreo(
+            archivo_entrada,
+            progreso=progreso,
+            advertencias=advertencias,
+        )
+
     if extension in {".pdf", ".png", ".jpg", ".jpeg"}:
         from utiles.importacion_pdf_ia import extraer_pedidos_pdf_ia
 

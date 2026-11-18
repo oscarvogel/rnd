@@ -101,8 +101,8 @@ def ayuda_proveedor(metodo_importacion):
         )
     if metodo == "DETALLE_VENTAS":
         return (
-            "Seleccione el archivo Detalle de Ventas configurado para este proveedor. "
-            "RND validará su estructura antes de importarlo."
+            "Recreo / Detalle de Ventas: seleccione el Excel Detalle de Ventas o el PDF "
+            "de factura de Recreo. RND validará la estructura antes de importarlo."
         )
     if metodo == "REPORTE_VIAJE":
         return (

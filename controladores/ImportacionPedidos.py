@@ -366,7 +366,7 @@ class ImportacionPedidosController(ControladorBase):
         archivo = self.archivo_trabajo
         hoja = self.view.cbo_hoja.text()
         try:
-            df = pd.read_excel(archivo, sheet_name=hoja, header=None)
+            df = pd.read_excel(archivo, sheet_name=hoja, header=None, dtype=str)
         except Exception as exc:
             self.resumen_actual = ResumenImportacion(errores=1)
             self.view.mostrar_resultado(self.resumen_actual)
