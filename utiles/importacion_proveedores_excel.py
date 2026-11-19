@@ -18,6 +18,7 @@ METODO_TIO_PUJIO = "TIO_PUJIO"
 METODO_DETALLE_VENTAS = "DETALLE_VENTAS"
 METODO_TREMBLAY = "TREMBLAY"
 METODO_REPORTE_VIAJE = "REPORTE_VIAJE"
+METODO_TACURAL = "TACURAL"
 
 # Única fuente de verdad para el combo de la ficha del proveedor
 # (vistas.ABMProveedores): sólo estos métodos están habilitados.
@@ -27,6 +28,7 @@ METODOS_IMPORTACION = (
     (METODO_TIO_PUJIO, "Tío Pujio (Control de Pedidos)"),
     (METODO_DETALLE_VENTAS, "Detalle de ventas"),
     (METODO_REPORTE_VIAJE, "Lario / Reporte de viaje (remitos por viaje)"),
+    (METODO_TACURAL, "Tacural (factura escaneada)"),
 )
 
 # Valores históricos guardados a mano que deben seguir funcionando.
@@ -405,6 +407,18 @@ def normalizar_archivo_pedidos(archivo_entrada, progreso=None, metodo=None, adve
         from utiles.importacion_factura_recreo import procesar_factura_recreo
 
         return procesar_factura_recreo(
+            archivo_entrada,
+            progreso=progreso,
+            advertencias=advertencias,
+        )
+
+    if metodo == METODO_TACURAL:
+        # Va antes de la rama genérica de PDF: el proveedor tiene su propio
+        # lector (factura escaneada de Tacural) y no debe caer en el
+        # extractor genérico por IA.
+        from utiles.importacion_factura_tacural import procesar_factura_tacural
+
+        return procesar_factura_tacural(
             archivo_entrada,
             progreso=progreso,
             advertencias=advertencias,

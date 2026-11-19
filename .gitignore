@@ -58,6 +58,9 @@ Thumbs.db
 !tests/fixtures/*.csv
 !tests/fixtures/*.pdf
 
+# Excepción: el PDF de muestra de Tacural viaja en la build del DEMO
+!assets/proveedor_tacural_demo.pdf
+
 # Andamiaje local de desarrollo en Windows (no portable)
 # setup_venv.bat tiene el path de Python 3.12 de esta maquina hardcodeado.
 /pip_install.bat

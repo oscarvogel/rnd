@@ -251,6 +251,73 @@ def _contenido_respuesta(payload: dict) -> str:
     return str(contenido or "")
 
 
+def _enviar_json(
+    url: str,
+    api_key: str,
+    payload: dict,
+    timeout: int,
+    que_pedir: str,
+) -> dict:
+    """Envia un payload al endpoint de IA y devuelve el JSON de la respuesta.
+
+    Centraliza la politica de reintentos (429/5xx y errores de red) para que
+    la importacion por vision y las llamadas de texto no se comporten de
+    forma distinta cuando el servicio falla.
+    """
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": "Bearer {}".format(api_key),
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    raw = None
+    ultimo_error = None
+    for intento in range(1, 4):
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                raw = response.read().decode("utf-8")
+            break
+        except urllib.error.HTTPError as exc:
+            ultimo_error = exc
+            detalle = ""
+            try:
+                detalle = exc.read().decode("utf-8", errors="replace")
+            except Exception:
+                detalle = ""
+            detalle = detalle[:500]
+            if exc.code in {429, 500, 502, 503, 504} and intento < 3:
+                time.sleep(float(intento))
+                continue
+            raise ExtraccionPdfIAError(
+                "El servicio de IA rechazo {} (HTTP {}). {}"
+                .format(que_pedir, exc.code, detalle)
+            ) from exc
+        except OSError as exc:
+            ultimo_error = exc
+            motivo = getattr(exc, "reason", None) or str(exc)
+            if intento < 3:
+                time.sleep(float(intento))
+                continue
+            raise ExtraccionPdfIAError(
+                "No se pudo conectar con el servicio de IA: {}".format(motivo)
+            ) from exc
+
+    if raw is None:
+        raise ExtraccionPdfIAError(
+            "No se obtuvo respuesta del servicio de IA: {}".format(ultimo_error)
+        )
+
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ExtraccionPdfIAError(
+            "El servicio de IA devolvio una respuesta no JSON"
+        ) from exc
+
+
 def llamar_minimax_texto(
     messages: list[dict],
     *,
@@ -271,59 +338,7 @@ def llamar_minimax_texto(
         "max_completion_tokens": max_completion_tokens,
         "messages": messages,
     }
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": "Bearer {}".format(api_key),
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-
-    raw = None
-    ultimo_error = None
-    for intento in range(1, 4):
-        try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                raw = response.read().decode("utf-8")
-            break
-        except urllib.error.HTTPError as exc:
-            ultimo_error = exc
-            detalle = ""
-            try:
-                detalle = exc.read().decode("utf-8", errors="replace")
-            except Exception:
-                detalle = ""
-            detalle = detalle[:500]
-            if exc.code in {429, 500, 502, 503, 504} and intento < 3:
-                time.sleep(float(intento))
-                continue
-            raise ExtraccionPdfIAError(
-                "El servicio de IA rechazo la consulta (HTTP {}). {}"
-                .format(exc.code, detalle)
-            ) from exc
-        except OSError as exc:
-            ultimo_error = exc
-            motivo = getattr(exc, "reason", None) or str(exc)
-            if intento < 3:
-                time.sleep(float(intento))
-                continue
-            raise ExtraccionPdfIAError(
-                "No se pudo conectar con el servicio de IA: {}".format(motivo)
-            ) from exc
-
-    if raw is None:
-        raise ExtraccionPdfIAError(
-            "No se obtuvo respuesta del servicio de IA: {}".format(ultimo_error)
-        )
-
-    try:
-        response_payload = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ExtraccionPdfIAError(
-            "El servicio de IA devolvio una respuesta no JSON"
-        ) from exc
+    response_payload = _enviar_json(url, api_key, payload, timeout, "la consulta")
 
     contenido = _contenido_respuesta(response_payload)
     contenido = re.sub(
@@ -372,59 +387,57 @@ def _llamar_vision(
             },
         ],
     }
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": "Bearer {}".format(api_key),
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    raw = None
-    ultimo_error = None
-    for intento in range(1, 4):
-        try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                raw = response.read().decode("utf-8")
-            break
-        except urllib.error.HTTPError as exc:
-            ultimo_error = exc
-            detalle = ""
-            try:
-                detalle = exc.read().decode("utf-8", errors="replace")
-            except Exception:
-                detalle = ""
-            detalle = detalle[:500]
-            if exc.code in {429, 500, 502, 503, 504} and intento < 3:
-                time.sleep(float(intento))
-                continue
-            raise ExtraccionPdfIAError(
-                "El servicio de IA rechazo la pagina (HTTP {}). {}"
-                .format(exc.code, detalle)
-            ) from exc
-        except OSError as exc:
-            ultimo_error = exc
-            motivo = getattr(exc, "reason", None) or str(exc)
-            if intento < 3:
-                time.sleep(float(intento))
-                continue
-            raise ExtraccionPdfIAError(
-                "No se pudo conectar con el servicio de IA: {}".format(motivo)
-            ) from exc
-
-    if raw is None:
-        raise ExtraccionPdfIAError(
-            "No se obtuvo respuesta del servicio de IA: {}".format(ultimo_error)
-        )
-
-    try:
-        response_payload = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise ExtraccionPdfIAError(
-            "El servicio de IA devolvio una respuesta no JSON"
-        ) from exc
+    response_payload = _enviar_json(url, api_key, payload, timeout, "la pagina")
     return _extraer_json(_contenido_respuesta(response_payload))
+
+
+def llamar_vision_texto(
+    imagen_bytes: bytes,
+    mime_type: str,
+    prompt: str,
+    *,
+    max_tokens: int = 4000,
+    timeout: int | None = None,
+) -> str:
+    """Transcribe o extrae texto de una imagen usando el endpoint de vision.
+
+    A diferencia de ``_llamar_vision`` no fuerza un JSON: devuelve el texto
+    crudo que devuelve el modelo. Lo usan los importadores que necesitan una
+    transcripcion literal de la pagina para parsearla en Python con reglas
+    deterministas (por ejemplo las facturas escaneadas de Tacural).
+    """
+    url, api_key, model, timeout_config = _configuracion()
+    if timeout is not None:
+        timeout_config = timeout
+
+    data_url = "data:{};base64,{}".format(
+        mime_type,
+        base64.b64encode(imagen_bytes).decode("ascii"),
+    )
+    payload = {
+        "model": model,
+        "thinking": {"type": "disabled"},
+        "temperature": 0.1,
+        "max_completion_tokens": max_tokens,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": data_url, "detail": "high"},
+                    },
+                ],
+            },
+        ],
+    }
+    response_payload = _enviar_json(url, api_key, payload, timeout_config, "la pagina")
+    contenido = _contenido_respuesta(response_payload)
+    contenido = re.sub(r"<think>.*?</think>", "", contenido, flags=re.I | re.S).strip()
+    if not contenido:
+        raise ExtraccionPdfIAError("La IA devolvio una respuesta vacia")
+    return contenido
 
 
 def _imagenes_desde_archivo(path: Path) -> list[tuple[bytes, str]]:
