@@ -1,9 +1,9 @@
 # coding=utf-8
 """Seed idempotente para probar la importacion de Tacural (PDF escaneado).
 
-Los clientes, codigos y domicilios corresponden al PDF escaneado de Tacural
-("assets/proveedor_tacural_demo.pdf") usado para validar el importador de
-facturas escaneadas.
+Los clientes, codigos y domicilios son de DEMO y corresponden al PDF de muestra
+que genera `utiles.generador_pdf_tacural` (misma estructura que el comprobante
+real, con una pagina escaneada de lado).
 
 Las rutas CENTRO/NORTE son una decision exclusiva del DEMO para que los pedidos
 queden listos para recorrer el flujo operativo; no provienen del PDF.
@@ -22,44 +22,144 @@ PROVEEDOR_TACURAL = {
 
 # "codigo" es el numero de cliente que imprime Tacural en la factura.
 # "codigo_cuit" es el CUIT: el importador lo usa para resolver el cliente.
+# Los datos son de DEMO: el PDF de muestra se dibuja con estos mismos
+# clientes, asi que no se versiona ningun dato de clientes reales.
 CLIENTES_TACURAL = (
     {
         "codigo": "5808",
-        "codigo_cuit": "27-20144842-0",
-        "razon_social": "LOZANO MARIELA GUADALUPE",
-        "cuit": "27-20144842-0",
-        "direccion": "RUTA PROVINCIAL 213 8026 Dp",
+        "codigo_cuit": "30700000111",
+        "razon_social": "SUPERMERCADO LOS DOS S.R.L.",
+        "cuit": "30-70000011-1",
+        "direccion": "AV. CENTRAL 1234",
         "localidad": "Posadas",
         "ruta": "CENTRO",
     },
     {
         "codigo": "5997",
-        "codigo_cuit": "20-16442991-2",
-        "razon_social": "BENITEZ OMAR ANIBAL",
-        "cuit": "20-16442991-2",
-        "direccion": "RUTA 12 KM8.5 ESQ. GUARANI",
+        "codigo_cuit": "30700000122",
+        "razon_social": "COMERCIO EL ORIENTE",
+        "cuit": "30-70000012-2",
+        "direccion": "RUTA 12 KM 8.5 ESQ. GUARANI",
         "localidad": "Garupa",
         "ruta": "CENTRO",
     },
     {
         "codigo": "9258",
-        "codigo_cuit": "27-37116773-6",
-        "razon_social": "VARGAS MARIA JOSE",
-        "cuit": "27-37116773-6",
+        "codigo_cuit": "30700000133",
+        "razon_social": "ALMACEN CENTRAL",
+        "cuit": "30-70000013-3",
         "direccion": "PERU 701",
         "localidad": "Obera",
         "ruta": "NORTE",
     },
     {
         "codigo": "9098",
-        "codigo_cuit": "33-70990435-9",
-        "razon_social": "HIPERMERCADO DEL POLLO S.R.L.",
-        "cuit": "33-70990435-9",
+        "codigo_cuit": "30700000144",
+        "razon_social": "HIPERMERCADO DEL NORTE S.R.L.",
+        "cuit": "30-70000014-4",
         "direccion": "AVDA LAVALLE 2720",
         "localidad": "Posadas",
         "ruta": "CENTRO",
     },
 )
+
+
+def _factura(numero, cliente, codigo_cliente, direccion, localidad, cp, telefono,
+             cajas, pedido, total_kilos, items, girada=False):
+    """Arma una factura de muestra a partir de los datos del cliente demo."""
+    importance = {}
+    for item in items:
+        item = dict(item)
+        item["importe"] = round(item["kg"] * item["punit"], 2)
+        importance.setdefault("items", []).append(item)
+    return {
+        "numero": numero,
+        "fecha": "18/11/2026",
+        "razon_social": cliente["razon_social"],
+        "codigo_cliente": codigo_cliente,
+        "direccion": direccion,
+        "localidad": localidad.upper(),
+        "provincia": "Misiones",
+        "cp": cp,
+        "telefono": telefono,
+        "cuit": cliente["cuit"],
+        "cajas": cajas,
+        "pedido": pedido,
+        "total_kilos": total_kilos,
+        "cae": "8646326778{:04d}".format(pedido),
+        "vto_cae": "28/11/2026",
+        "girada": girada,
+        "items": importance["items"],
+    }
+
+
+# Las cuatro facturas del PDF de muestra. Reproducen los casos que hacen
+# trabajar al importador: lineas con unidades y sin unidades, y una pagina
+# escaneada de lado.
+FACTURAS_MUESTRA = (
+    _factura(
+        "A00011-00420901", CLIENTES_TACURAL[0], "5808", "AV. CENTRAL 1234",
+        "Posadas", "3300", "03764-400011", 2, 1, 53.60,
+        (
+            {"codigo": 10110, "descripcion": "JAMON COCIDO ESPE 3", "unid": 3,
+             "kg": 15.60, "punit": 8413.88, "bonif": 10, "iva": 21},
+            {"codigo": 10314, "descripcion": "SALAME MILAN SIN", "unid": 2,
+             "kg": 4.60, "punit": 10509.92, "bonif": 10, "iva": 21},
+            {"codigo": 10200, "descripcion": "MORTADELA", "unid": 1,
+             "kg": 3.80, "punit": 7147.94, "bonif": 10, "iva": 21},
+            {"codigo": 10421, "descripcion": "SALCHI PARRILLER", "unid": 1,
+             "kg": 1.60, "punit": 8066.12, "bonif": 10, "iva": 21},
+            {"codigo": 10132, "descripcion": "JAMON COCIDO PAMP", "unid": 3,
+             "kg": 15.00, "punit": 4165.29, "bonif": 10, "iva": 21},
+            {"codigo": 10202, "descripcion": "MORTADELA PAMPITA", "unid": 1,
+             "kg": 3.00, "punit": 3123.96, "bonif": 10, "iva": 21},
+            {"codigo": 10130, "descripcion": "FIAMBRE COCIDO PA", "unid": 2,
+             "kg": 10.00, "punit": 2759.51, "bonif": 10, "iva": 21},
+        ),
+    ),
+    _factura(
+        "A00011-00420902", CLIENTES_TACURAL[1], "5997", "RUTA 12 KM 8.5 ESQ. GUARANI",
+        "Garupa", "3304", "03764-400012", 3, 2, 75.40,
+        (
+            {"codigo": 10130, "descripcion": "FIAMBRE COCIDO PA 12", "unid": None,
+             "kg": 12.00, "punit": 2759.51, "bonif": 10, "iva": 21},
+            {"codigo": 20242, "descripcion": "PANCETA AHUMADA D", "unid": None,
+             "kg": 4.60, "punit": 13636.86, "bonif": 10, "iva": 21},
+            {"codigo": 10314, "descripcion": "SALAME MILAN SIN", "unid": None,
+             "kg": 2.40, "punit": 10509.92, "bonif": 10, "iva": 21},
+            {"codigo": 10200, "descripcion": "MORTADELA", "unid": None,
+             "kg": 3.80, "punit": 7147.94, "bonif": 10, "iva": 21},
+            {"codigo": 20140, "descripcion": "BONDIOLA", "unid": None,
+             "kg": 1.60, "punit": 15824.38, "bonif": 10, "iva": 21},
+            {"codigo": 10132, "descripcion": "JAMON COCIDO PAMP", "unid": None,
+             "kg": 51.00, "punit": 4165.29, "bonif": 10, "iva": 21},
+        ),
+    ),
+    _factura(
+        "A00011-00420903", CLIENTES_TACURAL[2], "9258", "PERU 701",
+        "Obera", "3360", "03764-400013", 4, 3, 120.00,
+        (
+            {"codigo": 10134, "descripcion": "FIAMBRE COCIDO DE 12", "unid": None,
+             "kg": 60.00, "punit": 2759.51, "bonif": 10, "iva": 21},
+            {"codigo": 10132, "descripcion": "JAMON COCIDO PAMP 12", "unid": None,
+             "kg": 60.00, "punit": 4165.29, "bonif": 10, "iva": 21},
+        ),
+        girada=True,
+    ),
+    _factura(
+        "A00011-00420904", CLIENTES_TACURAL[3], "9098", "AVDA LAVALLE 2720",
+        "Posadas", "3300", "03764-400014", 10, 16, 194.80,
+        (
+            {"codigo": 20242, "descripcion": "PANCETA AHUMADA D 80", "unid": None,
+             "kg": 145.00, "punit": 13636.86, "bonif": 10, "iva": 21},
+            {"codigo": 20241, "descripcion": "PANCETA SALADA", "unid": None,
+             "kg": 36.80, "punit": 13636.86, "bonif": 10, "iva": 21},
+            {"codigo": 10804, "descripcion": "PANCETA AHUMADA D 40", "unid": None,
+             "kg": 13.00, "punit": 13873.39, "bonif": 10, "iva": 21},
+        ),
+    ),
+)
+
 
 MAPEO_COLUMNAS_NORMALIZADAS = (
     ("Cliente", "codigo_cliente"),

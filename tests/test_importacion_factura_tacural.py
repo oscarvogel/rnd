@@ -14,6 +14,7 @@ from utiles.importacion_factura_tacural import (  # noqa: E402
     _errores_de_orientacion,
     _errores_de_pagina,
     _filas_de_pagina,
+    _limpiar_unidades_duplicadas,
     _notas_de_pagina,
     _parsear_transcripcion,
     _reajustar_pesos,
@@ -199,6 +200,34 @@ def test_reajusta_el_peso_cuando_la_ia_lo_carga_en_la_columna_unidades():
     assert _reajustar_pesos(items, 53.60) is True
     assert items[0]["unid"] == 3
     assert items[0]["kg"] == pytest.approx(15.60)
+
+
+def test_limpia_las_unidades_duplicadas_del_peso():
+    items = [
+        {"unid": 60.00, "kg": 60.00},
+        {"unid": 4.60, "kg": 4.60},
+    ]
+
+    assert _limpiar_unidades_duplicadas(items) is True
+    assert items[0]["unid"] is None
+    assert items[0]["kg"] == pytest.approx(60.00)
+
+
+def test_no_limpia_unidades_iguales_al_peso_cuando_son_pesos_enteros():
+    # Un peso entero puede ser una unidad real: no se toca.
+    items = [{"unid": 2, "kg": 2}, {"unid": 3, "kg": 3}]
+
+    assert _limpiar_unidades_duplicadas(items) is False
+    assert items[0]["unid"] == 2
+
+
+def test_avisa_si_el_cuit_leido_es_el_del_proveedor():
+    encabezado, items, _ = _parsear_transcripcion(TRANSCRIPCION_FACTURA)
+    encabezado["CUIT"] = "30-58743818-2"
+
+    errores = _errores_de_orientacion(encabezado, items)
+
+    assert any("CUIT leido es el del proveedor" in error for error in errores)
 
 
 def test_arma_las_filas_con_el_contrato_de_rnd():
