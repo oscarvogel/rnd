@@ -93,13 +93,46 @@ Excel. Entre los métodos actuales están:
 - `COLUMNAS`;
 - `TREMBLAY`;
 - `TIO_PUJIO`;
-- `DETALLE_VENTAS`.
+- `DETALLE_VENTAS`;
+- `REPORTE_VIAJE`;
+- `TACURAL`.
 
 Para PDF e imágenes se utiliza el procesamiento por IA y luego el contrato de
 columnas normalizadas de RND.
 
 Según el Excel, el operador puede elegir hoja y, opcionalmente, fila de inicio y
 fila final. Si esos campos quedan vacíos, RND usa el rango disponible.
+
+### Método TACURAL (factura escaneada de Tacural)
+
+`utiles/importacion_factura_tacural.py` implementa el caso en que el
+proveedor entrega un PDF escaneado, sin capa de texto, con un comprobante por
+página. El flujo es:
+
+1. PyMuPDF renderiza cada página a PNG.
+2. La IA de visión transcribe la página a líneas con formato fijo
+   (`llamar_vision_texto` en `utiles/importacion_pdf_ia.py`, que comparte
+   credencial, endpoint y reintentos con el resto de la importación por IA).
+3. Python parsea esas líneas y valida la página contra lo impreso.
+
+Reglas propias del lector, que no dependen de que la IA "entienda" el
+documento:
+
+- El tipo de comprobante sale del **número**: `A00011-…` es factura y
+  `B00099-…` es presupuesto. Sólo se importan las facturas.
+- La **orientación** de la página se detecta probando rotaciones hasta que la
+  lectura cierra; si una lectura falla, la página se reintenta (la lectura por
+  IA no es determinista).
+- Los **kilos** de las líneas se contrastan con el `TOTAL KILOGRAMOS` impreso
+  y cada línea se contrasta con `Kg × P.Unit = Importe`.
+- Cuando la columna `Unid.` viene vacía, el peso se reconoce porque sólo hay
+  un número entre la descripción y el precio unitario.
+- Una página que no cierra se marca **REVISAR** y queda desmarcada en la vista
+  previa.
+
+El módulo no graba nada: devuelve un XLSX con las columnas normalizadas
+(`codigo_cliente`, `detalle_cliente`, `destino`, `comprobante`, `cantidad`,
+`producto`, `bultos`, `kilos`, `observaciones`).
 
 ## 4. Vista previa y resultado de importación
 

@@ -9,8 +9,23 @@ historicos ficticios, para probar Simular + Consolidar sin riesgo.
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
+import shutil
 
 import pandas as pd
+
+
+def _ruta_asset(nombre):
+    """Devuelve la ruta de un archivo de assets/ o None si no esta.
+
+    En desarrollo vive en la raiz del repo; en la build congelada queda
+    dentro de _internal, al lado del modulo demo_seed.
+    """
+    base = Path(__file__).resolve().parent
+    for carpeta in (base / "assets", base.parent / "assets"):
+        candidato = carpeta / nombre
+        if candidato.is_file():
+            return candidato
+    return None
 
 
 def prepare_demo_database() -> None:
@@ -243,6 +258,11 @@ def prepare_demo_database() -> None:
     # Se mantiene en un modulo separado para poder ejecutarlo también a demanda.
     from utiles.seed_estancia_oro import seed_estancia_oro
     seed_estancia_oro()
+
+    # Tacural: factura escaneada con un comprobante por pagina. El modulo
+    # aparte deja el proveedor y sus clientes listos para probar la lectura.
+    from utiles.seed_tacural import seed_tacural
+    seed_tacural()
 
     def lugar(cliente, nombre, direccion, localidad, ruta, principal=False):
         obj, _ = LugarEntrega.get_or_create(
@@ -527,7 +547,7 @@ def _asegurar_columnas_pallet(db) -> None:
 
 
 def _generar_archivos_importacion_demo() -> None:
-    """Genera cuatro archivos listos para probar cada método del importador."""
+    """Genera los archivos listos para probar cada método del importador."""
     destino = Path(__file__).resolve().parent / "demo_importaciones"
     destino.mkdir(exist_ok=True)
 
@@ -597,3 +617,10 @@ def _generar_archivos_importacion_demo() -> None:
         },
     ])
     columnas.to_excel(destino / "04_columnas_demo.xlsx", index=False)
+
+    # Tacural: el proveedor manda un PDF escaneado con un comprobante por
+    # pagina. El archivo viene en assets/ y se copia para que el tester lo
+    # tenga a mano, igual que las cuatro planillas.
+    origen = _ruta_asset("proveedor_tacural_demo.pdf")
+    if origen is not None:
+        shutil.copyfile(origen, destino / "05_proveedor_tacural.pdf")

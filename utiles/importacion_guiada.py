@@ -109,6 +109,12 @@ def ayuda_proveedor(metodo_importacion):
             "Lario / Reporte de viaje: seleccione el PDF de remitos del viaje. "
             "RND lee la tabla, valida el total y muestra la vista previa para revisar."
         )
+    if metodo == "TACURAL":
+        return (
+            "Tacural: seleccione el PDF escaneado de las facturas. RND lee cada "
+            "página, contrasta los kilos contra el total impreso y muestra la vista "
+            "previa: las páginas que no cierran quedan marcadas para revisión."
+        )
     if metodo == "COLUMNAS":
         return (
             "Seleccione el archivo recibido del proveedor. Puede ser Excel y, si corresponde, "

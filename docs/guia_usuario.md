@@ -69,10 +69,26 @@ Los métodos actuales incluyen, según el caso:
 - COLUMNAS;
 - TREMBLAY;
 - TIO_PUJIO;
-- DETALLE_VENTAS.
+- DETALLE_VENTAS;
+- REPORTE_VIAJE;
+- TACURAL.
 
 La configuración del proveedor se utiliza especialmente para validar y
 normalizar Excel.
+
+### Tacural: factura escaneada
+
+El proveedor Tacural envía un PDF escaneado, con un comprobante por página
+(facturas electrónicas `A00011-…` y presupuestos `B00099-…`). Con el método
+TACURAL, RND lee cada página, la contrasta contra los kilos y el total
+impresos, y muestra la vista previa.
+
+- Sólo se importan las **facturas**; los presupuestos quedan afuera.
+- Las páginas que no cierran con los totales impresos se marcan **REVISAR** y
+  aparecen desmarcadas: hay que validarlas antes de grabarlas.
+- Cada página cuesta una lectura de IA: un PDF de 25 páginas tarda unos 3
+  minutos.
+- El cliente se resuelve por CUIT y, si no está cargado, por razón social.
 
 ## Importación de pedidos
 

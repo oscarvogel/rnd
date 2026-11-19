@@ -60,6 +60,16 @@ def normalizar_cuit(valor):
     return digitos if len(digitos) == 11 else ""
 
 
+def normalizar_nombre_cliente(valor):
+    """Normaliza un nombre de cliente: mayusculas y solo letras y digitos.
+
+    Los proveedores imprimen los nombres con distinta puntuacion y a veces
+    truncados ("PROVOLONE S. A. S." contra "PROVOLONE S.A.S."). Comparar asi
+    permite reconocerlos sin depender de como los carga cada proveedor.
+    """
+    return re.sub(r"[^A-Z0-9]", "", str(valor or "").upper())
+
+
 def valor_para_vista_previa(valor):
     """Convierte valores de pandas/Excel a texto seguro y legible para la grilla."""
     if pd.isna(valor):
@@ -81,6 +91,9 @@ class ImportacionPedidosController(ControladorBase):
         self.resumen_actual = ResumenImportacion()
         self.archivo_normalizado = False
         self.origen_pdf_ia = False
+        # Indice de clientes por nombre normalizado: se arma la primera vez
+        # que hace falta y se reutiliza durante toda la importacion.
+        self._indice_clientes_nombres = None
         # La UI muestra siempre el archivo original elegido por el operador.
         # Si necesita normalizacion, archivo_trabajo apunta al XLSX temporal.
         self.archivo_trabajo = None
@@ -199,6 +212,9 @@ class ImportacionPedidosController(ControladorBase):
                 )
 
         if cliente_obj is None:
+            cliente_obj = self._resolver_cliente_por_nombre_aproximado(nombre_cliente)
+
+        if cliente_obj is None:
             return None, None
 
         principal = self._leer_db_con_reintento(
@@ -215,6 +231,54 @@ class ImportacionPedidosController(ControladorBase):
         if len(lugares) == 1:
             return cliente_obj, lugares[0]
         return cliente_obj, None
+
+    def _clientes_por_nombre_normalizado(self):
+        """Indice de clientes por nombre normalizado (sin puntos ni espacios).
+
+        Se arma una sola vez por importacion: solo se consulta cuando la
+        busqueda exacta por CUIT y por razon social ya fallo.
+        """
+        if self._indice_clientes_nombres is None:
+            indice = {}
+            clientes = self._leer_db_con_reintento(
+                lambda: list(Cliente.select()),
+                "lectura de clientes para resolver por nombre",
+            )
+            for cliente in clientes:
+                clave = normalizar_nombre_cliente(cliente.razon_social)
+                if clave:
+                    indice.setdefault(clave, []).append(cliente)
+            self._indice_clientes_nombres = indice
+        return self._indice_clientes_nombres
+
+    def _resolver_cliente_por_nombre_aproximado(self, nombre_cliente):
+        """Resuelve el cliente con el nombre normalizado o por prefijo.
+
+        Si hay mas de un cliente posible se devuelve None: el pedido queda
+        pendiente para que el operador lo resuelva, nunca se asigna al que
+        sea.
+        """
+        clave = normalizar_nombre_cliente(nombre_cliente)
+        if len(clave) < 12:
+            return None
+
+        indice = self._clientes_por_nombre_normalizado()
+        candidatos = indice.get(clave, [])
+        if len(candidatos) == 1:
+            return candidatos[0]
+        if candidatos:
+            return None
+
+        # El proveedor puede imprimir el nombre del cliente truncado.
+        prefijos = [
+            cliente
+            for otra_clave, clientes in indice.items()
+            if otra_clave.startswith(clave)
+            for cliente in clientes
+        ]
+        if len(prefijos) == 1:
+            return prefijos[0]
+        return None
 
     def _marcar_interrupcion_conexion(self, procesados, total, exc):
         """Deja la pantalla en un estado claro cuando una escritura queda incierta."""
