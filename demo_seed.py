@@ -9,23 +9,8 @@ historicos ficticios, para probar Simular + Consolidar sin riesgo.
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
-import shutil
 
 import pandas as pd
-
-
-def _ruta_asset(nombre):
-    """Devuelve la ruta de un archivo de assets/ o None si no esta.
-
-    En desarrollo vive en la raiz del repo; en la build congelada queda
-    dentro de _internal, al lado del modulo demo_seed.
-    """
-    base = Path(__file__).resolve().parent
-    for carpeta in (base / "assets", base.parent / "assets"):
-        candidato = carpeta / nombre
-        if candidato.is_file():
-            return candidato
-    return None
 
 
 def prepare_demo_database() -> None:
@@ -619,8 +604,9 @@ def _generar_archivos_importacion_demo() -> None:
     columnas.to_excel(destino / "04_columnas_demo.xlsx", index=False)
 
     # Tacural: el proveedor manda un PDF escaneado con un comprobante por
-    # pagina. El archivo viene en assets/ y se copia para que el tester lo
-    # tenga a mano, igual que las cuatro planillas.
-    origen = _ruta_asset("proveedor_tacural_demo.pdf")
-    if origen is not None:
-        shutil.copyfile(origen, destino / "05_proveedor_tacural.pdf")
+    # pagina. El archivo se dibuja en el momento (misma estructura que el
+    # comprobante real, con una pagina escaneada de lado) para no versionar
+    # binarios ni datos de clientes.
+    from utiles.generador_pdf_tacural import generar_pdf_muestra_tacural
+
+    generar_pdf_muestra_tacural(destino / "05_proveedor_tacural.pdf")

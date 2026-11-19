@@ -38,6 +38,11 @@ from utiles.importacion_proveedores_excel import COLUMNAS_NORMALIZADAS, _notific
 
 NOMBRE_PROVEEDOR = "Tacural"
 
+# CUIT del proveedor. Aparece en el encabezado de cada comprobante y no es el
+# del cliente: si el CUIT leido es este, la IA tomo el encabezado por el
+# cliente y la pagina hay que releerla.
+CUIT_PROVEEDOR = "30587438182"
+
 # El proveedor rotula los datos del cliente con estas etiquetas. La IA las
 # devuelve en mayusculas con el mismo nombre de campo.
 CAMPOS_ENCABEZADO = (
@@ -89,7 +94,7 @@ LOCALIDAD: <localidad del cliente>
 PROVINCIA: <provincia del cliente>
 CP: <codigo postal>
 TELEFONO: <telefono del cliente>
-CUIT: <cuit del cliente con guiones, por ejemplo 27-20144842-0>
+CUIT: <cuit del CLIENTE, el de la linea "CUIT:" que esta junto a Localidad. NO uses el "Cuit.:" del encabezado del proveedor>
 CAJA: <cantidad de cajas que figura en CAJA : Cajas: N>
 ZONA: <zona, por ejemplo 58>
 NUMERO_PEDIDO: <numero de pedido>
@@ -278,6 +283,27 @@ def _reajustar_pesos(items, total_kilos):
     return True
 
 
+def _limpiar_unidades_duplicadas(items):
+    """Limpia el caso en que la IA copio el peso en la columna de unidades.
+
+    Cuando la columna Unid. viene vacia, el modelo a veces escribe el mismo
+    numero en Unid. y en Kg. Si TODAS las lineas repiten el valor y ademas
+    hay un peso con decimales (un peso entero puede ser una unidad real),
+    la columna de unidades va vacia.
+    """
+    if not items:
+        return False
+    if any(item["unid"] is None or item["kg"] is None for item in items):
+        return False
+    if not all(item["unid"] == item["kg"] for item in items):
+        return False
+    if not any(abs(item["kg"] - round(item["kg"])) > 0.001 for item in items):
+        return False
+    for item in items:
+        item["unid"] = None
+    return True
+
+
 def _errores_de_orientacion(encabezado, items):
     """Fallos que indican que la pagina NO fue leida bien.
 
@@ -310,6 +336,8 @@ def _errores_de_orientacion(encabezado, items):
     tipo = _tipo_documento(encabezado)
     if tipo != "PRESUPUESTO" and not _cuit(encabezado.get("CUIT")):
         errores.append("no se pudo leer un CUIT valido del cliente")
+    elif _cuit(encabezado.get("CUIT")) == CUIT_PROVEEDOR:
+        errores.append("el CUIT leido es el del proveedor, no el del cliente")
 
     razon = _texto(encabezado.get("RAZON_SOCIAL")).upper()
     if not razon:
@@ -506,6 +534,7 @@ def _leer_pagina(indice, imagen_bytes, apaisada, advertencias, intentos=2):
 
             encabezado, items, problemas = _parsear_transcripcion(transcripcion)
             _reajustar_pesos(items, _numero(encabezado.get("TOTAL_KILOGRAMOS")))
+            _limpiar_unidades_duplicadas(items)
             errores = _errores_de_orientacion(encabezado, items)
             candidato = {
                 "encabezado": encabezado,
