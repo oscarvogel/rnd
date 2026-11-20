@@ -134,6 +134,37 @@ El módulo no graba nada: devuelve un XLSX con las columnas normalizadas
 (`codigo_cliente`, `detalle_cliente`, `destino`, `comprobante`, `cantidad`,
 `producto`, `bultos`, `kilos`, `observaciones`).
 
+### Método REPORTE_VIAJE (remitos por viaje de Lario)
+
+`utiles/importacion_reporte_viaje.py` implementa el caso en que el proveedor
+entrega un PDF **exportado por el sistema** (con capa de texto): una tabla de
+16 columnas con una fila por remito. No usa IA: se lee por coordenadas.
+
+El flujo es:
+
+1. Se detectan las 16 columnas a partir de las celdas de la cabecera (los
+   rectángulos que dibuja el export; si el export dibuja polígonos en lugar de
+   rectángulos, se usan las curvas, que pdfplumber reporta aparte).
+2. Cada fila se arma por rango de caracteres: el nombre del socio y el CUIT se
+   separan por color, y el C.P. se queda sólo con los dígitos porque el export
+   lo superpone con el final de la ciudad.
+3. Se contrasta el `TOTAL` impreso con la suma de las filas.
+
+Reglas propias del lector:
+
+- El **CUIT del cliente** es la clave: con él RND resuelve el cliente y su lugar
+  de entrega.
+- Un albarán `WR/OUT/…` es una anulación probable y un remito sin cajas quedan
+  marcados **REVISAR** (desmarcados en la vista previa).
+- Si el `TOTAL` del PDF no coincide con la suma de las filas, RND avisa: suele
+  significar que al export le faltó el detalle (por ejemplo, una página en
+  blanco).
+- El remito **no** viene en el archivo: se carga a mano en *Pedidos para
+  organizar*.
+
+El módulo devuelve el mismo XLSX de columnas normalizadas que el resto de los
+importadores.
+
 ## 4. Vista previa y resultado de importación
 
 **Cargar vista previa** lee y prepara el archivo, pero todavía no graba pedidos.

@@ -181,9 +181,10 @@ def prepare_demo_database() -> None:
                 "metodo_importacion": metodo,
             },
         )
-        if proveedor.metodo_importacion != metodo or not proveedor.activo:
+        if proveedor.metodo_importacion != metodo or not proveedor.activo or proveedor.cuit != cuit:
             proveedor.metodo_importacion = metodo
             proveedor.activo = True
+            proveedor.cuit = cuit
             proveedor.save()
         proveedores_demo.setdefault(metodo, []).append(proveedor)
 
@@ -610,3 +611,11 @@ def _generar_archivos_importacion_demo() -> None:
     from utiles.generador_pdf_tacural import generar_pdf_muestra_tacural
 
     generar_pdf_muestra_tacural(destino / "05_proveedor_tacural.pdf")
+
+    # Lario: el Reporte de viaje es un PDF exportado con una fila por remito
+    # (16 columnas). El archivo se dibuja en el momento, con la misma
+    # estructura del export real, para no versionar binarios ni datos de
+    # clientes.
+    from utiles.generador_pdf_lario import generar_pdf_muestra_lario
+
+    generar_pdf_muestra_lario(destino / "06_proveedor_lario.pdf")
