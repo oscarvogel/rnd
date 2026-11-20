@@ -23,9 +23,9 @@ de producción. Podés trabajar tranquilo.
   manual_usuario_RND_20oct2026.docx   -> el mismo, por si querés imprimirlo o editarlo
 
 
-3. LOS CINCO ARCHIVOS DE EJEMPLO
+3. LOS SEIS ARCHIVOS DE EJEMPLO
 --------------------------------
-No busques archivos: estos son los cinco archivos de prueba, uno por cada
+No busques archivos: estos son los seis archivos de prueba, uno por cada
 método de importación. Cada uno va con su proveedor.
 
   01_proveedor_tremblay.xlsx        ->  Proveedor Demo - Tremblay
@@ -33,6 +33,7 @@ método de importación. Cada uno va con su proveedor.
   03_proveedor_detalle_ventas.xlsx  ->  Proveedor Demo - Detalle Ventas
   04_proveedor_columnas.xlsx        ->  Proveedor Demo - Columnas
   05_proveedor_tacural.pdf          ->  CHACINADOS TACURAL SRL
+  06_proveedor_lario.pdf            ->  Lario (Reporte de viaje)
 
 Ojo: el proveedor define el método de importación. Si subís el archivo de Tío
 Pujio con el proveedor Tremblay, no importa (o importa mal, que es peor).
@@ -45,7 +46,28 @@ Los datos del demo ya vienen cargados: clientes, lugares de entrega, rutas
 falta dar de alta nada.
 
 
-4. EL CASO NUEVO: TACURAL (PDF escaneado)
+4. EL CASO DE LARIO (PDF de remitos por viaje)
+---------------------------------------------
+El proveedor Lario no manda planillas: manda un PDF con una tabla de 16
+columnas y una fila por remito del viaje. Para probar ese caso:
+
+  1. Elegí el proveedor Lario.
+  2. Subí 06_proveedor_lario.pdf (10 remitos, con un remito anulado y otro sin
+     cajas informadas, para que se vea qué marca RND como REVISAR).
+  3. RND lee el PDF por columnas y muestra la vista previa. Con este archivo
+     son unos segundos: acá no hace falta IA.
+  4. Revisá la vista previa: los remitos con WR/OUT (posible anulación) o sin
+     cajas informadas aparecen marcados REVISAR y vienen desmarcados, para que
+     los valides vos.
+  5. El remito NO viene en el archivo: hay que cargarlo a mano en el paso 2
+     de "El circuito a probar". Es parte de la prueba, no un error.
+
+El archivo real de Lario trae el CUIT del cliente, que es como RND resuelve a
+quién pertenece cada remito. Los clientes del demo ya están cargados con esos
+CUIT, así que los remitos llegan con el cliente y el lugar de entrega resueltos.
+
+
+5. EL CASO NUEVO: TACURAL (PDF escaneado)
 ------------------------------------------
 El proveedor Tacural no manda planillas: manda un PDF escaneado, con una
 factura por página. Para probar ese caso:
@@ -66,7 +88,7 @@ Si la IA no está disponible en la instalación, RND sigue funcionando: lo que
 no vas a poder probar en ese caso es justamente este importador de PDF.
 
 
-5. EL CIRCUITO A PROBAR (de punta a punta)
+6. EL CIRCUITO A PROBAR (de punta a punta)
 ------------------------------------------
   1. Importar pedidos
      Elegí Proveedor/origen y Fecha reparto, cargá uno de los archivos,
@@ -94,7 +116,7 @@ no vas a poder probar en ese caso es justamente este importador de PDF.
      Si llega, probá también el botón Lista para Sergio.
 
 
-6. TRES ACLARACIONES QUE AHORRAN TIEMPO
+7. CUATRO ACLARACIONES QUE AHORRAN TIEMPO
 -----------------------------------------
   a) "Orden de despacho" no es un documento. El despacho es el ESTADO de la
      hoja: EN_PREPARACION -> LISTA -> DESPACHADA. Se llega con el botón
@@ -112,7 +134,7 @@ no vas a poder probar en ese caso es justamente este importador de PDF.
      Es parte de la prueba, no un error.
 
 
-7. QUÉ NECESITO DE VUELTA
+8. QUÉ NECESITO DE VUELTA
 -------------------------
 Respondeme con esta lista, aunque sea en 4 líneas:
 
@@ -135,11 +157,12 @@ una descripción, y lo reviso el mismo día.
 El punto 11 no es menor: me sirve para saber si el circuito es usable o si
 hay que recortar pasos.
 
-Contame también qué pasó con el archivo de Tacural (el PDF): si las páginas
-aparecieron con los datos completos y si alguna quedó marcada para revisar.
+Contame también qué pasó con los dos PDF: el de Tacural (si las páginas
+aparecieron con los datos completos y si alguna quedó marcada para revisar) y
+el de Lario (si los remitos llegaron con el cliente y el lugar de entrega).
 
 
-8. FECHA
+9. FECHA
 --------
 Proponé un día y una hora y lo confirmamos. Si se complica, decímelo y lo
 corremos, pero necesito una fecha cerrada.

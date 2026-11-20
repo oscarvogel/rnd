@@ -24,39 +24,41 @@ PROVEEDOR_TACURAL = {
 # "codigo_cuit" es el CUIT: el importador lo usa para resolver el cliente.
 # Los datos son de DEMO: el PDF de muestra se dibuja con estos mismos
 # clientes, asi que no se versiona ningun dato de clientes reales.
+# Los CUIT son ficticios pero con digito verificador VALIDO: el importador
+# del Reporte de viaje (Lario) si lo comprueba y descarta los que no cuadran.
 CLIENTES_TACURAL = (
     {
         "codigo": "5808",
-        "codigo_cuit": "30700000111",
+        "codigo_cuit": "30700000113",
         "razon_social": "SUPERMERCADO LOS DOS S.R.L.",
-        "cuit": "30-70000011-1",
+        "cuit": "30-70000011-3",
         "direccion": "AV. CENTRAL 1234",
         "localidad": "Posadas",
         "ruta": "CENTRO",
     },
     {
         "codigo": "5997",
-        "codigo_cuit": "30700000122",
+        "codigo_cuit": "30700000121",
         "razon_social": "COMERCIO EL ORIENTE",
-        "cuit": "30-70000012-2",
+        "cuit": "30-70000012-1",
         "direccion": "RUTA 12 KM 8.5 ESQ. GUARANI",
         "localidad": "Garupa",
         "ruta": "CENTRO",
     },
     {
         "codigo": "9258",
-        "codigo_cuit": "30700000133",
+        "codigo_cuit": "30700000139",
         "razon_social": "ALMACEN CENTRAL",
-        "cuit": "30-70000013-3",
+        "cuit": "30-70000013-9",
         "direccion": "PERU 701",
         "localidad": "Obera",
         "ruta": "NORTE",
     },
     {
         "codigo": "9098",
-        "codigo_cuit": "30700000144",
+        "codigo_cuit": "30700000148",
         "razon_social": "HIPERMERCADO DEL NORTE S.R.L.",
-        "cuit": "30-70000014-4",
+        "cuit": "30-70000014-8",
         "direccion": "AVDA LAVALLE 2720",
         "localidad": "Posadas",
         "ruta": "CENTRO",

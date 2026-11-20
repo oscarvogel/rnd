@@ -76,6 +76,22 @@ Los métodos actuales incluyen, según el caso:
 La configuración del proveedor se utiliza especialmente para validar y
 normalizar Excel.
 
+### Lario: Reporte de viaje
+
+El proveedor Lario envía un PDF con una tabla de 16 columnas y una fila por
+remito del viaje (es un export del sistema, con texto seleccionable). Con el
+método REPORTE_VIAJE, RND lee el PDF por columnas, sin IA, y muestra la vista
+previa.
+
+- El **CUIT del cliente** es la clave: con él RND resuelve el cliente y su
+  lugar de entrega.
+- Los remitos `WR/OUT/…` (posible anulación) y los que vienen **sin cajas**
+  informadas se marcan **REVISAR** y aparecen desmarcados.
+- Si el `TOTAL` impreso en el PDF no coincide con la suma de las filas, RND
+  avisa: suele significar que al export le faltó detalle y hay que revisar antes
+  de grabar.
+- El remito no viene en el archivo: se carga a mano en *Pedidos para organizar*.
+
 ### Tacural: factura escaneada
 
 El proveedor Tacural envía un PDF escaneado, con un comprobante por página

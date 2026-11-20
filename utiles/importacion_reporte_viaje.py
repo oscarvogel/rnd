@@ -59,6 +59,11 @@ def _colapsar(valor):
     return re.sub(r"\s+", " ", _texto(valor)).strip()
 
 
+def _solo_digitos(valor):
+    """Deja solo los digitos de un texto (para celdas que son numericas)."""
+    return "".join(caracter for caracter in _texto(valor) if caracter.isdigit())
+
+
 def _cuit_valido(digitos):
     if len(digitos) != 11 or not digitos.isdigit():
         return False
@@ -138,6 +143,27 @@ def _columna_por_solapamiento(word, bounds):
     )
 
 
+def _posiciones_de_celdas(page, top_cabecera):
+    """Devuelve los bordes x de las celdas de la cabecera.
+
+    Crystal Report (el export de Lario) dibuja cada celda como rectangulo.
+    Otros exportadores dibujan el mismo poligono, que pdfplumber reporta como
+    curva. Se usan los rectangulos y, si no hay, se cae a las curvas.
+    """
+    posiciones = []
+    for rect in page.rects:
+        if rect["top"] <= top_cabecera + 1.0 <= rect["bottom"]:
+            posiciones.append(rect["x0"])
+            posiciones.append(rect["x1"])
+    if posiciones:
+        return posiciones
+    for curva in page.curves:
+        if curva["top"] <= top_cabecera + 1.0 <= curva["bottom"]:
+            posiciones.append(curva["x0"])
+            posiciones.append(curva["x1"])
+    return posiciones
+
+
 def _detectar_columnas(page):
     words = page.extract_words(use_text_flow=False, keep_blank_chars=False)
     mejor = None
@@ -150,11 +176,7 @@ def _detectar_columnas(page):
         raise ValueError("No se encontro la cabecera del Reporte de viaje")
 
     top_cabecera = mejor[1]
-    posiciones = []
-    for rect in page.rects:
-        if rect["top"] <= top_cabecera + 1.0 <= rect["bottom"]:
-            posiciones.append(rect["x0"])
-            posiciones.append(rect["x1"])
+    posiciones = _posiciones_de_celdas(page, top_cabecera)
     bounds = _merge_bounds(posiciones)
     if len(bounds) - 1 != CANTIDAD_COLUMNAS:
         raise ValueError(
@@ -288,7 +310,13 @@ def _leer_pdf(archivo_entrada, progreso=None, advertencias=None):
                         "cuit": cuit,
                         "calle": _texto_celda(celdas, COL_CALLE),
                         "ciudad": _texto_por_rango(chars_fila, bounds, COL_CIUDAD, COL_CIUDAD + 1),
-                        "cp": _texto_por_rango(chars_fila, bounds, COL_CP, COL_CP + 1),
+                        # El C.P. se solapa con el final de la ciudad: el export
+                        # deja letras pegadas ("PUERTO IGUAZ" + 337000 ->
+                        # "3U37000"). El C.P. es siempre numerico, asi que se
+                        # queda solo con los digitos.
+                        "cp": _solo_digitos(
+                            _texto_por_rango(chars_fila, bounds, COL_CP, COL_CP + 1)
+                        ),
                         "cajas": _parse_numero(_texto_celda(celdas, COL_CAJAS)),
                         "subtotal": _parse_numero(_texto_celda(celdas, COL_SUBTOTAL)),
                         "neto": _parse_numero(_texto_celda(celdas, COL_NETO)),

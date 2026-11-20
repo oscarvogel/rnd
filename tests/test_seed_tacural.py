@@ -65,3 +65,19 @@ def test_los_datos_del_demo_no_son_cuits_de_clientes_reales():
     for cliente in CLIENTES_TACURAL:
         assert cliente["cuit"].startswith("30-700000")
         assert cliente["codigo_cuit"].startswith("30700000")
+
+
+def test_los_cuits_del_demo_tienen_digito_verificador_valido():
+    """El importador del Reporte de viaje (Lario) valida el digito verificador.
+
+    Con un CUIT de demo mal armado, el importador lo descarta y el remito
+    queda sin cliente resuelto.
+    """
+    from utiles.importacion_reporte_viaje import _cuit_valido
+
+    for cliente in CLIENTES_TACURAL:
+        digitos = cliente["codigo_cuit"]
+        assert len(digitos) == 11 and digitos.isdigit()
+        assert _cuit_valido(digitos), "CUIT de demo sin digito verificador: {}".format(digitos)
+        sin_guiones = "".join(c for c in cliente["cuit"] if c.isdigit())
+        assert sin_guiones == digitos
