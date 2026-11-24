@@ -112,9 +112,11 @@ def ayuda_proveedor(metodo_importacion):
         )
     if metodo == "TACURAL":
         return (
-            "Tacural: seleccione el PDF escaneado de las facturas. RND lee cada "
+            "Tacural: seleccione el PDF escaneado de los comprobantes. RND lee cada "
             "página, contrasta los kilos contra el total impreso y muestra la vista "
-            "previa: las páginas que no cierran quedan marcadas para revisión."
+            "previa: facturas y presupuestos se importan (los presupuestos quedan "
+            "marcados SIN FACTURAR) y las páginas que no cierran quedan marcadas "
+            "para revisión."
         )
     if metodo == "COLUMNAS":
         return (

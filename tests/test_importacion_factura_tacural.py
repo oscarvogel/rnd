@@ -257,7 +257,7 @@ def test_marca_para_revisar_las_filas_de_una_pagina_que_no_cierra():
     assert all("REVISAR" in fila["observaciones"] for fila in filas)
 
 
-def test_el_presupuesto_no_entra_a_la_importacion(tmp_path, monkeypatch):
+def test_el_presupuesto_tambien_entra_a_la_importacion(tmp_path, monkeypatch):
     archivo = _crear_pdf(tmp_path / "tacural.pdf")
     monkeypatch.setattr(
         "utiles.importacion_factura_tacural._transcribir",
@@ -265,10 +265,47 @@ def test_el_presupuesto_no_entra_a_la_importacion(tmp_path, monkeypatch):
     )
     advertencias = []
 
-    with pytest.raises(ValueError):
-        procesar_factura_tacural(str(archivo), advertencias=advertencias)
+    salida = procesar_factura_tacural(str(archivo), advertencias=advertencias)
 
-    assert any("presupuesto" in texto for texto in advertencias)
+    df = pd.read_excel(salida, dtype=str)
+    assert len(df) == 3
+    assert set(df["comprobante"]) == {"B00099-00023463"}
+    # El presupuesto no trae CUIT: el cliente se resuelve por el codigo de
+    # Tacural que viene impreso en el comprobante.
+    assert set(df["codigo_cliente"]) == {"9164"}
+    assert "PRESUPUESTO B00099-00023463" in df.iloc[0]["observaciones"]
+    assert "SIN FACTURAR" in df.iloc[0]["observaciones"]
+    assert "REVISAR" not in df.iloc[0]["observaciones"]
+    assert any("sin facturar" in texto.lower() for texto in advertencias)
+    assert not any("afuera" in texto for texto in advertencias)
+
+
+def test_importa_facturas_y_presupuestos_del_mismo_pdf(tmp_path, monkeypatch):
+    # El PDF de prueba tiene dos paginas (una por comprobante).
+    import fitz
+
+    archivo = tmp_path / "tacural_dos_paginas.pdf"
+    documento = fitz.open()
+    documento.new_page(width=595, height=842)
+    documento.new_page(width=595, height=842)
+    documento.save(str(archivo))
+    documento.close()
+
+    transcripciones = iter([TRANSCRIPCION_FACTURA, TRANSCRIPCION_PRESUPUESTO])
+    monkeypatch.setattr(
+        "utiles.importacion_factura_tacural._transcribir",
+        lambda imagen, refuerzo=False: next(transcripciones),
+    )
+    advertencias = []
+
+    salida = procesar_factura_tacural(str(archivo), advertencias=advertencias)
+
+    df = pd.read_excel(salida, dtype=str)
+    assert set(df["comprobante"]) == {"A00011-00420809", "B00099-00023463"}
+    assert any(
+        "2 comprobantes (1 presupuestos sin facturar)" in texto
+        for texto in advertencias
+    )
 
 
 def test_importa_la_factura_y_devuelve_el_contrato_normalizado(tmp_path, monkeypatch):

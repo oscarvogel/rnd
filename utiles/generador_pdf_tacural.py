@@ -2,10 +2,11 @@
 """Genera el PDF de muestra de Tacural para el DEMO.
 
 El archivo que manda Tacural es un escaneo de papel. Para el DEMO no hace
-falta el escaneo real: se dibuja una factura con la misma estructura
+falta el escaneo real: se dibuja un comprobante con la misma estructura
 (encabezado del proveedor, datos del cliente, tabla de productos, total de
 kilos) y se le da una apariencia de documento escaneado, incluida una pagina
-girada, que es el caso que mas le cuesta al lector.
+girada, que es el caso que mas le cuesta al lector. El PDF incluye facturas y
+un presupuesto, que es la mercaderia entregada sin facturar.
 
 Se genera en tiempo de ejecucion por dos razones: no se versiona un PDF (la
 higiene del repo prohibe los binarios pesados) y no se versionan datos de
@@ -112,7 +113,8 @@ def _linea_tabla(item):
 
 
 def _render_factura(factura, indice):
-    """Dibuja una factura con la estructura del comprobante de Tacural."""
+    """Dibuja un comprobante con la estructura del documento de Tacural."""
+    es_presupuesto = factura.get("tipo") == "PRESUPUESTO"
     fuente = _fuente(19)
     fuente_titulo = _fuente(34)
     fuente_chica = _fuente(16)
@@ -133,7 +135,12 @@ def _render_factura(factura, indice):
     escribir(90, 280, "IVA RESPONSABLE INSCRIPTO", fuente)
 
     derecha = ANCHO - 90 - 34 * paso
-    escribir(derecha, 90, "FACTURA A ELECTRONICA", fuente)
+    escribir(
+        derecha,
+        90,
+        "PRESUPUESTO" if es_presupuesto else "FACTURA A ELECTRONICA",
+        fuente,
+    )
     escribir(derecha, 120, "{}".format(factura["numero"]), fuente)
     escribir(derecha, 160, "FECHA {}".format(factura["fecha"]), fuente)
     escribir(derecha, 210, "ING. BRUTOS : 921-741323-6", fuente_chica)
@@ -179,9 +186,10 @@ def _render_factura(factura, indice):
     escribir(90, 1360, "TOTAL KILOGRAMOS   {}".format(
         _numero(factura["total_kilos"])
     ), fuente)
-    escribir(90, 1400, "CAE {}  VTO CAE {}".format(
-        factura["cae"], factura["vto_cae"]
-    ), fuente_chica)
+    if not es_presupuesto:
+        escribir(90, 1400, "CAE {}  VTO CAE {}".format(
+            factura["cae"], factura["vto_cae"]
+        ), fuente_chica)
 
     # El logo y una flecha suelta, como en el escaneo.
     dibujo.ellipse([110, 60, 330, 140], outline=TINTA, width=3)
@@ -219,11 +227,12 @@ def _girar(imagen):
 
 
 def generar_pdf_muestra_tacural(destino) -> str:
-    """Escribe el PDF de muestra con las facturas definidas en el seed."""
-    from utiles.seed_tacural import FACTURAS_MUESTRA
+    """Escribe el PDF de muestra con los comprobantes definidos en el seed."""
+    from utiles.seed_tacural import FACTURAS_MUESTRA, PRESUPUESTOS_MUESTRA
 
+    comprobantes = FACTURAS_MUESTRA + PRESUPUESTOS_MUESTRA
     paginas = []
-    for indice, factura in enumerate(FACTURAS_MUESTRA, start=1):
+    for indice, factura in enumerate(comprobantes, start=1):
         imagen = _render_factura(factura, indice)
         imagen = _efecto_escaneo(imagen, 1000 + indice)
         if factura.get("girada"):

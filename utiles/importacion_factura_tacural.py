@@ -2,8 +2,10 @@
 """Importador de facturas de Tacural (CHACINADOS TACURAL SRL).
 
 El proveedor manda un PDF escaneado, sin capa de texto, con un comprobante por
-pagina (facturas electronicas A00011-... y presupuestos B00099-...). Por eso el
-flujo no puede ser el de los proveedores que envian Excel:
+pagina (facturas electronicas A00011-... y presupuestos B00099-...). Los dos
+tipos se importan: el presupuesto es mercaderia entregada que todavia no se
+facturo, y RND la muestra como pendiente de facturacion. Por eso el flujo no
+puede ser el de los proveedores que envian Excel:
 
 1. PyMuPDF renderiza cada pagina a PNG.
 2. La IA de vision (misma credencial, endpoint y reintentos que la importacion
@@ -15,7 +17,8 @@ Lo que la IA aporta es la lectura; lo que decide es el codigo. Tres reglas
 propias hacen que el resultado no dependa de que la IA "entienda" el documento:
 
 - El tipo de comprobante sale del numero (A00011-... es factura, B00099-... es
-  presupuesto), no de lo que la IA diga.
+  presupuesto), no de lo que la IA diga. Los presupuestos tambien se importan
+  y quedan identificados como SIN FACTURAR.
 - El peso de cada linea se contrasta contra el TOTAL KILOGRAMOS impreso.
 - Una pagina que no cierra queda marcada REVISAR y la vista previa la muestra
   desmarcada para que el operador la valide.
@@ -603,6 +606,11 @@ def _filas_de_pagina(encabezado, items, indice, revisar):
             observaciones.append("Importe {}".format(_formatear_numero(item["importe"])))
         if codigo_cliente:
             observaciones.append("Cli {}".format(codigo_cliente))
+        if tipo == "PRESUPUESTO":
+            # El presupuesto es mercaderia entregada que Tacural todavia no
+            # facturo: se importa, pero queda marcada para no confundirla con
+            # una factura al reimprimir o controlar la cuenta corriente.
+            observaciones.append("SIN FACTURAR")
         if revisar:
             observaciones.append("REVISAR: la pagina no cerraba con los totales")
 
@@ -663,9 +671,11 @@ def procesar_factura_tacural(
         if tipo == "PRESUPUESTO":
             presupuestos += 1
             advertencias.append(
-                "Pagina {}: es un presupuesto ({}), no se importo.".format(indice, encabezado.get("NUMERO") or "")
+                "Pagina {}: presupuesto {} (sin facturar); se importa como "
+                "pendiente de facturacion.".format(
+                    indice, encabezado.get("NUMERO") or "(sin numero)"
+                )
             )
-            continue
 
         if not items:
             advertencias.append(
@@ -694,13 +704,17 @@ def procesar_factura_tacural(
     salida = _guardar_temporal(filas)
     _notificar(progreso, 100)
 
-    advertencias.append(
-        "Tacural: {} comprobantes, {} lineas importadas.".format(
-            len(documentos), len(filas)
-        )
-    )
     if presupuestos:
         advertencias.append(
-            "Tacural: {} presupuestos quedaron afuera de la importacion.".format(presupuestos)
+            "Tacural: {} comprobantes ({} presupuestos sin facturar), "
+            "{} lineas importadas.".format(
+                len(documentos), presupuestos, len(filas)
+            )
+        )
+    else:
+        advertencias.append(
+            "Tacural: {} comprobantes, {} lineas importadas.".format(
+                len(documentos), len(filas)
+            )
         )
     return salida

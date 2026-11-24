@@ -66,15 +66,24 @@ CLIENTES_TACURAL = (
 )
 
 
-def _factura(numero, cliente, codigo_cliente, direccion, localidad, cp, telefono,
-             cajas, pedido, total_kilos, items, girada=False):
-    """Arma una factura de muestra a partir de los datos del cliente demo."""
+def _comprobante(numero, cliente, codigo_cliente, direccion, localidad, cp,
+                 telefono, cajas, pedido, total_kilos, items, girada=False,
+                 tipo="FACTURA"):
+    """Arma un comprobante de muestra a partir de los datos del cliente demo.
+
+    Los presupuestos (B00099-...) no llevan CUIT ni IVA: Tacural los usa para
+    entregar mercaderia que todavía no facturó.
+    """
+    es_presupuesto = tipo == "PRESUPUESTO"
     importance = {}
     for item in items:
         item = dict(item)
+        if es_presupuesto:
+            item["iva"] = None
         item["importe"] = round(item["kg"] * item["punit"], 2)
         importance.setdefault("items", []).append(item)
     return {
+        "tipo": tipo,
         "numero": numero,
         "fecha": "18/11/2026",
         "razon_social": cliente["razon_social"],
@@ -84,15 +93,33 @@ def _factura(numero, cliente, codigo_cliente, direccion, localidad, cp, telefono
         "provincia": "Misiones",
         "cp": cp,
         "telefono": telefono,
-        "cuit": cliente["cuit"],
+        "cuit": "" if es_presupuesto else cliente["cuit"],
         "cajas": cajas,
         "pedido": pedido,
         "total_kilos": total_kilos,
-        "cae": "8646326778{:04d}".format(pedido),
-        "vto_cae": "28/11/2026",
+        "cae": "" if es_presupuesto else "8646326778{:04d}".format(pedido),
+        "vto_cae": "" if es_presupuesto else "28/11/2026",
         "girada": girada,
         "items": importance["items"],
     }
+
+
+def _factura(numero, cliente, codigo_cliente, direccion, localidad, cp,
+             telefono, cajas, pedido, total_kilos, items, girada=False):
+    """Arma una factura de muestra a partir de los datos del cliente demo."""
+    return _comprobante(
+        numero, cliente, codigo_cliente, direccion, localidad, cp, telefono,
+        cajas, pedido, total_kilos, items, girada=girada, tipo="FACTURA",
+    )
+
+
+def _presupuesto(numero, cliente, codigo_cliente, direccion, localidad, cp,
+                 telefono, cajas, pedido, total_kilos, items, girada=False):
+    """Arma un presupuesto: mercaderia entregada que todavía no se facturó."""
+    return _comprobante(
+        numero, cliente, codigo_cliente, direccion, localidad, cp, telefono,
+        cajas, pedido, total_kilos, items, girada=girada, tipo="PRESUPUESTO",
+    )
 
 
 # Las cuatro facturas del PDF de muestra. Reproducen los casos que hacen
@@ -158,6 +185,23 @@ FACTURAS_MUESTRA = (
              "kg": 36.80, "punit": 13636.86, "bonif": 10, "iva": 21},
             {"codigo": 10804, "descripcion": "PANCETA AHUMADA D 40", "unid": None,
              "kg": 13.00, "punit": 13873.39, "bonif": 10, "iva": 21},
+        ),
+    ),
+)
+
+
+# Un presupuesto del PDF de muestra: Tacural entrega la mercaderia y recien
+# despues la factura, asi que este comprobante tambien se importa y queda
+# marcado SIN FACTURAR.
+PRESUPUESTOS_MUESTRA = (
+    _presupuesto(
+        "B00099-00023901", CLIENTES_TACURAL[0], "5808", "AV. CENTRAL 1234",
+        "Posadas", "3300", "03764-400011", 2, 21, 60.00,
+        (
+            {"codigo": 10132, "descripcion": "JAMON COCIDO PAMP 48",
+             "unid": None, "kg": 40.00, "punit": 4165.29, "bonif": 10},
+            {"codigo": 10130, "descripcion": "FIAMBRE COCIDO PA 12",
+             "unid": None, "kg": 20.00, "punit": 2759.51, "bonif": 10},
         ),
     ),
 )

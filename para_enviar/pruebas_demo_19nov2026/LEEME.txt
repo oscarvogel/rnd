@@ -69,20 +69,22 @@ CUIT, así que los remitos llegan con el cliente y el lugar de entrega resueltos
 
 5. EL CASO NUEVO: TACURAL (PDF escaneado)
 ------------------------------------------
-El proveedor Tacural no manda planillas: manda un PDF escaneado, con una
-factura por página. Para probar ese caso:
+El proveedor Tacural no manda planillas: manda un PDF escaneado, con un
+comprobante por página (facturas y presupuestos). Para probar ese caso:
 
   1. Elegí el proveedor CHACINADOS TACURAL SRL.
-  2. Subí 05_proveedor_tacural.pdf (4 páginas: tres verticales y una escaneada
-     de lado, para que se vea que RND la lee igual).
+  2. Subí 05_proveedor_tacural.pdf (5 páginas: cuatro facturas y un
+     presupuesto, una escaneada de lado, para que se vea que RND la lee
+     igual).
   3. Tarda un poco más que una planilla: RND lee cada página con IA y la
      contrasta contra los kilos y el total que están impresos. Con este
-     archivo son unos 30 segundos.
+     archivo son unos 40 segundos.
   4. Revisá la vista previa: las páginas que no cierran con los totales
      aparecen marcadas REVISAR y vienen desmarcadas, para que las valides
      vos.
-  5. Sólo se importan las facturas. Si el archivo trae presupuestos, quedan
-     afuera y RND te avisa cuáles fueron.
+  5. Se importan las facturas y los presupuestos. El presupuesto es
+     mercadería entregada que todavía no se facturó: no trae CUIT, se
+     resuelve por el código de cliente y queda marcado SIN FACTURAR.
 
 Si la IA no está disponible en la instalación, RND sigue funcionando: lo que
 no vas a poder probar en ese caso es justamente este importador de PDF.

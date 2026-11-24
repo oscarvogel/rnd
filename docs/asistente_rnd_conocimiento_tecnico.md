@@ -103,7 +103,7 @@ columnas normalizadas de RND.
 Según el Excel, el operador puede elegir hoja y, opcionalmente, fila de inicio y
 fila final. Si esos campos quedan vacíos, RND usa el rango disponible.
 
-### Método TACURAL (factura escaneada de Tacural)
+### Método TACURAL (comprobantes escaneados de Tacural)
 
 `utiles/importacion_factura_tacural.py` implementa el caso en que el
 proveedor entrega un PDF escaneado, sin capa de texto, con un comprobante por
@@ -119,7 +119,9 @@ Reglas propias del lector, que no dependen de que la IA "entienda" el
 documento:
 
 - El tipo de comprobante sale del **número**: `A00011-…` es factura y
-  `B00099-…` es presupuesto. Sólo se importan las facturas.
+  `B00099-…` es presupuesto. Se importan los dos: el presupuesto es la
+  mercadería entregada que todavía no se facturó y queda marcada
+  `SIN FACTURAR` en las observaciones.
 - La **orientación** de la página se detecta probando rotaciones hasta que la
   lectura cierra; si una lectura falla, la página se reintenta (la lectura por
   IA no es determinista).

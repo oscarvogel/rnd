@@ -13,6 +13,7 @@ from utiles.generador_pdf_tacural import generar_pdf_muestra_tacural  # noqa: E4
 from utiles.seed_tacural import (  # noqa: E402
     CLIENTES_TACURAL,
     FACTURAS_MUESTRA,
+    PRESUPUESTOS_MUESTRA,
 )
 
 
@@ -24,14 +25,14 @@ def test_los_clientes_del_seed_cuadran_con_las_facturas_de_muestra():
         assert factura["cuit"] in cuits_clientes
 
 
-def test_el_total_de_kilos_de_cada_factura_cierra_con_sus_lineas():
-    for factura in FACTURAS_MUESTRA:
+def test_el_total_de_kilos_de_cada_comprobante_cierra_con_sus_lineas():
+    for factura in FACTURAS_MUESTRA + PRESUPUESTOS_MUESTRA:
         suma = round(sum(item["kg"] for item in factura["items"]), 2)
         assert suma == pytest.approx(factura["total_kilos"])
 
 
 def test_el_importe_de_cada_linea_es_el_peso_por_el_precio():
-    for factura in FACTURAS_MUESTRA:
+    for factura in FACTURAS_MUESTRA + PRESUPUESTOS_MUESTRA:
         for item in factura["items"]:
             assert item["importe"] == pytest.approx(item["kg"] * item["punit"], rel=0.01)
 
@@ -39,6 +40,21 @@ def test_el_importe_de_cada_linea_es_el_peso_por_el_precio():
 def test_hay_una_factura_escaneada_de_lado():
     giradas = [factura for factura in FACTURAS_MUESTRA if factura.get("girada")]
     assert len(giradas) == 1
+
+
+def test_el_presupuesto_de_muestra_no_trae_cuit_ni_iva():
+    assert len(PRESUPUESTOS_MUESTRA) == 1
+    presupuesto = PRESUPUESTOS_MUESTRA[0]
+    assert presupuesto["tipo"] == "PRESUPUESTO"
+    assert presupuesto["numero"].startswith("B00099-")
+    assert presupuesto["cuit"] == ""
+    assert all(item["iva"] is None for item in presupuesto["items"])
+
+
+def test_el_presupuesto_usa_un_cliente_del_seed():
+    codigos = {cliente["codigo"] for cliente in CLIENTES_TACURAL}
+    for presupuesto in PRESUPUESTOS_MUESTRA:
+        assert presupuesto["codigo_cliente"] in codigos
 
 
 def test_genera_un_pdf_con_una_pagina_apaisada(tmp_path):
@@ -50,7 +66,9 @@ def test_genera_un_pdf_con_una_pagina_apaisada(tmp_path):
     assert destino.exists()
     documento = fitz.open(str(destino))
     try:
-        assert documento.page_count == len(FACTURAS_MUESTRA)
+        assert documento.page_count == (
+            len(FACTURAS_MUESTRA) + len(PRESUPUESTOS_MUESTRA)
+        )
         apaisadas = [
             pagina for pagina in documento
             if pagina.rect.width > pagina.rect.height

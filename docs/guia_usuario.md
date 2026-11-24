@@ -94,19 +94,23 @@ previa.
   de grabar.
 - El remito no viene en el archivo: se carga a mano en *Pedidos para organizar*.
 
-### Tacural: factura escaneada
+### Tacural: comprobantes escaneados
 
 El proveedor Tacural envía un PDF escaneado, con un comprobante por página
 (facturas electrónicas `A00011-…` y presupuestos `B00099-…`). Con el método
 TACURAL, RND lee cada página, la contrasta contra los kilos y el total
 impresos, y muestra la vista previa.
 
-- Sólo se importan las **facturas**; los presupuestos quedan afuera.
+- Se importan las **facturas** y también los **presupuestos**: el presupuesto
+  es mercadería entregada que Tacural todavía no facturó. En la vista previa
+  queda identificado como `PRESUPUESTO` y `SIN FACTURAR`.
 - Las páginas que no cierran con los totales impresos se marcan **REVISAR** y
   aparecen desmarcadas: hay que validarlas antes de grabarlas.
 - Cada página cuesta una lectura de IA: un PDF de 25 páginas tarda unos 3
   minutos.
-- El cliente se resuelve por CUIT y, si no está cargado, por razón social.
+- El cliente se resuelve por CUIT; si el comprobante no lo trae (como los
+  presupuestos), por el código de cliente de Tacural y, si no está cargado, por
+  razón social.
 
 ## Importación de pedidos
 
