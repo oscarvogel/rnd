@@ -412,6 +412,15 @@ def normalizar_archivo_pedidos(archivo_entrada, progreso=None, metodo=None, adve
             advertencias=advertencias,
         )
 
+    if metodo == METODO_DETALLE_VENTAS and extension == ".zip":
+        from utiles.importacion_factura_recreo import procesar_facturas_recreo_zip
+
+        return procesar_facturas_recreo_zip(
+            archivo_entrada,
+            progreso=progreso,
+            advertencias=advertencias,
+        )
+
     if metodo == METODO_TACURAL:
         # Va antes de la rama genérica de PDF: el proveedor tiene su propio
         # lector (factura escaneada de Tacural) y no debe caer en el

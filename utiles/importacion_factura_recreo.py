@@ -6,9 +6,11 @@ normaliza al contrato comun del importador de pedidos.
 """
 from __future__ import annotations
 
+import io
 import os
 import re
 import tempfile
+import zipfile
 
 import pandas as pd
 import pdfplumber
@@ -190,14 +192,12 @@ def _guardar_temporal(filas):
     return temporal.name
 
 
-def procesar_factura_recreo(archivo_entrada, progreso=None, advertencias=None):
-    if not archivo_entrada or not os.path.exists(archivo_entrada):
-        raise FileNotFoundError(archivo_entrada)
-    if os.path.splitext(archivo_entrada)[1].lower() != ".pdf":
-        raise ValueError("La factura de Recreo debe ser un PDF")
+def _extraer_factura(texto, advertencias=None):
+    """Convierte el texto de una factura de Recreo en cabecera y filas.
 
-    _notificar(progreso, 10)
-    texto = _texto_pdf(archivo_entrada)
+    Se usa tanto para un PDF suelto como para cada PDF dentro de un ZIP de
+    WhatsApp. Las advertencias se acumulan en la lista recibida.
+    """
     if not _parece_factura_recreo(texto):
         raise ValueError(
             "El PDF no corresponde a una factura de Recreo. "
@@ -207,7 +207,6 @@ def procesar_factura_recreo(archivo_entrada, progreso=None, advertencias=None):
     cabecera = _cabecera(texto)
     productos = _productos(texto)
     totales = _totales(texto)
-    _notificar(progreso, 70)
 
     if not cabecera["cuit"]:
         _agregar_advertencia(
@@ -236,8 +235,135 @@ def procesar_factura_recreo(archivo_entrada, progreso=None, advertencias=None):
                 "observaciones": observaciones[:100],
             }
         )
+    return cabecera, filas
 
+
+def procesar_factura_recreo(archivo_entrada, progreso=None, advertencias=None):
+    if not archivo_entrada or not os.path.exists(archivo_entrada):
+        raise FileNotFoundError(archivo_entrada)
+    if os.path.splitext(archivo_entrada)[1].lower() != ".pdf":
+        raise ValueError("La factura de Recreo debe ser un PDF")
+
+    _notificar(progreso, 10)
+    texto = _texto_pdf(archivo_entrada)
+    _notificar(progreso, 40)
+    _, filas = _extraer_factura(texto, advertencias)
     _notificar(progreso, 90)
     salida = _guardar_temporal(filas)
     _notificar(progreso, 100)
     return salida
+
+
+def _entradas_pdf_zip(contenedor):
+    """Devuelve los PDF utiles del ZIP, sin carpetas ni metadatos de macOS."""
+    entradas = []
+    for info in contenedor.infolist():
+        if info.is_dir():
+            continue
+        nombre = info.filename.replace("\\", "/")
+        if nombre.startswith("__MACOSX/"):
+            continue
+        if not nombre.lower().endswith(".pdf"):
+            continue
+        if os.path.basename(nombre).startswith("._"):
+            continue
+        entradas.append(info)
+    return sorted(entradas, key=lambda info: info.filename.lower())
+
+
+def procesar_facturas_recreo_zip(archivo_entrada, progreso=None, advertencias=None):
+    """Importa todas las facturas PDF de Recreo contenidas en un ZIP.
+
+    Es el formato en que los proveedores envian varias facturas juntas por
+    WhatsApp. Cada PDF se procesa de forma independiente: una factura dañada
+    no impide importar el resto, pero queda informada como advertencia.
+    """
+    if not archivo_entrada or not os.path.exists(archivo_entrada):
+        raise FileNotFoundError(archivo_entrada)
+    if os.path.splitext(archivo_entrada)[1].lower() != ".zip":
+        raise ValueError("El lote de facturas de Recreo debe ser un archivo ZIP")
+
+    try:
+        contenedor = zipfile.ZipFile(archivo_entrada)
+    except (zipfile.BadZipFile, OSError) as exc:
+        raise ValueError(
+            "El archivo ZIP no se pudo abrir: {}".format(exc)
+        ) from exc
+
+    with contenedor:
+        entradas = _entradas_pdf_zip(contenedor)
+        if not entradas:
+            raise ValueError("El ZIP no contiene facturas PDF de Recreo")
+
+        total = len(entradas)
+        filas_totales = []
+        leidas = 0
+        comprobantes = set()
+        errores = []
+
+        for indice, info in enumerate(entradas, start=1):
+            _notificar(progreso, 5 + int((indice - 1) / total * 85))
+            nombre = os.path.basename(info.filename.replace("\\", "/"))
+
+            if info.flag_bits & 0x1:
+                errores.append("{} (protegido con contraseña)".format(nombre))
+                _agregar_advertencia(
+                    advertencias,
+                    "{}: se omite la factura porque el PDF esta protegido.".format(nombre),
+                )
+                continue
+
+            try:
+                with contenedor.open(info) as archivo_pdf:
+                    contenido = archivo_pdf.read()
+                texto = _texto_pdf(io.BytesIO(contenido))
+                advertencias_factura = []
+                cabecera, filas = _extraer_factura(texto, advertencias_factura)
+            except Exception as exc:
+                errores.append("{} ({})".format(nombre, exc))
+                _agregar_advertencia(
+                    advertencias,
+                    "{}: se omite la factura ({}).".format(nombre, exc),
+                )
+                continue
+
+            clave = re.sub(r"\D", "", cabecera["comprobante"])
+            if clave and clave in comprobantes:
+                _agregar_advertencia(
+                    advertencias,
+                    "{}: la factura {} ya estaba en el ZIP; se importa una sola vez.".format(
+                        nombre, cabecera["comprobante"]
+                    ),
+                )
+                continue
+            if clave:
+                comprobantes.add(clave)
+
+            for texto_advertencia in advertencias_factura:
+                _agregar_advertencia(
+                    advertencias,
+                    "{}: {}".format(nombre, texto_advertencia),
+                )
+            filas_totales.extend(filas)
+            leidas += 1
+
+        if not filas_totales:
+            detalle = "; ".join(errores) if errores else "no se encontraron facturas legibles"
+            raise ValueError(
+                "No se pudo importar ninguna de las {} facturas del ZIP: {}".format(
+                    total, detalle
+                )
+            )
+
+        if errores:
+            _agregar_advertencia(
+                advertencias,
+                "Se importaron {} de {} facturas del ZIP. Con problemas: {}.".format(
+                    leidas, total, "; ".join(errores)
+                ),
+            )
+
+        _notificar(progreso, 95)
+        salida = _guardar_temporal(filas_totales)
+        _notificar(progreso, 100)
+        return salida

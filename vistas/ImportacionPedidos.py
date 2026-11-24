@@ -119,7 +119,7 @@ class ImportacionPedidosView(VistaBase):
         self.btn_examinar = Boton(
             texto="Seleccionar archivo",
             imagen=imagen("79354_excel_icon.png"),
-            tooltip="Seleccionar Excel, PDF o imagen de pedidos a importar"
+            tooltip="Seleccionar Excel, PDF, ZIP de facturas o imagen de pedidos a importar"
         )
         self.btn_examinar.setProperty("role", "primary")
         fila_archivo.addWidget(self.btn_examinar)
@@ -143,7 +143,8 @@ class ImportacionPedidosView(VistaBase):
         layout_archivo.addLayout(fila_opciones)
 
         nota_opciones = QLabel(
-            "PDF/imagen: RND extrae los pedidos con IA y los muestra en esta misma vista previa."
+            "PDF/imagen: RND extrae los pedidos con IA y los muestra en esta misma vista previa. "
+            "ZIP de Recreo: lee todas las facturas PDF del lote y las reúne en una sola vista previa."
         )
         nota_opciones.setWordWrap(True)
         nota_opciones.setObjectName("importacionNotaTecnica")

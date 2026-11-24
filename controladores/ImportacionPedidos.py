@@ -91,6 +91,9 @@ class ImportacionPedidosController(ControladorBase):
         self.resumen_actual = ResumenImportacion()
         self.archivo_normalizado = False
         self.origen_pdf_ia = False
+        # Documentos propuestos por un lector automatico (PDF, imagen o ZIP de
+        # facturas): se permite corregir celdas antes de grabar.
+        self.previa_editable = False
         # Indice de clientes por nombre normalizado: se arma la primera vez
         # que hace falta y se reutiliza durante toda la importacion.
         self._indice_clientes_nombres = None
@@ -308,7 +311,7 @@ class ImportacionPedidosController(ControladorBase):
 
         cArchivo = openFileNameDialog(
             title="Seleccionar archivo de pedidos",
-            files="Archivos importacion (*.xlsx;*.xls;*.pdf;*.png;*.jpg;*.jpeg)",
+            files="Archivos importacion (*.xlsx;*.xls;*.pdf;*.png;*.jpg;*.jpeg;*.zip)",
         )
         if not cArchivo:
             return
@@ -333,6 +336,7 @@ class ImportacionPedidosController(ControladorBase):
 
         extension = archivo_origen.lower().rsplit(".", 1)[-1] if "." in archivo_origen else ""
         self.origen_pdf_ia = extension in {"pdf", "png", "jpg", "jpeg"}
+        self.previa_editable = self.origen_pdf_ia or extension == "zip"
         self.archivo_normalizado = False
         self.archivo_trabajo = None
         self.view.avance.iniciar(
@@ -466,9 +470,10 @@ class ImportacionPedidosController(ControladorBase):
             valor_para_vista_previa(valor)
             for valor in df.iloc[fila_cabeceras].tolist()
         ]
-        if self.origen_pdf_ia:
-            # La IA propone; el operador puede corregir cualquier dato antes
-            # de grabar. Excel conserva el comportamiento historico.
+        if self.previa_editable:
+            # El lector automatico propone; el operador puede corregir
+            # cualquier dato antes de grabar. Excel conserva el
+            # comportamiento historico.
             self.view.grid_datos.columnasHabilitadas = list(range(len(cabeceras)))
         else:
             self.view.grid_datos.columnasHabilitadas = [0]
@@ -505,7 +510,7 @@ class ImportacionPedidosController(ControladorBase):
             )
             row = df_datos.iloc[i]
             importa_por_defecto = True
-            if self.origen_pdf_ia:
+            if self.previa_editable:
                 observaciones_fila = str(row.get("observaciones", "") or "")
                 # Datos dudosos nunca quedan seleccionados automaticamente.
                 importa_por_defecto = "REVISAR" not in observaciones_fila.upper()
@@ -520,7 +525,7 @@ class ImportacionPedidosController(ControladorBase):
         self.resumen_actual = ResumenImportacion(leidos=total_filas)
         self.view.mostrar_previa(total_filas)
         self.view.lbl_resultado_titulo.setText("Vista previa cargada")
-        if self.origen_pdf_ia:
+        if self.previa_editable:
             self.view.lbl_resultado_detalle.setText(
                 "Revise los {} registros. Puede corregir las celdas; las filas marcadas "
                 "REVISAR quedan desmarcadas hasta que el operador las valide.".format(total_filas)
