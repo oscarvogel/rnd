@@ -137,14 +137,18 @@ El módulo no graba nada: devuelve un XLSX con las columnas normalizadas
 ### Método REPORTE_VIAJE (remitos por viaje de Lario)
 
 `utiles/importacion_reporte_viaje.py` implementa el caso en que el proveedor
-entrega un PDF **exportado por el sistema** (con capa de texto): una tabla de
-16 columnas con una fila por remito. No usa IA: se lee por coordenadas.
+entrega un PDF **exportado por el sistema** (con capa de texto): una tabla con
+una fila por remito. No usa IA: se lee por coordenadas.
+
+El export tuvo dos formatos: el viejo de 16 columnas y el nuevo de 17, que
+agrega **Estado** (`done`/`cancel`) entre *Tipo de producto* y *Cuenta*.
 
 El flujo es:
 
-1. Se detectan las 16 columnas a partir de las celdas de la cabecera (los
+1. Se detectan las columnas a partir de las celdas de la cabecera (los
    rectángulos que dibuja el export; si el export dibuja polígonos en lugar de
-   rectángulos, se usan las curvas, que pdfplumber reporta aparte).
+   rectángulos, se usan las curvas, que pdfplumber reporta aparte) y se las
+   identifica por el nombre de la etiqueta, no por una cantidad fija.
 2. Cada fila se arma por rango de caracteres: el nombre del socio y el CUIT se
    separan por color, y el C.P. se queda sólo con los dígitos porque el export
    lo superpone con el final de la ciudad.
@@ -154,8 +158,8 @@ Reglas propias del lector:
 
 - El **CUIT del cliente** es la clave: con él RND resuelve el cliente y su lugar
   de entrega.
-- Un albarán `WR/OUT/…` es una anulación probable y un remito sin cajas quedan
-  marcados **REVISAR** (desmarcados en la vista previa).
+- Un albarán `WR/OUT/…`, un remito con **Estado** `cancel` y un remito sin
+  cajas quedan marcados **REVISAR** (desmarcados en la vista previa).
 - Si el `TOTAL` del PDF no coincide con la suma de las filas, RND avisa: suele
   significar que al export le faltó el detalle (por ejemplo, una página en
   blanco).

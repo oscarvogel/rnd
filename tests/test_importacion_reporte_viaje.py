@@ -18,6 +18,7 @@ from utiles.importacion_proveedores_excel import (  # noqa: E402
 )
 from utiles.importacion_reporte_viaje import (  # noqa: E402
     _cuit_valido,
+    _normalizar_filas,
     procesar_reporte_viaje,
 )
 
@@ -41,6 +42,14 @@ HEADERS = [
     "Peso bruto",
     "Peso congelado",
 ]
+
+# El export nuevo de Lario agrega "Estado" (done/cancel) entre "Tipo de
+# producto" y "Cuenta": 17 columnas en lugar de 16.
+X_ESTADO = [
+    10, 40, 50, 63, 75, 87, 99, 111, 133,
+    148, 168, 179, 193, 205, 221, 235, 249, 263,
+]
+HEADERS_ESTADO = HEADERS[:5] + ["Estado"] + HEADERS[5:]
 ROW_CARNE = [
     "DEPOSITO RND (BONDA)", "", "226SO172960", "00901-00024732", "Carne",
     "829", "SUPERMERCADOS NELSON S.R.L.", "30715692577", "AV ZAPIOLA 5957",
@@ -58,25 +67,40 @@ ROW_WR_OUT = [
 ]
 
 
-def _crear_pdf(path, total_cajas="45", total_neto="962"):
+def _crear_pdf(path, total_cajas="45", total_neto="962", con_estado=False):
+    x = X_ESTADO if con_estado else X
+    headers = HEADERS_ESTADO if con_estado else HEADERS
+
     pdf = FPDF(orientation="L", unit="mm", format="A4")
     pdf.set_auto_page_break(0)
     pdf.add_page()
     pdf.set_font("Helvetica", size=3.2)
-    for indice, header in enumerate(HEADERS):
-        pdf.rect(X[indice], 10, X[indice + 1] - X[indice], 5)
-        pdf.text(X[indice] + 0.4, 13, header)
+    for indice, header in enumerate(headers):
+        pdf.rect(x[indice], 10, x[indice + 1] - x[indice], 5)
+        pdf.text(x[indice] + 0.4, 13, header)
+
     filas = [ROW_CARNE, ROW_FIAMBRE, ROW_WR_OUT]
+    if con_estado:
+        estados = ["done", "done", "cancel"]
+        filas = [
+            fila[:5] + [estado] + fila[5:]
+            for fila, estado in zip(filas, estados)
+        ]
     for indice, fila in enumerate(filas):
         y = 17 + indice * 6
         for columna, valor in enumerate(fila):
             if valor:
-                pdf.text(X[columna] + 0.4, y, valor)
-    total = ["", "", "", "", "", "", "", "", "", "TOTAL", "0", total_cajas, "", total_neto, "", ""]
+                pdf.text(x[columna] + 0.4, y, valor)
+
+    total = [""] * len(headers)
+    total[headers.index("Ciudad")] = "TOTAL"
+    total[headers.index("C.P")] = "0"
+    total[headers.index("Cajas")] = total_cajas
+    total[headers.index("Peso neto")] = total_neto
     y = 17 + len(filas) * 6
     for columna, valor in enumerate(total):
         if valor:
-            pdf.text(X[columna] + 0.4, y, valor)
+            pdf.text(x[columna] + 0.4, y, valor)
     pdf.output(str(path))
 
 
@@ -116,6 +140,67 @@ def test_parsea_reporte_de_viaje(tmp_path):
     assert wr_out["cantidad"] == 0
     assert wr_out["kilos"] == 0
     assert "REVISAR" in wr_out["observaciones"]
+
+
+def test_parsea_reporte_de_viaje_con_columna_estado(tmp_path):
+    """El export nuevo trae 17 columnas: "Estado" entre "Tipo" y "Cuenta".
+
+    Si los indices quedan fijos los valores se corren y el archivo no se puede
+    preparar ("no tiene las 16 columnas esperadas").
+    """
+    archivo = tmp_path / "reporte_estado.pdf"
+    _crear_pdf(archivo, con_estado=True)
+    advertencias = []
+
+    salida = procesar_reporte_viaje(str(archivo), advertencias=advertencias)
+
+    df = pd.read_excel(salida)
+    assert len(df) == 3
+    assert advertencias == [
+        "Hay 1 remito(s) marcados REVISAR (WR/OUT o sin cajas). "
+        "Quedan desmarcados en la vista previa."
+    ]
+
+    carne = df.iloc[0]
+    assert str(carne["codigo_cliente"]) == "30715692577"
+    assert carne["detalle_cliente"] == "SUPERMERCADOS NELSON S.R.L."
+    assert carne["comprobante"] == "00901-00024732"
+    assert carne["producto"] == "Carne"
+    assert carne["cantidad"] == 30
+    assert carne["kilos"] == pytest.approx(599.75)
+    assert "REVISAR" not in carne["observaciones"]
+
+    fiambre = df.iloc[1]
+    assert fiambre["comprobante"] == "00901-00024734"
+    assert fiambre["cantidad"] == 15
+
+    wr_out = df.iloc[2]
+    assert wr_out["comprobante"] == "WR/OUT/35697"
+    assert "REVISAR" in wr_out["observaciones"]
+
+
+def test_un_remito_cancelado_se_marca_revisar():
+    fila = {
+        "pedido": "226SO177616",
+        "albaran": "00901-00025515",
+        "tipo": "Carne",
+        "estado": "cancel",
+        "cuenta": "845",
+        "socio": "BARREYRO CAROLINA",
+        "cuit": "30715692577",
+        "calle": "SARMIENTO 1420",
+        "ciudad": "POSADAS",
+        "cp": "330000",
+        "cajas": 3,
+        "subtotal": 352080.0,
+        "neto": 65.2,
+        "bruto": 68.2,
+        "congelado": 65.2,
+    }
+
+    (normalizada,) = _normalizar_filas([fila])
+
+    assert "REVISAR: remito cancelado en el reporte" in normalizada["observaciones"]
 
 
 def test_advierte_total_descuadrado(tmp_path):

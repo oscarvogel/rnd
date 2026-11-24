@@ -78,15 +78,17 @@ normalizar Excel.
 
 ### Lario: Reporte de viaje
 
-El proveedor Lario envía un PDF con una tabla de 16 columnas y una fila por
-remito del viaje (es un export del sistema, con texto seleccionable). Con el
+El proveedor Lario envía un PDF con una tabla y una fila por remito del viaje
+(es un export del sistema, con texto seleccionable). El export puede traer 16
+columnas o 17, según incluya la columna **Estado** (`done`/`cancel`). Con el
 método REPORTE_VIAJE, RND lee el PDF por columnas, sin IA, y muestra la vista
 previa.
 
 - El **CUIT del cliente** es la clave: con él RND resuelve el cliente y su
   lugar de entrega.
-- Los remitos `WR/OUT/…` (posible anulación) y los que vienen **sin cajas**
-  informadas se marcan **REVISAR** y aparecen desmarcados.
+- Los remitos `WR/OUT/…` (posible anulación), los que la columna **Estado**
+  marca como `cancel` y los que vienen **sin cajas** informadas se marcan
+  **REVISAR** y aparecen desmarcados.
 - Si el `TOTAL` impreso en el PDF no coincide con la suma de las filas, RND
   avisa: suele significar que al export le faltó detalle y hay que revisar antes
   de grabar.

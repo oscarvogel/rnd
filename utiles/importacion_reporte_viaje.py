@@ -1,15 +1,21 @@
 # coding=utf-8
 """Importador del Reporte de viaje de Lario (PDF de remitos por viaje).
 
-El PDF es una tabla de 16 columnas con una fila por remito. Se lee por
-coordenadas porque el export superpone textos largos (CUIT, ciudad/C.P.) y
-algunos nombres quedan truncados en la columna Socio.
+El PDF es una tabla de una fila por remito. Se lee por coordenadas porque el
+export superpone textos largos (CUIT, ciudad/C.P.) y algunos nombres quedan
+truncados en la columna Socio.
+
+El export tuvo dos formatos: el viejo de 16 columnas y el nuevo, que agrega
+"Estado" (done/cancel) entre "Tipo de producto" y "Cuenta". Las columnas se
+detectan por el nombre de la cabecera, no por una cantidad fija, para que
+cualquiera de los dos formatos se lea sin tocar los indices.
 """
 from __future__ import annotations
 
 import os
 import re
 import tempfile
+import unicodedata
 from collections import defaultdict
 
 import pandas as pd
@@ -20,23 +26,49 @@ from utiles.importacion_proveedores_excel import COLUMNAS_NORMALIZADAS, _notific
 
 EXTENSIONES = {".pdf"}
 
-COL_PUNTO = 0
-COL_ZONA = 1
-COL_PEDIDO = 2
-COL_ALBARAN = 3
-COL_TIPO = 4
-COL_CUENTA = 5
-COL_SOCIO = 6
-COL_CUIT = 7
-COL_CALLE = 8
-COL_CIUDAD = 9
-COL_CP = 10
-COL_CAJAS = 11
-COL_SUBTOTAL = 12
-COL_NETO = 13
-COL_BRUTO = 14
-COL_CONGELADO = 15
-CANTIDAD_COLUMNAS = 16
+# Claves internas de las columnas que usa el importador, en el orden del export.
+COLUMNAS = (
+    "punto",
+    "zona",
+    "pedido",
+    "albaran",
+    "tipo",
+    "estado",
+    "cuenta",
+    "socio",
+    "cuit",
+    "calle",
+    "ciudad",
+    "cp",
+    "cajas",
+    "subtotal",
+    "neto",
+    "bruto",
+    "congelado",
+)
+
+# "Estado" no esta en el export viejo: es opcional.
+COLUMNAS_REQUERIDAS = tuple(nombre for nombre in COLUMNAS if nombre != "estado")
+
+ETIQUETAS_COLUMNA = {
+    "PUNTO DE DESCARGA": "punto",
+    "ZONA COMERCIAL": "zona",
+    "PEDIDO DE VENTA": "pedido",
+    "ALBARAN": "albaran",
+    "TIPO DE PRODUCTO": "tipo",
+    "ESTADO": "estado",
+    "CUENTA": "cuenta",
+    "SOCIO": "socio",
+    "CUIT": "cuit",
+    "CALLE": "calle",
+    "CIUDAD": "ciudad",
+    "CP": "cp",
+    "CAJAS": "cajas",
+    "SUBTOTAL": "subtotal",
+    "PESO NETO": "neto",
+    "PESO BRUTO": "bruto",
+    "PESO CONGELADO": "congelado",
+}
 
 HEADER_KEYS = {
     "PUNTO",
@@ -46,7 +78,10 @@ HEADER_KEYS = {
     "CAJAS",
     "PESO",
     "CUENTA",
+    "ESTADO",
 }
+
+ESTADOS_ANULADOS = {"cancel", "cancelado", "anulado"}
 
 
 def _texto(valor):
@@ -164,27 +199,69 @@ def _posiciones_de_celdas(page, top_cabecera):
     return posiciones
 
 
+def _normalizar_etiqueta(texto):
+    """Deja la etiqueta comparable: mayusculas, sin acentos ni puntuacion."""
+    texto = _texto(texto).replace(".", "")
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = "".join(
+        caracter for caracter in texto if not unicodedata.combining(caracter)
+    )
+    texto = re.sub(r"[^A-Za-z0-9 ]", " ", texto.upper())
+    return re.sub(r"\s+", " ", texto).strip()
+
+
+def _etiquetas_de_cabecera(grupo, bounds):
+    """Devuelve {indice de columna: etiqueta} leyendo la fila de la cabecera."""
+    por_columna = defaultdict(list)
+    for word in grupo:
+        por_columna[_columna_por_solapamiento(word, bounds)].append(word)
+    etiquetas = {}
+    for indice, palabras in por_columna.items():
+        texto = " ".join(
+            word["text"] for word in sorted(palabras, key=lambda word: word["x0"])
+        )
+        etiquetas[indice] = _normalizar_etiqueta(texto)
+    return etiquetas
+
+
 def _detectar_columnas(page):
+    """Devuelve los bordes x de las celdas y el indice de cada columna conocida.
+
+    Los indices no se fijan a mano porque el export cambio de 16 a 17 columnas
+    al agregar "Estado" (done/cancel) entre "Tipo de producto" y "Cuenta".
+    Se leen las etiquetas de la cabecera y se arma el mapa por nombre.
+    """
     words = page.extract_words(use_text_flow=False, keep_blank_chars=False)
     mejor = None
     for grupo in _agrupar_por_top(words):
         textos = {word["text"].upper() for word in grupo}
         puntaje = len(textos & HEADER_KEYS)
         if puntaje and (mejor is None or puntaje > mejor[0]):
-            mejor = (puntaje, min(word["top"] for word in grupo))
+            mejor = (puntaje, min(word["top"] for word in grupo), grupo)
     if mejor is None:
         raise ValueError("No se encontro la cabecera del Reporte de viaje")
 
     top_cabecera = mejor[1]
     posiciones = _posiciones_de_celdas(page, top_cabecera)
     bounds = _merge_bounds(posiciones)
-    if len(bounds) - 1 != CANTIDAD_COLUMNAS:
+    if len(bounds) < 2:
+        raise ValueError("El Reporte de viaje no tiene las celdas de la cabecera")
+
+    etiquetas = _etiquetas_de_cabecera(mejor[2], bounds)
+    columnas = {}
+    for indice, etiqueta in etiquetas.items():
+        clave = ETIQUETAS_COLUMNA.get(etiqueta)
+        if clave:
+            columnas[clave] = indice
+
+    faltantes = [nombre for nombre in COLUMNAS_REQUERIDAS if nombre not in columnas]
+    if faltantes:
         raise ValueError(
-            "El Reporte de viaje no tiene las {} columnas esperadas".format(
-                CANTIDAD_COLUMNAS
+            "El Reporte de viaje no tiene las columnas esperadas (falta: {})".format(
+                ", ".join(faltantes)
             )
         )
-    return bounds
+    return bounds, columnas
 
 
 def _texto_por_rango(chars, bounds, desde, hasta):
@@ -195,9 +272,9 @@ def _texto_por_rango(chars, bounds, desde, hasta):
     return _colapsar("".join(char["text"] for char in seleccion))
 
 
-def _recuperar_cuit(chars, bounds):
-    inicio = bounds[COL_CUIT]
-    fin = bounds[COL_CUIT + 1]
+def _recuperar_cuit(chars, bounds, indice):
+    inicio = bounds[indice]
+    fin = bounds[indice + 1]
     por_color = defaultdict(list)
     for char in chars:
         if inicio - 1.5 <= char["x0"] <= fin + 1.0:
@@ -249,6 +326,7 @@ def _leer_pdf(archivo_entrada, progreso=None, advertencias=None):
     filas = []
     totales = {}
     bounds = None
+    columnas = None
 
     with pdfplumber.open(archivo_entrada) as pdf:
         total_paginas = max(len(pdf.pages), 1)
@@ -258,7 +336,7 @@ def _leer_pdf(archivo_entrada, progreso=None, advertencias=None):
                 _notificar(progreso, 10 + int(indice_pagina / total_paginas * 80))
                 continue
             if bounds is None:
-                bounds = _detectar_columnas(page)
+                bounds, columnas = _detectar_columnas(page)
 
             chars = page.chars
             for grupo in _agrupar_por_top(words):
@@ -272,14 +350,16 @@ def _leer_pdf(archivo_entrada, progreso=None, advertencias=None):
                 celdas = _celdas_por_palabras(grupo, bounds)
                 if texto_mayus.startswith("TOTAL"):
                     totales = {
-                        "cajas": _parse_numero(_texto_celda(celdas, COL_CAJAS)),
-                        "subtotal": _parse_numero(_texto_celda(celdas, COL_SUBTOTAL)),
-                        "neto": _parse_numero(_texto_celda(celdas, COL_NETO)),
+                        "cajas": _parse_numero(_texto_celda(celdas, columnas["cajas"])),
+                        "subtotal": _parse_numero(
+                            _texto_celda(celdas, columnas["subtotal"])
+                        ),
+                        "neto": _parse_numero(_texto_celda(celdas, columnas["neto"])),
                     }
                     continue
 
-                pedido = _texto_celda(celdas, COL_PEDIDO)
-                albaran = _texto_celda(celdas, COL_ALBARAN)
+                pedido = _texto_celda(celdas, columnas["pedido"])
+                albaran = _texto_celda(celdas, columnas["albaran"])
                 if not pedido and not albaran:
                     continue
 
@@ -288,8 +368,10 @@ def _leer_pdf(archivo_entrada, progreso=None, advertencias=None):
                     for char in chars
                     if abs(char["top"] - grupo[0]["top"]) <= 2.0
                 ]
-                cuit = _recuperar_cuit(chars_fila, bounds)
-                cuenta_socio = _texto_por_rango(chars_fila, bounds, COL_CUENTA, COL_SOCIO + 1)
+                cuit = _recuperar_cuit(chars_fila, bounds, columnas["cuit"])
+                cuenta_socio = _texto_por_rango(
+                    chars_fila, bounds, columnas["cuenta"], columnas["socio"] + 1
+                )
                 if cuit:
                     cuenta_socio = cuenta_socio.replace(cuit, " ")
                 coincidencia = re.match(r"^(\d+)\s*(.*)$", cuenta_socio)
@@ -304,24 +386,40 @@ def _leer_pdf(archivo_entrada, progreso=None, advertencias=None):
                     {
                         "pedido": pedido,
                         "albaran": albaran,
-                        "tipo": _texto_celda(celdas, COL_TIPO),
+                        "tipo": _texto_celda(celdas, columnas["tipo"]),
+                        "estado": (
+                            _texto_celda(celdas, columnas["estado"])
+                            if "estado" in columnas
+                            else ""
+                        ),
                         "cuenta": cuenta,
                         "socio": socio,
                         "cuit": cuit,
-                        "calle": _texto_celda(celdas, COL_CALLE),
-                        "ciudad": _texto_por_rango(chars_fila, bounds, COL_CIUDAD, COL_CIUDAD + 1),
+                        "calle": _texto_celda(celdas, columnas["calle"]),
+                        "ciudad": _texto_por_rango(
+                            chars_fila,
+                            bounds,
+                            columnas["ciudad"],
+                            columnas["ciudad"] + 1,
+                        ),
                         # El C.P. se solapa con el final de la ciudad: el export
                         # deja letras pegadas ("PUERTO IGUAZ" + 337000 ->
                         # "3U37000"). El C.P. es siempre numerico, asi que se
                         # queda solo con los digitos.
                         "cp": _solo_digitos(
-                            _texto_por_rango(chars_fila, bounds, COL_CP, COL_CP + 1)
+                            _texto_por_rango(
+                                chars_fila, bounds, columnas["cp"], columnas["cp"] + 1
+                            )
                         ),
-                        "cajas": _parse_numero(_texto_celda(celdas, COL_CAJAS)),
-                        "subtotal": _parse_numero(_texto_celda(celdas, COL_SUBTOTAL)),
-                        "neto": _parse_numero(_texto_celda(celdas, COL_NETO)),
-                        "bruto": _parse_numero(_texto_celda(celdas, COL_BRUTO)),
-                        "congelado": _parse_numero(_texto_celda(celdas, COL_CONGELADO)),
+                        "cajas": _parse_numero(_texto_celda(celdas, columnas["cajas"])),
+                        "subtotal": _parse_numero(
+                            _texto_celda(celdas, columnas["subtotal"])
+                        ),
+                        "neto": _parse_numero(_texto_celda(celdas, columnas["neto"])),
+                        "bruto": _parse_numero(_texto_celda(celdas, columnas["bruto"])),
+                        "congelado": _parse_numero(
+                            _texto_celda(celdas, columnas["congelado"])
+                        ),
                     }
                 )
             _notificar(progreso, 10 + int(indice_pagina / total_paginas * 80))
@@ -343,11 +441,14 @@ def _normalizar_filas(filas_pdf):
     for fila in filas_pdf:
         albaran = fila["albaran"]
         es_wr_out = albaran.upper().startswith("WR/")
+        estado = _texto(fila.get("estado")).lower()
         cajas = fila["cajas"]
         neto = fila["neto"]
         revisar = []
         if es_wr_out:
             revisar.append("remito WR/OUT sin peso (posible anulacion)")
+        elif estado in ESTADOS_ANULADOS:
+            revisar.append("remito cancelado en el reporte")
         elif cajas is None:
             revisar.append("sin cajas informadas")
 
@@ -446,7 +547,9 @@ def procesar_reporte_viaje(archivo_entrada, progreso=None, advertencias=None):
     revisar = sum(
         1
         for fila in filas_pdf
-        if fila["albaran"].upper().startswith("WR/") or fila["cajas"] is None
+        if fila["albaran"].upper().startswith("WR/")
+        or fila["cajas"] is None
+        or _texto(fila.get("estado")).lower() in ESTADOS_ANULADOS
     )
     if revisar:
         _agregar_advertencia(
