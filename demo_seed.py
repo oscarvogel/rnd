@@ -250,6 +250,12 @@ def prepare_demo_database() -> None:
     from utiles.seed_tacural import seed_tacural
     seed_tacural()
 
+    # Noalsa: remitos escaneados (un comprobante por pagina) que usa el lector
+    # generico de PDF/imagen con IA. El PDF se copia a demo_importaciones como
+    # 07_proveedor_noalsa.pdf porque es un escaneo que no se puede dibujar.
+    from utiles.seed_noalsa import seed_noalsa
+    seed_noalsa()
+
     def lugar(cliente, nombre, direccion, localidad, ruta, principal=False):
         obj, _ = LugarEntrega.get_or_create(
             cliente=cliente,

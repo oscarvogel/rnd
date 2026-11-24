@@ -1,5 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 pyqt5libs_datas, pyqt5libs_binaries, pyqt5libs_hiddenimports = collect_all("pyqt5libs")
@@ -14,6 +16,13 @@ runtime_datas = [
     ("../sistema.demo.ini", "."),
     ("../rnd.ini", "."),
 ]
+
+# El PDF de Noalsa es un escaneo real que no se puede dibujar en runtime (y
+# esta en .gitignore). Si esta en la copia local, viaja con el instalador para
+# que el caso se pueda probar tambien en una instalacion limpia.
+noalsa_pdf = Path(SPECPATH).parent / "demo_importaciones" / "07_proveedor_noalsa.pdf"
+if noalsa_pdf.exists():
+    runtime_datas.append((str(noalsa_pdf), "demo_importaciones"))
 
 hidden = (
     pyqt5libs_hiddenimports
